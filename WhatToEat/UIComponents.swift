@@ -37,8 +37,8 @@ struct PrimaryActionButton: View {
             .frame(maxWidth: .infinity)
             .padding()
             .background(AppTheme.Colors.accent)
-            .cornerRadius(AppTheme.Layout.cardRadius)
-            .shadow(color: AppTheme.Shadows.buttonGlow, radius: 10, x: 0, y: 5)
+            .cornerRadius(AppTheme.Radius.base)
+            .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 10, x: 0, y: 5)
         }
         .buttonStyle(.plain) // 确保不会被系统默认蓝色干扰
     }

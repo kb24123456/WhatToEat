@@ -7,13 +7,25 @@ struct AddRestaurantView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
+    // 获取所有餐厅数据，用于动态生成品类和地区选项
+    @Query private var allRestaurants: [Restaurant]
+    
     // --- 1. 表单基础数据 ---
     @State private var name = ""
-    @State private var cuisine = "火锅" // 对应模型里的 type
-    @State private var district = "江北"
-    @State private var rating = 5
+    @State private var category = "" // 对应模型里的 type，已从"菜系"改为"品类"，初始为空
+    @State private var district = "" // 初始为空
+    @State private var rating = 0 // 初始为0，无星星选中
     @State private var review = ""
     @State private var tagsInput = "" // 使用逗号分隔录入，更简洁
+    
+    // --- 混合录入状态管理 ---
+    // 品类相关
+    @State private var useCustomCategory = false
+    @State private var customCategoryInput = ""
+    
+    // 地区相关
+    @State private var useCustomDistrict = false
+    @State private var customDistrictInput = ""
     
     // --- 2. 位置相关 ---
     @State private var address = ""
@@ -28,9 +40,16 @@ struct AddRestaurantView: View {
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
     
-    // 选项配置
-    private let cuisineOptions = ["火锅", "烧烤", "西餐", "快餐", "日料", "其它"]
-    private let districtOptions = ["江北", "渝北", "渝中", "南岸", "沙坪坝", "其它"]
+    // --- 动态选项生成 ---
+    // 从所有餐厅中提取唯一品类列表，排序后返回
+    var categoryOptions: [String] {
+        Array(Set(allRestaurants.map { $0.type })).sorted()
+    }
+    
+    // 从所有餐厅中提取唯一地区列表，排序后返回
+    var districtOptions: [String] {
+        Array(Set(allRestaurants.map { $0.district })).sorted()
+    }
     
     var body: some View {
         NavigationStack {
@@ -74,17 +93,61 @@ struct AddRestaurantView: View {
                 Section("基本信息") {
                     TextField("餐厅名称", text: $name)
                     
-                    Picker("菜系", selection: $cuisine) {
-                        ForEach(cuisineOptions, id: \.self) { Text($0) }
+                    // 品类选择：动态混合录入
+                    if categoryOptions.isEmpty {
+                        // 无现有品类时，直接文本输入
+                        TextField("输入品类", text: $category)
+                            .autocorrectionDisabled()
+                    } else {
+                        // 有现有品类时，提供选择器 + 自定义选项
+                        Picker("品类", selection: $category) {
+                            ForEach(categoryOptions, id: \.self) { Text($0) }
+                            Text("+ 自定义品类")
+                                .tag("__CUSTOM_CATEGORY__")
+                        }
+                        
+                        // 显示自定义输入框
+                        if category == "__CUSTOM_CATEGORY__" {
+                            TextField("输入新品类", text: $customCategoryInput)
+                                .autocorrectionDisabled()
+                                .onSubmit {
+                                    if !customCategoryInput.isEmpty {
+                                        category = customCategoryInput
+                                        customCategoryInput = ""
+                                    }
+                                }
+                        }
                     }
                     
-                    Picker("地区", selection: $district) {
-                        ForEach(districtOptions, id: \.self) { Text($0) }
+                    // 地区选择：动态混合录入
+                    if districtOptions.isEmpty {
+                        // 无现有地区时，直接文本输入
+                        TextField("输入地区", text: $district)
+                            .autocorrectionDisabled()
+                    } else {
+                        // 有现有地区时，提供选择器 + 自定义选项
+                        Picker("地区", selection: $district) {
+                            ForEach(districtOptions, id: \.self) { Text($0) }
+                            Text("+ 自定义地区")
+                                .tag("__CUSTOM_DISTRICT__")
+                        }
+                        
+                        // 显示自定义输入框
+                        if district == "__CUSTOM_DISTRICT__" {
+                            TextField("输入新地区", text: $customDistrictInput)
+                                .autocorrectionDisabled()
+                                .onSubmit {
+                                    if !customDistrictInput.isEmpty {
+                                        district = customDistrictInput
+                                        customDistrictInput = ""
+                                    }
+                                }
+                        }
                     }
                     
                     // 漂亮的星级评分交互
                     HStack {
-                        Text("推荐指数")
+                        Text("评分")
                         Spacer()
                         ForEach(1...5, id: \.self) { index in
                             Image(systemName: index <= rating ? "star.fill" : "star")
@@ -106,8 +169,8 @@ struct AddRestaurantView: View {
                     }
                 }
 
-                // ✅ 模块四：评价与标签 (自动换行)
-                Section("心得与标签") {
+                // ✅ 模块四：印象 (自动换行)
+                Section("印象") {
                     TextField("一句话评价", text: $review, axis: .vertical)
                         .lineLimit(3...5)
                     
@@ -162,15 +225,37 @@ struct AddRestaurantView: View {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         
-        // 2. 将图片保存到磁盘并获取文件名
+        // 2. 处理品类和地区：确保不保存占位符值，为空时使用默认值
+        let finalCategory: String
+        if category == "__CUSTOM_CATEGORY__" {
+            // 如果选择了自定义品类但未输入，使用默认值
+            finalCategory = !customCategoryInput.isEmpty ? customCategoryInput : "未分类"
+        } else {
+            // 如果直接选择的品类为空，使用默认值
+            finalCategory = !category.isEmpty ? category : "未分类"
+        }
+        
+        let finalDistrict: String
+        if district == "__CUSTOM_DISTRICT__" {
+            // 如果选择了自定义地区但未输入，使用默认值
+            finalDistrict = !customDistrictInput.isEmpty ? customDistrictInput : "其他"
+        } else {
+            // 如果直接选择的地区为空，使用默认值
+            finalDistrict = !district.isEmpty ? district : "其他"
+        }
+        
+        // 3. 处理评分：如果未选择（为0），使用默认值3
+        let finalRating = rating > 0 ? rating : 3
+        
+        // 3. 将图片保存到磁盘并获取文件名
         let filename = selectedImage.flatMap { ImageManager.shared.saveImage($0) }
         
-        // 3. 创建餐厅对象
+        // 4. 创建餐厅对象
         let newRestaurant = Restaurant(
             name: name,
-            type: cuisine,
-            district: district,
-            rating: rating,
+            type: finalCategory,
+            district: finalDistrict,
+            rating: finalRating,
             address: address,
             latitude: latitude,
             longitude: longitude,
@@ -180,7 +265,7 @@ struct AddRestaurantView: View {
             averagePrice: 0.0
         )
         
-        // 4. 存入 SwiftData
+        // 5. 存入 SwiftData
         modelContext.insert(newRestaurant)
         dismiss()
     }

@@ -1,35 +1,39 @@
 import SwiftUI
 
-// MARK: - 🎨 核心设计系统 (全量名称兼容版)
 struct AppTheme {
-    
-    // MARK: - 1. 色彩规范
+    // MARK: - 1. 配色方案 (小红书红 + 奶油系)
     struct Colors {
-        static let background = Color(hex: "#FCF9F7")
+        static let background = Color.white
+        static let navigationBar = Colors.background // 导航栏颜色 = 背景颜色，自动跟随背景色变化
         static let card = Color.white
         static let textPrimary = Color(hex: "#332E2B")
         static let textSecondary = Color(hex: "#948E88")
-        static let accent = Color(hex: "#FF2442") // 🔴 小红书红
         
-        // 原始色值定义
-        static let tagBlue = Color(hex: "#5796E6")
-        static let tagOrange = Color(hex: "#FFB347")
-        static let tagGreen = Color(hex: "#43C59E")
-        static let tagPurple = Color(hex: "#9B6BFF")
+        // 🔴 核心强调色（小红书红）
+        static let accent = Color(hex: "#FF2442")
+        
+        // ✅ 补齐 primary 颜色（报错的关键）
+        static let primary = Color(hex: "#5796E6") // 湖蓝色
+        static let secondary = Color(hex: "#FFB347") // 蛋黄橙
+        static let success = Color(hex: "#43C59E") // 碧绿色
+        
+        static let lightRed = Color(hex: "#FFE8EE")
+        static let lightBlue = Color(hex: "#EBF3FF")
+        static let lightGreen = Color(hex: "#E8F7F2")
+        static let lightGray = Color(hex: "#F5F5F5") // 浅灰色，用于评价信息背景
         static let divider = Color.black.opacity(0.05)
-
-        // ✅ 关键别名映射：解决 primary/secondary/success 报错
-        static let primary = tagBlue     // 菜系用蓝
-        static let secondary = tagOrange // 评分用橙
-        static let success = tagGreen   // 区域用绿
-        
-        // 浅色底背景别名 (如果代码中有用到)
-        static let lightBlue = tagBlue.opacity(0.12)
-        static let lightOrange = tagOrange.opacity(0.12)
-        static let lightGreen = tagGreen.opacity(0.12)
     }
     
-    // MARK: - 2. 字体规范
+    // MARK: - 6. 设计规则
+    struct Rules {
+        // 导航栏规则
+        static let navigationBarUseShadow = false // 导航栏不允许有阴影
+        
+        // 卡片规则
+        static let restaurantCardUseShadow = false // 餐厅信息卡片不允许有阴影
+    }
+    
+    // MARK: - 2. 字体预设
     struct Fonts {
         static let largeTitle = Font.system(.largeTitle, design: .rounded).bold()
         static let title = Font.system(.title, design: .rounded).bold()
@@ -38,67 +42,54 @@ struct AppTheme {
         static let headline = Font.system(.headline, design: .rounded).weight(.semibold)
         static let body = Font.system(.body, design: .rounded)
         static let subheadline = Font.system(.subheadline, design: .rounded).weight(.medium)
+        static let callout = Font.system(.callout, design: .rounded)
+        static let footnote = Font.system(.footnote, design: .rounded)
         static let caption = Font.system(.caption, design: .rounded)
         static let caption1 = Font.system(.caption, design: .rounded)
         static let caption2 = Font.system(.caption2, design: .rounded)
     }
-
-    // MARK: - 3. 几何布局规范
-    struct Layout {
-        static let cardRadius: CGFloat = 26
-        static let capsuleRadius: CGFloat = 100
-        static let menuRadius: CGFloat = 24
-        static let spacingLg: CGFloat = 20
-        static let spacingMd: CGFloat = 12
-    }
     
-    // MARK: - 4. 间距规范
+    // MARK: - 3. 间距系统
     struct Spacing {
         static let xs: CGFloat = 4
         static let sm: CGFloat = 8
         static let md: CGFloat = 12
-        static let lg: CGFloat = 20
+        static let lg: CGFloat = 16 // 卡片垂直间距：16pt
         static let xl: CGFloat = 32
-        static let card: CGFloat = 16
+        static let card: CGFloat = lg // card作为lg的别名，保持向后兼容
     }
     
-    // MARK: - 5. 圆角规范
+    // MARK: - 4. 极致圆角
     struct Radius {
-        static let base: CGFloat = 26
+        static let base: CGFloat = 16 // 卡片圆角：16pt
         static let small: CGFloat = 16
         static let sm: CGFloat = 8
+        static let image: CGFloat = 16 // 图片圆角与卡片圆角一致
         static let circle: CGFloat = 100
-        static let image: CGFloat = 20 // 解决卡片图片圆角报错
     }
     
-    // MARK: - 6. 动效规范
-    struct Animation {
-        static let jelly = SwiftUI.Animation.spring(response: 0.35, dampingFraction: 0.6, blendDuration: 0)
-        static let morph = SwiftUI.Animation.spring(response: 0.4, dampingFraction: 0.8, blendDuration: 0)
-        static let contentFade = SwiftUI.Animation.easeInOut(duration: 0.2)
-    }
-    
-    // MARK: - 7. 阴影系统
+    // MARK: - 5. 阴影系统 (✅ 解决 Shadows 报错)
     struct Shadows {
-        static let cardShadow = Color.black.opacity(0.04)
-        static let menuShadow = Color.black.opacity(0.12)
-        static let buttonGlow = Color(hex: "#FF2442").opacity(0.2)
-        
-        // 内部结构定义
         struct ShadowItem {
             let color: Color; let radius: CGFloat; let x: CGFloat; let y: CGFloat
         }
-        
         static let light = ShadowItem(color: Color.black.opacity(0.03), radius: 10, x: 0, y: 4)
         static let base = ShadowItem(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 8)
         static let elevated = ShadowItem(color: Color(hex: "#FF2442").opacity(0.15), radius: 12, x: 0, y: 6)
     }
     
-    // 别名映射
+    // 兼容别名
     typealias Shadow = Shadows
+    
+    // MARK: - 6. 卡片尺寸规范
+    struct Cards {
+        static let restaurantCoverWidth: CGFloat = 100
+        static let restaurantCoverHeight: CGFloat = 133.33
+        static let restaurantCoverRatio: CGFloat = 3/4
+    }
 }
 
-// MARK: - 🛠️ 辅助工具与 View 修饰符 (保持不变)
+// MARK: - 颜色 Hex 支持
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
@@ -114,22 +105,17 @@ extension Color {
     }
 }
 
-struct StandardCardModifier: ViewModifier {
+// MARK: - 触感反馈插件
+struct HapticFeedbackModifier: ViewModifier {
     func body(content: Content) -> some View {
-        content
-            .background(AppTheme.Colors.card)
-            .cornerRadius(AppTheme.Layout.cardRadius)
-            .shadow(color: AppTheme.Shadows.cardShadow, radius: 10, x: 0, y: 4)
+        content.simultaneousGesture(TapGesture().onEnded {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        })
     }
 }
 
 extension View {
-    func applyCardStyle() -> some View {
-        self.modifier(StandardCardModifier())
-    }
-    func withHapticFeedback(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) -> some View {
-        self.simultaneousGesture(TapGesture().onEnded {
-            UIImpactFeedbackGenerator(style: style).impactOccurred()
-        })
+    func withHapticFeedback() -> some View {
+        self.modifier(HapticFeedbackModifier())
     }
 }

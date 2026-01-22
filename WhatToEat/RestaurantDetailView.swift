@@ -83,15 +83,9 @@ struct RestaurantDetailView: View {
     // MARK: - 1. 封面图
     @ViewBuilder
     private var coverImageSection: some View {
-        ZStack {
-            if let filename = restaurant.coverPhotoFilename,
-               let image = ImageManager.shared.loadImage(filename: filename) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 250)
-                    .clipped()
-            } else {
+        AsyncImageView(
+            filename: restaurant.coverPhotoFilename,
+            placeholder: AnyView(
                 Rectangle()
                     .fill(Color.gray.opacity(0.3))
                     .frame(height: 250)
@@ -100,8 +94,11 @@ struct RestaurantDetailView: View {
                             .font(.system(size: 40))
                             .foregroundColor(.white)
                     )
-            }
-        }
+            )
+        )
+        // AsyncImageView内部已经处理了resizable和aspectRatio，不需要外部调用
+        .frame(height: 250)
+        .clipped()
         .onTapGesture { showActionSheet = true }
     }
 
@@ -218,16 +215,15 @@ struct RestaurantDetailView: View {
                                 .font(.caption).bold().foregroundColor(.green)
                         }
                         
-                        // 打卡照片
-                        if let filename = log.photoFilename,
-                           let image = ImageManager.shared.loadImage(filename: filename) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 180)
-                                .clipped()
-                                .cornerRadius(8)
-                        }
+                        // 打卡照片：使用 AsyncImageView 实现异步加载和预解码
+                        AsyncImageView(
+                            filename: log.photoFilename,
+                            placeholder: AnyView(EmptyView())
+                        )
+                        // AsyncImageView内部已经处理了resizable和aspectRatio，不需要外部调用
+                        .frame(height: log.photoFilename != nil ? 180 : 0)
+                        .clipped()
+                        .cornerRadius(8)
                         
                         // 详情数据
                         Text("消费 ¥\(Int(log.expense)) • \(log.peopleCount)人用餐")

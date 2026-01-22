@@ -8,147 +8,133 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - 1. Tab项定义
+// MARK: - Tab项枚举 (保留在这里作为导航定义)
 enum TabItem: String, CaseIterable {
-    case library = "餐厅库"
-    case home = "首页"
+    case library = "食库"
+    case home = "吃啥"
+    case add = ""
+    case friends = "事友圈"
     case profile = "我的"
     
     var iconName: String {
         switch self {
         case .library: return "books.vertical"
         case .home: return "house"
+        case .add: return "plus"
+        case .friends: return "person.3"
         case .profile: return "person"
         }
     }
 }
 
-// MARK: - 2. 主视图
+// MARK: - 主视图
 struct ContentView: View {
     @State private var selectedTab: TabItem = .library
     @Namespace private var tabAnimation
-    @State private var showAddSheet = false
+    @State private var showAddRestaurant = false
     
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // 主内容区域
+        ZStack {
+            // 1. 主内容区域切换
             Group {
                 switch selectedTab {
                 case .library:
-                    LibraryView()
+                    LibraryView() // 这里的实现已经搬到了 LibraryView.swift
                 case .home:
-                    PlaceholderView(title: "首页", description: "随机抽取功能即将上线")
+                    PlaceholderView(title: "吃啥", description: "随机抽取功能即将上线")
+                case .add:
+                    EmptyView() // 加号按钮只用于触发动作，不显示内容
+                case .friends:
+                    PlaceholderView(title: "事友圈", description: "社交功能即将上线")
                 case .profile:
                     PlaceholderView(title: "我的", description: "个人设置功能即将上线")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
-            // 红色加号按钮
-            if selectedTab == .library {
-                addButtonOverlay
-            }
-
-            // 悬浮导航栏
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // 2. 沉底导航栏：使用safeAreaInset确保底部安全区域被正确处理
             customTabBar
         }
-        .ignoresSafeArea(.keyboard)
-        .sheet(isPresented: $showAddSheet) {
+        .ignoresSafeArea(.keyboard) // 防止键盘弹出时导航栏乱跑
+        .sheet(isPresented: $showAddRestaurant) {
             AddRestaurantView()
         }
     }
     
-    // 红色加号按钮组件
-    private var addButtonOverlay: some View {
-        Button {
-            showAddSheet = true
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        } label: {
-            Image(systemName: "plus")
-                .font(.title2.bold())
-                .foregroundColor(.white)
-                .frame(width: 56, height: 56)
-                .background(AppTheme.Colors.accent)
-                .clipShape(Circle())
-                .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 10, x: 0, y: 5)
-        }
-        .padding(.trailing, 25)
-        .padding(.bottom, 110) // 浮在导航栏上方
-        .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-        .transition(.scale.combined(with: .opacity))
-    }
-    
-    // 导航栏组件
-    // MARK: - 终极版：视觉绝对平衡 + 果冻缩放导航栏
+    // 自定义导航栏组件 - 沉底设计
     private var customTabBar: some View {
-            HStack(spacing: 0) {
-                ForEach(TabItem.allCases, id: \.self) { tab in
+        HStack(spacing: 0) {
+            ForEach(TabItem.allCases, id: \.self) { tab in
+                if tab == .add {
+                    // 中间圆形突出按钮
                     Button {
-                        // ✅ 1. 触发果冻弹簧动画
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                        // 打开添加餐厅表单
+                        showAddRestaurant = true
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color(hex: "#FF2442"))
+                                .frame(width: 56, height: 56)
+                                .shadow(color: Color(hex: "#FF2442").opacity(0.3), radius: 10, x: 0, y: 2)
+                            Image(systemName: tab.iconName)
+                                .font(.title2.bold())
+                                .foregroundColor(.white)
+                        }
+                        .offset(y: 2) // 向上偏移，顶部距离导航栏上边缘4pt
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 80, height: 60) // 固定中间按钮宽度，确保两侧按钮有足够空间
+                } else {
+                    // 普通导航按钮
+                    Button {
+                        // 使用交互式弹簧动画，提供更流畅的体验
+                        withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
                             selectedTab = tab
                         }
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     } label: {
-                        // ✅ 2. 核心修正：强制从顶部(top)开始计算坐标，彻底停用自动居中
-                        ZStack(alignment: .top) {
-                            
-                            // --- A. 白色指示器 (48pt 高) ---
-                            if selectedTab == tab {
-                                RoundedRectangle(cornerRadius: 18)
-                                    .fill(Color.white)
-                                    .frame(width: 60, height: 54)
-                                    // 在 64pt 的总高里居中：(64 - 54) / 2 = 5
-                                    .offset(y: 5)
-                                    .matchedGeometryEffect(id: "tab_glow", in: tabAnimation)
-                                    .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
-                            }
-                            
-                            // --- B. 按钮内容 (图标 + 文字) ---
-                            VStack(spacing: 2) {
-                                Image(systemName: tab.iconName)
-                                    .font(.system(size: 20))
-                                    .frame(height: 22) // 固定图标高度
-                                
-                                Text(tab.rawValue)
-                                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                                    .frame(height: 12) // 固定文字高度
-                            }
-                            // ✅ 3. 颜色锁定：确保选中时变红，不选中变灰
-                            .foregroundColor(selectedTab == tab ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary)
-                            
-                            // ✅ 4. 终极视觉对齐修正 (之前最成功的数值)
-                            // 数学居中是 14，为了抵消文字底部留白，实测 15 是视觉上的“绝对平衡”
-                            .offset(y: 15)
-                            
-                            // ✅ 5. 缩放逻辑：在定好的中心点上原地膨胀
-                            .scaleEffect(selectedTab == tab ? 1.15 : 1.0)
+                        VStack(spacing: 2) {
+                            Image(systemName: tab.iconName)
+                                .font(.system(size: 24))
+                                .frame(height: 24)
+                            Text(tab.rawValue)
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .frame(height: 12)
                         }
-                        // 确保每个 Tab 的触控区域填满 64pt 高度
-                        .frame(maxWidth: .infinity, maxHeight: 64)
+                        .foregroundColor(selectedTab == tab ? Color(hex: "#FF2442") : Color(hex: "#948E88"))
+                        .scaleEffect(selectedTab == tab ? 1.15 : 1.0)
+                        .frame(maxWidth: .infinity, alignment: getButtonAlignment(for: tab)) // 动态对齐方式
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, maxHeight: 60)
                 }
             }
-            // 导航栏容器定义
-            .frame(width: UIScreen.main.bounds.width * 0.9, height: 64)
-            .padding(.bottom, 34)
-            .background(
-                ZStack {
-                    BlurView(style: .systemUltraThinMaterialLight).opacity(0.9)
-                    AppTheme.Colors.background.opacity(0.85)
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-            )
-            .shadow(color: Color.black.opacity(0.06), radius: 15, x: 0, y: 8)
         }
+        .padding(.horizontal, AppTheme.Spacing.lg) // 添加16pt水平间距
+        .frame(height: 60)
+        .background(Color.white)
+
+        .zIndex(100)
+    }
+    
+    // 辅助方法：根据按钮位置返回对齐方式
+    private func getButtonAlignment(for tab: TabItem) -> Alignment {
+        switch tab {
+        case .library: // 左端按钮
+            return .leading
+        case .home: // 左侧中间按钮
+            return .center
+        case .add: // 中间按钮
+            return .center
+        case .friends: // 右侧中间按钮
+            return .center
+        case .profile: // 右端按钮
+            return .trailing
+        }
+    }
 }
 
-// MARK: - 3. 辅助组件
+// MARK: - 辅助组件 (全局通用)
 
 struct BlurView: UIViewRepresentable {
     let style: UIBlurEffect.Style
@@ -163,7 +149,9 @@ struct PlaceholderView: View {
     let description: String
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: "construction").font(.system(size: 80)).foregroundColor(.gray)
+            Image(systemName: "construction")
+                .font(.system(size: 80))
+                .foregroundColor(.gray)
             Text(title).font(.title).bold()
             Text(description).foregroundColor(.gray).multilineTextAlignment(.center).padding()
         }

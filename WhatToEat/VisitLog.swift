@@ -12,12 +12,15 @@ final class VisitLog {
     var review: String
     var photoFilename: String? // 只能存字符串文件名
     
+    // 关系：添加与Restaurant的反向关系，显式指定根类型
+    @Relationship(inverse: \Restaurant.logs) var restaurant: Restaurant?
+    
     // 计算属性：单次人均（注意：计算属性不会存入数据库，所以很安全）
     var perPersonPrice: Double {
         peopleCount > 0 ? expense / Double(peopleCount) : 0
     }
     
-    init(date: Date = Date(), expense: Double = 0.0, peopleCount: Int = 1, goodDishes: String = "", badDishes: String = "", review: String = "", photoFilename: String? = nil) {
+    init(date: Date = Date(), expense: Double = 0.0, peopleCount: Int = 1, goodDishes: String = "", badDishes: String = "", review: String = "", photoFilename: String? = nil, restaurant: Restaurant? = nil) {
         self.id = UUID()
         self.date = date
         self.expense = expense
@@ -26,5 +29,6 @@ final class VisitLog {
         self.badDishes = badDishes
         self.review = review
         self.photoFilename = photoFilename
+        self.restaurant = restaurant
     }
 }

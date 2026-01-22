@@ -15,6 +15,9 @@ class ImageManager {
     // 私有初始化
     private init() {}
     
+    // 内存缓存，避免重复读取同一图片
+    private var imageCache: [String: UIImage] = [:]
+    
     // 获取Documents目录路径
     private var documentsDirectory: URL {
         let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
@@ -44,8 +47,43 @@ class ImageManager {
         }
     }
     
-    // 读取图片
+    // 异步读取图片
+    func loadImageAsync(filename: String) async -> UIImage? {
+        // 先检查缓存
+        if let cachedImage = imageCache[filename] {
+            return cachedImage
+        }
+        
+        // 创建文件路径
+        let fileURL = documentsDirectory.appendingPathComponent(filename)
+        
+        // 检查文件是否存在
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+        
+        // 异步读取图片
+        do {
+            let imageData = try Data(contentsOf: fileURL)
+            if let image = UIImage(data: imageData) {
+                // 将图片加入缓存
+                imageCache[filename] = image
+                return image
+            }
+            return nil
+        } catch {
+            print("读取图片失败: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    // 读取图片（同步版本，保持向后兼容）
     func loadImage(filename: String) -> UIImage? {
+        // 先检查缓存
+        if let cachedImage = imageCache[filename] {
+            return cachedImage
+        }
+        
         // 创建文件路径
         let fileURL = documentsDirectory.appendingPathComponent(filename)
         
@@ -57,7 +95,12 @@ class ImageManager {
         // 读取图片
         do {
             let imageData = try Data(contentsOf: fileURL)
-            return UIImage(data: imageData)
+            if let image = UIImage(data: imageData) {
+                // 将图片加入缓存
+                imageCache[filename] = image
+                return image
+            }
+            return nil
         } catch {
             print("读取图片失败: \(error.localizedDescription)")
             return nil
@@ -66,6 +109,9 @@ class ImageManager {
     
     // 删除图片
     func deleteImage(filename: String) {
+        // 从缓存中移除
+        imageCache.removeValue(forKey: filename)
+        
         // 创建文件路径
         let fileURL = documentsDirectory.appendingPathComponent(filename)
         
