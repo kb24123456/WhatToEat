@@ -20,6 +20,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     // 发布用户当前位置
     @Published var userLocation: CLLocation?
     
+    // 发布当前位置对应的城市名
+    @Published var currentCity: String?
+    
+    // 地理编码器
+    private let geocoder = CLGeocoder()
+    
     // 初始化方法
     override init() {
         super.init()
@@ -157,6 +163,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.last {
             userLocation = location
+            // 获取城市名称
+            getCityName(from: location)
+        }
+    }
+    
+    // 根据位置获取城市名称
+    private func getCityName(from location: CLLocation) {
+        geocoder.reverseGeocodeLocation(location) { [weak self] (placemarks, error) in
+            guard let self = self, let placemark = placemarks?.first else {
+                return
+            }
+            
+            if let city = placemark.locality {
+                // 去除城市名称中的“市”字（如“上海市”→“上海”）
+                let cityName = city.replacingOccurrences(of: "市", with: "")
+                self.currentCity = cityName
+            }
         }
     }
     

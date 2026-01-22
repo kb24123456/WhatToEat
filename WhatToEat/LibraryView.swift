@@ -10,6 +10,7 @@ struct LibraryView: View {
     // 状态管理
     @State private var searchText = ""
     @State private var showImportSheet = false
+    @State private var showCityPicker = false
     @FocusState private var isSearchFocused: Bool // ✅ 专门监听搜索框是否被点中
     
     @StateObject private var locationManager = LocationManager.shared
@@ -35,6 +36,10 @@ struct LibraryView: View {
             .background(AppTheme.Colors.background)
         }
             .sheet(isPresented: $showImportSheet) { ImportDataView() }
+            // 城市选择器
+            .sheet(isPresented: $showCityPicker) {
+                CitySelectionView(selectedCity: $viewModel.selectedCity)
+            }
             // 当restaurants或locationManager.userLocation变化时，更新ViewModel
             .onChange(of: restaurants) { newRestaurants in
                 viewModel.restaurants = newRestaurants
@@ -59,47 +64,42 @@ struct LibraryView: View {
                 .foregroundColor(AppTheme.Colors.textPrimary)
             
             // 2. 城市选择器
-            Menu {
-                ForEach(RegionManager.shared.allCities, id: \.self) { city in
-                    Button(city) { 
-                        viewModel.selectedCity = city 
-                        viewModel.selectedDistrict = nil // 切换城市时重置地区选择
-                    }
-                }
+            Button {
+                showCityPicker = true
             } label: {
                 HStack {
                     Text(viewModel.selectedCity)
-                        .font(AppTheme.Fonts.body)
+                        .font(AppTheme.Fonts.footnote)
+                        .fontWeight(.medium)
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     Image(systemName: "chevron.down")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundColor(.gray)
                 }
-                .padding(AppTheme.Spacing.md)
-                .background(AppTheme.Colors.card)
-                .cornerRadius(AppTheme.Radius.base)
-                // 与搜索框相同的样式
-                .overlay(
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(
                     RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .stroke(Color.clear, lineWidth: 1.5)
+                        .fill(AppTheme.Colors.card)
+                        .shadow(
+                            color: Color.black.opacity(0.05),
+                            radius: 5,
+                            x: 0,
+                            y: 2
+                        )
                 )
-                .shadow(
-                    color: Color.black.opacity(0.04),
-                    radius: 8,
-                    x: 0,
-                    y: 2
-                )
-                .frame(height: 44) // 与搜索框高度一致
             }
+            .buttonStyle(.plain)
             
             // 3. 搜索框（占据剩余空间）
             HStack {
                 Image(systemName: "magnifyingglass").foregroundColor(.gray)
                 TextField("搜索餐厅名称、菜系...", text: $searchText)
-                    .font(AppTheme.Fonts.body)
+                    .font(AppTheme.Fonts.footnote)
                     .focused($isSearchFocused) // ✅ 绑定焦点状态
             }
-            .padding(AppTheme.Spacing.md)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
             .background(AppTheme.Colors.card)
             .cornerRadius(AppTheme.Radius.base)
             // 1. ✅ 动态边框：聚焦时显示“小红书红”，平时显示透明或极浅灰
@@ -109,8 +109,8 @@ struct LibraryView: View {
             )
             // 2. ✅ 动态阴影：聚焦时变深变大，呈现“浮起”感
             .shadow(
-                color: isSearchFocused ? AppTheme.Colors.accent.opacity(0.1) : Color.black.opacity(0.04),
-                radius: isSearchFocused ? 15 : 8,
+                color: isSearchFocused ? AppTheme.Colors.accent.opacity(0.1) : Color.black.opacity(0.05),
+                radius: isSearchFocused ? 15 : 5,
                 x: 0,
                 y: isSearchFocused ? 8 : 2
             )
@@ -118,17 +118,8 @@ struct LibraryView: View {
             .scaleEffect(isSearchFocused ? 1.02 : 1.0)
             // 使用 matchedGeometryEffect 替代传统动画，提高性能
             .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.2), value: isSearchFocused)
-            .frame(height: 44) // 明确设置高度，确保与城市选择器一致
             
-            // 4. 地图图标按钮
-            Button(action: { 
-                // 暂不添加任何功能
-            }) { 
-                Image(systemName: "map")
-                    .font(AppTheme.Fonts.title3)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-            }
-            .buttonStyle(.plain)
+
         }
         .padding(AppTheme.Spacing.lg)
         .background(AppTheme.Colors.background)

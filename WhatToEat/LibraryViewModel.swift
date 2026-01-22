@@ -11,6 +11,11 @@ import Combine
 
 /// 餐厅列表视图模型，处理餐厅列表的业务逻辑
 class LibraryViewModel: ObservableObject {
+    // MARK: - 常量定义
+    
+    /// 城市存储键
+    private let kSavedCityKey = "UserSelectedCity"
+    
     // MARK: - 1. 输入参数
     
     /// 原始餐厅数据数组（来自SwiftData查询）
@@ -36,9 +41,11 @@ class LibraryViewModel: ObservableObject {
     
     // MARK: - 2. 状态管理
     
-    /// 当前选中的城市（默认"上海"）
-    @Published var selectedCity: String = "上海" {
+    /// 当前选中的城市（带有记忆功能）
+    @Published var selectedCity: String {
         didSet {
+            // 每当城市变化时，保存到UserDefaults
+            UserDefaults.standard.set(selectedCity, forKey: kSavedCityKey)
             updateProcessedRestaurants()
         }
     }
@@ -89,6 +96,13 @@ class LibraryViewModel: ObservableObject {
     init(restaurants: [Restaurant], userLocation: CLLocation?) {
         self.restaurants = restaurants
         self.userLocation = userLocation
+        
+        // 从UserDefaults加载保存的城市，默认使用"上海"
+        if let savedCity = UserDefaults.standard.string(forKey: kSavedCityKey) {
+            self.selectedCity = savedCity
+        } else {
+            self.selectedCity = "上海"
+        }
         
         // 初始处理餐厅数据
         self.processedRestaurants = processRestaurants()
