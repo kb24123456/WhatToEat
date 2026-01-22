@@ -36,8 +36,8 @@ class LibraryViewModel: ObservableObject {
     
     // MARK: - 2. 状态管理
     
-    /// 当前选中的城市（默认"上海市"）
-    @Published var selectedCity: String = "上海市" {
+    /// 当前选中的城市（默认"上海"）
+    @Published var selectedCity: String = "上海" {
         didSet {
             updateProcessedRestaurants()
         }
