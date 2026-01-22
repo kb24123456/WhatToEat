@@ -206,6 +206,25 @@ struct RestaurantCard: View {
                         Text(restaurant.type)
                             .font(AppTheme.Fonts.footnote)
                             .foregroundColor(AppTheme.Colors.textPrimary)
+                        
+                        Spacer() // 添加分隔符，将标签推到右侧
+                        
+                        if !restaurant.tags.isEmpty {
+                            // 标签水平排列，使用ScrollView确保在小屏幕上能滚动查看
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: AppTheme.Spacing.xs) {
+                                    ForEach(restaurant.tags, id: \.self) {
+                                        Text("# \($0)")
+                                            .font(AppTheme.Fonts.footnote)
+                                            .foregroundColor(AppTheme.Colors.primary)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 4)
+                                            .background(AppTheme.Colors.primary.opacity(0.1))
+                                            .cornerRadius(16)
+                                    }
+                                }
+                            }
+                        }
                     }
                     
                     if !restaurant.review.isEmpty {
