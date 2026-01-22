@@ -7,6 +7,7 @@ final class Restaurant {
     var name: String
     var type: String
     var district: String
+    var city: String
     var rating: Int
     var address: String
     var latitude: Double
@@ -20,11 +21,12 @@ final class Restaurant {
     // 关系：确保这里写得标准
     @Relationship(deleteRule: .cascade) var logs: [VisitLog] = []
     
-    init(name: String = "", type: String = "未分类", district: String = "其他", rating: Int = 3, address: String = "", latitude: Double = 0.0, longitude: Double = 0.0, coverPhotoFilename: String? = nil, review: String = "", tags: [String] = [], averagePrice: Double = 0.0) {
+    init(name: String = "", type: String = "未分类", district: String = "其他", city: String = "", rating: Int = 3, address: String = "", latitude: Double = 0.0, longitude: Double = 0.0, coverPhotoFilename: String? = nil, review: String = "", tags: [String] = [], averagePrice: Double = 0.0) {
         self.id = UUID()
         self.name = name
         self.type = type
         self.district = district
+        self.city = city
         self.rating = rating
         self.address = address
         self.latitude = latitude

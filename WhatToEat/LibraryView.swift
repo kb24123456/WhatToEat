@@ -13,18 +13,16 @@ struct LibraryView: View {
     @FocusState private var isSearchFocused: Bool // ✅ 专门监听搜索框是否被点中
     
     @StateObject private var locationManager = LocationManager.shared
-
-    // MARK: - 过滤逻辑
-    private var filteredRestaurants: [Restaurant] {
-        restaurants.filter { restaurant in
-            if searchText.isEmpty { return true }
-            let s = searchText.lowercased()
-            return restaurant.name.lowercased().contains(s) ||
-                   restaurant.type.lowercased().contains(s) ||
-                   restaurant.address.lowercased().contains(s)
-        }
+    @StateObject private var viewModel: LibraryViewModel
+    
+    // 初始化方法
+    init() {
+        // 初始化ViewModel时传入空数组，后续会更新
+        let viewModel = LibraryViewModel(restaurants: [], userLocation: nil)
+        _viewModel = StateObject(wrappedValue: viewModel)
     }
-
+    
+    // MARK: - 生命周期
     var body: some View {
         NavigationStack {
             // ✅ 使用 topLeading，这是所有像素级对齐的基准
@@ -37,6 +35,17 @@ struct LibraryView: View {
             .background(AppTheme.Colors.background)
         }
             .sheet(isPresented: $showImportSheet) { ImportDataView() }
+            // 当restaurants或locationManager.userLocation变化时，更新ViewModel
+            .onChange(of: restaurants) { newRestaurants in
+                viewModel.restaurants = newRestaurants
+            }
+            .onChange(of: locationManager.userLocation) { newLocation in
+                viewModel.userLocation = newLocation
+            }
+            .onAppear {
+                // 初始更新位置
+                viewModel.userLocation = locationManager.userLocation
+            }
         }
     }
     
@@ -49,7 +58,41 @@ struct LibraryView: View {
                 .fontWeight(.bold)
                 .foregroundColor(AppTheme.Colors.textPrimary)
             
-            // 2. 搜索框（占据剩余空间）
+            // 2. 城市选择器
+            Menu {
+                ForEach(RegionManager.shared.allCities, id: \.self) { city in
+                    Button(city) { 
+                        viewModel.selectedCity = city 
+                        viewModel.selectedDistrict = nil // 切换城市时重置地区选择
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(viewModel.selectedCity)
+                        .font(AppTheme.Fonts.body)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .padding(AppTheme.Spacing.md)
+                .background(AppTheme.Colors.card)
+                .cornerRadius(AppTheme.Radius.base)
+                // 与搜索框相同的样式
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                        .stroke(Color.clear, lineWidth: 1.5)
+                )
+                .shadow(
+                    color: Color.black.opacity(0.04),
+                    radius: 8,
+                    x: 0,
+                    y: 2
+                )
+                .frame(height: 44) // 与搜索框高度一致
+            }
+            
+            // 3. 搜索框（占据剩余空间）
             HStack {
                 Image(systemName: "magnifyingglass").foregroundColor(.gray)
                 TextField("搜索餐厅名称、菜系...", text: $searchText)
@@ -75,11 +118,12 @@ struct LibraryView: View {
             .scaleEffect(isSearchFocused ? 1.02 : 1.0)
             // 使用 matchedGeometryEffect 替代传统动画，提高性能
             .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.2), value: isSearchFocused)
+            .frame(height: 44) // 明确设置高度，确保与城市选择器一致
             
-            // 3. 地图图标按钮
+            // 4. 地图图标按钮
             Button(action: { 
                 // 暂不添加任何功能
-            }) {
+            }) { 
                 Image(systemName: "map")
                     .font(AppTheme.Fonts.title3)
                     .foregroundColor(AppTheme.Colors.textPrimary)
@@ -93,29 +137,103 @@ struct LibraryView: View {
     // MARK: - 筛选按钮栏
     private var filterBarSection: some View {
         HStack(spacing: 12) {
-            ForEach(["地区", "品类", "排序"], id: \.self) { title in
-                Button(action: { 
-                    // 后续添加筛选逻辑
-                }) {
-                    Text(title)
+            // 1. 地区筛选
+            Menu {
+                // 全区选项
+                Button("全区") { viewModel.selectedDistrict = nil }
+                Divider()
+                // 动态获取当前城市的区列表
+                ForEach(RegionManager.shared.getDistricts(for: viewModel.selectedCity), id: \.self) { district in
+                    Button(district) { viewModel.selectedDistrict = district }
+                }
+            } label: {
+                HStack {
+                    Text(viewModel.selectedDistrict ?? "地区")
                         .font(AppTheme.Fonts.footnote)
                         .fontWeight(.medium)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.base) // 16pt圆角
-                                .fill(AppTheme.Colors.card)
-                                .shadow(
-                                    color: Color.black.opacity(0.05), 
-                                    radius: 5, 
-                                    x: 0, 
-                                    y: 2
-                                )
-                        )
+                    Image(systemName: "chevron.down")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                        .fill(AppTheme.Colors.card)
+                        .shadow(
+                            color: Color.black.opacity(0.05), 
+                            radius: 5, 
+                            x: 0, 
+                            y: 2
+                        )
+                )
             }
+            .buttonStyle(.plain)
+            
+            // 2. 分类筛选
+            Menu {
+                // 全部分类选项
+                Button("全部分类") { viewModel.selectedType = nil }
+                Divider()
+                // 动态获取所有餐厅类型
+                ForEach(viewModel.getAvailableTypes(from: restaurants), id: \.self) { type in
+                    Button(type) { viewModel.selectedType = type }
+                }
+            } label: {
+                HStack {
+                    Text(viewModel.selectedType ?? "品类")
+                        .font(AppTheme.Fonts.footnote)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                        .fill(AppTheme.Colors.card)
+                        .shadow(
+                            color: Color.black.opacity(0.05), 
+                            radius: 5, 
+                            x: 0, 
+                            y: 2
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            
+            // 3. 排序切换
+            Menu {
+                ForEach(LibraryViewModel.SortOption.allCases, id: \.self) { option in
+                    Button(option.displayName) { viewModel.sortOption = option }
+                }
+            } label: {
+                HStack {
+                    Text(viewModel.sortOption.displayName)
+                        .font(AppTheme.Fonts.footnote)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                        .fill(AppTheme.Colors.card)
+                        .shadow(
+                            color: Color.black.opacity(0.05), 
+                            radius: 5, 
+                            x: 0, 
+                            y: 2
+                        )
+                )
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, AppTheme.Spacing.lg)
         .padding(.top, AppTheme.Spacing.xs) // 与搜索框的最小间距
@@ -126,16 +244,14 @@ struct LibraryView: View {
     private var listSection: some View {
         ScrollView {
             LazyVStack(spacing: AppTheme.Spacing.lg) {
-                ForEach(filteredRestaurants, id: \.id) { restaurant in
-                    RestaurantCard(restaurant: restaurant, locationManager: locationManager)
+                ForEach(viewModel.processedRestaurants, id: \.id) { displayItem in
+                    RestaurantCard(restaurant: displayItem.restaurant, locationManager: locationManager)
                         .padding(.horizontal, AppTheme.Spacing.lg)
                 }
             }
             .padding(.bottom, 90)
         }
     }
-
-
 }
 
 // MARK: - 餐厅卡片组件 (自适应尺寸，完美适配所有设备)
@@ -148,7 +264,7 @@ struct RestaurantCard: View {
     // 使用 AsyncImageView 替代手动图片加载，实现预解码和缓存
     
     var body: some View {
-        NavigationLink(destination: RestaurantDetailView(restaurant: restaurant, locationManager: locationManager)) {
+        NavigationLink(destination: RestaurantDetailView(restaurant: restaurant, locationManager: locationManager)) { 
             HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
                 // 封面图：使用 AsyncImageView 实现异步加载和预解码
                 AsyncImageView(
@@ -170,7 +286,7 @@ struct RestaurantCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text(restaurant.name)
-                            .font(AppTheme.Fonts.title3)
+                            .font(AppTheme.Fonts.headline)
                             .bold()
                             .lineLimit(1)
                             .foregroundColor(AppTheme.Colors.textPrimary)
@@ -195,7 +311,8 @@ struct RestaurantCard: View {
                         HStack(spacing: 2) {
                             Image(systemName: "location.fill")
                                 .font(.system(size: 10))
-                            Text(locationManager.distanceTo(lat: restaurant.latitude, long: restaurant.longitude))
+                            // 处理位置不可用的情况
+                            Text(getFormattedDistance())
                         }
                         .font(Font.system(.footnote, design: .rounded))
                         .foregroundColor(AppTheme.Colors.textPrimary)
@@ -251,6 +368,18 @@ struct RestaurantCard: View {
             Button("删除", role: .destructive) { withAnimation { modelContext.delete(restaurant) } }
             Button("取消", role: .cancel) {}
         } message: { Text("确定要删除吗？") }
+    }
+    
+    // 获取格式化的距离字符串，处理位置不可用情况
+    private func getFormattedDistance() -> String {
+        // 检查位置管理器是否可用
+        guard let userLocation = locationManager.userLocation else {
+            return "未定位"
+        }
+        
+        // 调用位置管理器的距离计算方法
+        let distanceString = locationManager.distanceTo(lat: restaurant.latitude, long: restaurant.longitude)
+        return distanceString
     }
 }
 

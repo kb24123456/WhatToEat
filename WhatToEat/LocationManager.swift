@@ -26,8 +26,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         // 配置位置管理器
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters // 精度设置为最近10米
-        locationManager.distanceFilter = 10 // 位置变化超过10米时更新
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters // 精度设置为百米级，为了省电
+        locationManager.distanceFilter = 100 // 位置变化超过100米时更新
         
         // 请求位置权限
         requestLocationPermission()
