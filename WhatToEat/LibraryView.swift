@@ -521,7 +521,7 @@ struct RestaurantCard: View {
                                 VStack(alignment: .leading, spacing: 0) {
                                     Text("\"\(restaurant.review)\"")
                                         .font(AppTheme.Fonts.footnote)
-                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
                                         .padding(.horizontal, AppTheme.Spacing.md)
