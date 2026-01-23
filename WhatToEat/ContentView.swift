@@ -13,16 +13,16 @@ enum TabItem: String, CaseIterable {
     case library = "食库"
     case home = "吃啥"
     case add = ""
-    case friends = "事友圈"
+    case friends = "食记"
     case profile = "我的"
     
     var iconName: String {
         switch self {
-        case .library: return "books.vertical"
-        case .home: return "house"
+        case .library: return "pointer.arrow.ipad.square"
+        case .home: return "fork.knife.circle.badge.sparkles"
         case .add: return "plus"
-        case .friends: return "person.3"
-        case .profile: return "person"
+        case .friends: return "pointer.arrow.ipad.square"
+        case .profile: return "person.crop.circle"
         }
     }
 }
