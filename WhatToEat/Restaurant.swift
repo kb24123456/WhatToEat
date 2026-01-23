@@ -46,4 +46,29 @@ final class Restaurant {
         let total = logs.reduce(0.0) { $0 + ($1.expense / Double(max(1, $1.peopleCount))) }
         self.averagePrice = total / Double(logs.count)
     }
+    
+    // MARK: - 计算属性
+    
+    /// 打卡次数
+    var checkInCount: Int {
+        return logs.count
+    }
+    
+    /// 收录天数文本
+    var recordTimeDisplay: String {
+        let calendar = Calendar.current
+        let now = Date()
+        let components = calendar.dateComponents([.day], from: createdAt, to: now)
+        let days = components.day ?? 0
+        
+        if days == 0 {
+            return "今天收录"
+        } else if days <= 30 {
+            return "收录第 \(days) 天"
+        } else {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy.MM"
+            return "收录于 \(dateFormatter.string(from: createdAt))"
+        }
+    }
 }

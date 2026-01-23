@@ -34,6 +34,9 @@ struct RestaurantDetailView: View {
                     // 2. 标题和分类标签
                     titleSection
                     
+                    // 2.5 统计卡片
+                    statsCardSection
+                    
                     // 3. 餐厅标签
                     tagsSection
                     
@@ -115,6 +118,42 @@ struct RestaurantDetailView: View {
                 Text(restaurant.district).font(.caption).padding(6).background(Color.green.opacity(0.1)).foregroundColor(.green).cornerRadius(4)
             }
         }
+        .padding(.horizontal)
+    }
+    
+    // MARK: - 2.5 统计卡片
+    @ViewBuilder
+    private var statsCardSection: some View {
+        HStack(spacing: 1) {
+            // 左侧：收录时间
+            VStack(alignment: .center, spacing: 4) {
+                Text("📅 收录时间")
+                    .font(AppTheme.Fonts.footnote)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Text(restaurant.recordTimeDisplay)
+                    .font(AppTheme.Fonts.footnote)
+                    .fontWeight(.medium)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(AppTheme.Colors.card)
+            
+            // 右侧：累计打卡
+            VStack(alignment: .center, spacing: 4) {
+                Text("🔥 累计打卡")
+                    .font(AppTheme.Fonts.footnote)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                Text("\(restaurant.checkInCount) 次")
+                    .font(AppTheme.Fonts.footnote)
+                    .fontWeight(.medium)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(AppTheme.Colors.card)
+        }
+        .cornerRadius(AppTheme.Radius.sm)
         .padding(.horizontal)
     }
     

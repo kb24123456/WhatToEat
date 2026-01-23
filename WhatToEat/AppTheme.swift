@@ -16,6 +16,7 @@ struct AppTheme {
         static let primary = Color(hex: "#5796E6") // 湖蓝色
         static let secondary = Color(hex: "#FFB347") // 蛋黄橙
         static let success = Color(hex: "#43C59E") // 碧绿色
+        static let price = Color(hex: "#ff96a4") // 人均消费颜色
         
         static let lightRed = Color(hex: "#FFE8EE")
         static let lightBlue = Color(hex: "#EBF3FF")
