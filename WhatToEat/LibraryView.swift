@@ -141,7 +141,8 @@ struct LibraryView: View {
             // 使用 matchedGeometryEffect 替代传统动画，提高性能
             .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.2), value: isSearchFocused)
         }
-        .padding(AppTheme.Spacing.lg)
+        .padding(.horizontal, AppTheme.Spacing.lg)
+        .padding(.vertical, AppTheme.Spacing.sm)
         .background(AppTheme.Colors.background)
     }
     
