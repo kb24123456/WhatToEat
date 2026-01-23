@@ -313,10 +313,15 @@ struct AddRestaurantView: View {
             @MainActor in
             // 存入 SwiftData
             modelContext.insert(newRestaurant)
-            // 显式保存上下文
-            try? modelContext.save()
-            // 关闭页面
-            dismiss()
+            // 显式保存上下文，确保保存成功后再关闭页面
+            do {
+                try modelContext.save()
+                // 保存成功后才关闭页面
+                dismiss()
+            } catch {
+                // 保存失败，记录错误但不关闭页面
+                print("保存餐厅失败: \(error.localizedDescription)")
+            }
         }
     }
     

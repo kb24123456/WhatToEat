@@ -10,33 +10,37 @@ import CoreLocation
 import Combine
 
 /// 餐厅列表视图模型，处理餐厅列表的业务逻辑
+@MainActor
 class LibraryViewModel: ObservableObject {
     // MARK: - 常量定义
     
     /// 城市存储键
     private let kSavedCityKey = "UserSelectedCity"
     
+    /// 位置更新阈值（米）- 用户移动超过此距离才重新排序
+    private let locationUpdateThreshold: Double = 50
+    
     // MARK: - 1. 输入参数
     
     /// 原始餐厅数据数组（来自SwiftData查询）
     var restaurants: [Restaurant] {
         didSet {
-            updateProcessedRestaurants()
+            processRestaurants()
         }
     }
     
     /// 用户当前位置
     var userLocation: CLLocation? {
         didSet {
-            updateProcessedRestaurants()
+            // 检查位置变化是否超过阈值
+            if let oldLocation = oldValue, let newLocation = userLocation {
+                let distanceChange = oldLocation.distance(from: newLocation)
+                if distanceChange < locationUpdateThreshold {
+                    return // 位置变化太小，不更新
+                }
+            }
+            processRestaurants()
         }
-    }
-    
-    // MARK: - 辅助方法
-    
-    /// 更新处理后的餐厅数据
-    private func updateProcessedRestaurants() {
-        self.processedRestaurants = processRestaurants()
     }
     
     // MARK: - 2. 状态管理
@@ -46,28 +50,35 @@ class LibraryViewModel: ObservableObject {
         didSet {
             // 每当城市变化时，保存到UserDefaults
             UserDefaults.standard.set(selectedCity, forKey: kSavedCityKey)
-            updateProcessedRestaurants()
+            processRestaurants()
         }
     }
     
     /// 当前选中的行政区（可选，为空代表全区）
     @Published var selectedDistrict: String? {
         didSet {
-            updateProcessedRestaurants()
+            processRestaurants()
         }
     }
     
     /// 当前选中的餐厅类型（可选，为空代表全分类）
     @Published var selectedType: String? {
         didSet {
-            updateProcessedRestaurants()
+            processRestaurants()
+        }
+    }
+    
+    /// 搜索文本
+    @Published var searchText: String = "" {
+        didSet {
+            processRestaurants()
         }
     }
     
     /// 排序选项
     @Published var sortOption: SortOption = .smart {
         didSet {
-            updateProcessedRestaurants()
+            processRestaurants()
         }
     }
     
@@ -89,6 +100,11 @@ class LibraryViewModel: ObservableObject {
     /// 处理后的餐厅显示项数组
     @Published var processedRestaurants: [RestaurantDisplayItem] = []
     
+    // MARK: - 4. 缓存
+    
+    /// 距离缓存 - 缓存已计算的距离，避免重复计算
+    private var distanceCache: [UUID: Double] = [:]
+    
     // MARK: - 初始化方法
     
     /// 初始化ViewModel
@@ -107,18 +123,25 @@ class LibraryViewModel: ObservableObject {
         }
         
         // 初始处理餐厅数据
-        self.processedRestaurants = processRestaurants()
+        processRestaurants()
     }
     
-    // MARK: - 4. 核心处理方法
+    // MARK: - 5. 核心处理方法
     
     /// 处理餐厅数据，包括计算距离、过滤和排序
     /// - Returns: 处理后的餐厅显示项数组
-    func processRestaurants() -> [RestaurantDisplayItem] {
-        // 1. 计算距离并创建显示项
+    private func processRestaurants() {
+        // 1. 计算距离并创建显示项（使用缓存优化）
         let displayItems = restaurants.map { restaurant -> RestaurantDisplayItem in
-            // 计算距离（米）
-            let distance = calculateDistance(from: userLocation, to: restaurant)
+            // 尝试从缓存获取距离，否则重新计算
+            let distance: Double
+            if let cachedDistance = distanceCache[restaurant.id] {
+                distance = cachedDistance
+            } else {
+                distance = calculateDistance(from: userLocation, to: restaurant)
+                // 保存到缓存
+                distanceCache[restaurant.id] = distance
+            }
             // 创建显示项
             return RestaurantDisplayItem(restaurant: restaurant, distance: distance)
         }
@@ -146,16 +169,22 @@ class LibraryViewModel: ObservableObject {
                 }
             }
             
+            // 按搜索文本过滤
+            if !searchText.isEmpty {
+                let searchLower = searchText.lowercased()
+                return restaurant.name.lowercased().contains(searchLower) || 
+                       restaurant.type.lowercased().contains(searchLower) ||
+                       restaurant.tags.contains { $0.lowercased().contains(searchLower) }
+            }
+            
             return true
         }
         
         // 3. 排序餐厅
-        let sortedItems = sortDisplayItems(filteredItems, by: sortOption)
-        
-        return sortedItems
+        self.processedRestaurants = sortDisplayItems(filteredItems, by: sortOption)
     }
     
-    // MARK: - 5. 辅助方法
+    // MARK: - 6. 辅助方法
     
     /// 计算两个位置之间的直线距离
     /// - Parameters:

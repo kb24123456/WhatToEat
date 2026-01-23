@@ -8,7 +8,6 @@ struct LibraryView: View {
     @Query private var restaurants: [Restaurant]
     
     // 状态管理
-    @State private var searchText = ""
     @State private var showImportSheet = false
     @State private var showCityPicker = false
     @FocusState private var isSearchFocused: Bool // ✅ 专门监听搜索框是否被点中
@@ -19,7 +18,7 @@ struct LibraryView: View {
     @State private var selectedCity: String
     @State private var selectedDistrict: String?
     @State private var selectedType: String?
-    @State private var sortOption: SortOption = .smart
+    @State private var searchText = ""
     
     // 排序选项枚举
     enum SortOption: String, CaseIterable {
@@ -33,6 +32,8 @@ struct LibraryView: View {
             return self.rawValue
         }
     }
+    
+    @State private var sortOption: SortOption = .smart
     
     // 城市存储键
     private let kSavedCityKey = "UserSelectedCity"
@@ -64,9 +65,13 @@ struct LibraryView: View {
             .sheet(isPresented: $showCityPicker) {
                 CitySelectionView(selectedCity: $selectedCity)
             }
+            // 导航目标配置
+            .navigationDestination(for: Restaurant.self) {
+                RestaurantDetailView(restaurant: $0, locationManager: locationManager)
+            }
             // 当城市变化时，保存到UserDefaults
             .onChange(of: selectedCity) {
-                UserDefaults.standard.set(selectedCity, forKey: kSavedCityKey)
+                UserDefaults.standard.set($0, forKey: kSavedCityKey)
             }
         }
     }
@@ -183,7 +188,7 @@ struct LibraryView: View {
                 Button("全部分类") { selectedType = nil }
                 Divider()
                 // 动态获取所有餐厅类型
-                ForEach(getAvailableTypes(), id: \.self) { type in
+                ForEach(CategoryManager.shared.getAllCategories(from: restaurants), id: \.self) { type in
                     Button(type) { selectedType = type }
                 }
             } label: {
@@ -246,26 +251,7 @@ struct LibraryView: View {
         .padding(.bottom, AppTheme.Spacing.md)
     }
     
-    // MARK: - 餐厅列表
-    private var listSection: some View {
-        ScrollView {
-            LazyVStack(spacing: AppTheme.Spacing.lg) {
-                ForEach(filteredRestaurants) { restaurant in
-                    RestaurantCard(restaurant: restaurant, locationManager: locationManager)
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                }
-            }
-            .padding(.bottom, 90)
-        }
-    }
-    
     // MARK: - 辅助方法
-    
-    /// 从餐厅数据中提取所有去重的餐厅类型
-    private func getAvailableTypes() -> [String] {
-        // 使用CategoryManager获取所有可用品类
-        return CategoryManager.shared.getAllCategories(from: restaurants)
-    }
     
     /// 计算两个位置之间的直线距离
     private func calculateDistance(from: CLLocation?, to restaurant: Restaurant) -> Double {
@@ -278,11 +264,16 @@ struct LibraryView: View {
     }
     
     /// 计算智能排序得分
-    private func calculateSmartScore(restaurant: Restaurant, distance: Double) -> Double {
+    /// - Parameters:
+    ///   - distance: 距离（米）
+    ///   - rating: 评分
+    ///   - createdAt: 创建时间
+    /// - Returns: 智能排序得分
+    private func calculateSmartScore(distance: Double, rating: Int, createdAt: Date) -> Double {
         var score: Double = 0.0
         
         // 因子 A：评分权重 (40%)
-        let ratingScore = Double(restaurant.rating) * 20.0
+        let ratingScore = Double(rating) * 20.0
         score += ratingScore * 0.4
         
         // 因子 B：距离权重 (40%)
@@ -296,7 +287,7 @@ struct LibraryView: View {
         // 因子 C：新鲜度权重 (20%)
         // 检查是否是最近7天内创建的记录
         let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
-        if restaurant.createdAt >= sevenDaysAgo {
+        if createdAt >= sevenDaysAgo {
             score += 20.0 // 最近7天内创建，加20分
         }
         
@@ -307,6 +298,9 @@ struct LibraryView: View {
     private var filteredRestaurants: [Restaurant] {
         // 1. 过滤餐厅
         var result = restaurants.filter { restaurant in
+            // 🛑 核心修复：防止访问尚未就绪的对象
+            guard restaurant.modelContext != nil else { return false }
+            
             // 按城市过滤
             guard restaurant.city == selectedCity else {
                 return false
@@ -338,27 +332,56 @@ struct LibraryView: View {
         }
         
         // 2. 排序餐厅
+        // 确保所有打分在过滤之后、渲染之前一次性完成
         let userLocation = locationManager.userLocation
         result = result.sorted { restaurant1, restaurant2 in
-            let distance1 = calculateDistance(from: userLocation, to: restaurant1)
-            let distance2 = calculateDistance(from: userLocation, to: restaurant2)
+            // 提前读取所有需要的属性，避免在排序过程中重复访问SwiftData
+            let (distance1, rating1, createdAt1) = (
+                calculateDistance(from: userLocation, to: restaurant1),
+                restaurant1.rating,
+                restaurant1.createdAt
+            )
+            let (distance2, rating2, createdAt2) = (
+                calculateDistance(from: userLocation, to: restaurant2),
+                restaurant2.rating,
+                restaurant2.createdAt
+            )
             
             switch sortOption {
             case .smart:
-                let score1 = calculateSmartScore(restaurant: restaurant1, distance: distance1)
-                let score2 = calculateSmartScore(restaurant: restaurant2, distance: distance2)
+                // 智能排序得分计算
+                let score1 = calculateSmartScore(distance: distance1, rating: rating1, createdAt: createdAt1)
+                let score2 = calculateSmartScore(distance: distance2, rating: rating2, createdAt: createdAt2)
                 return score1 > score2
             case .distance:
                 return distance1 < distance2
             case .rating:
-                return restaurant1.rating > restaurant2.rating
+                return rating1 > rating2
             case .createdAt:
-                return restaurant1.createdAt > restaurant2.createdAt
+                return createdAt1 > createdAt2
             }
         }
         
         return result
     }
+    
+    // MARK: - 餐厅列表
+    private var listSection: some View {
+        ScrollView {
+            LazyVStack(spacing: AppTheme.Spacing.lg) {
+                ForEach(filteredRestaurants) { restaurant in
+                    RestaurantCard(restaurant: restaurant, locationManager: locationManager)
+                        .onTapGesture {
+                            // 使用导航目标模式，点击时触发导航
+                        }
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.lg) // 左右各16pt内边距，与顶部Header对齐
+            .padding(.bottom, 90)
+        }
+    }
+
+
 }
 
 // MARK: - 餐厅卡片组件 (自适应尺寸，完美适配所有设备)
@@ -367,8 +390,6 @@ struct RestaurantCard: View {
     let restaurant: Restaurant
     @ObservedObject var locationManager: LocationManager
     @State private var showDeleteAlert = false
-    
-    // 使用 AsyncImageView 替代手动图片加载，实现预解码和缓存
     
     // 计算距离文本
     private func distanceText(from: CLLocation, to restaurant: Restaurant) -> String {
@@ -380,11 +401,25 @@ struct RestaurantCard: View {
         }
     }
     
+    // 获取消费数据文本
+    private var priceText: String {
+        if restaurant.averagePrice > 0 {
+            return "¥\(Int(restaurant.averagePrice))/人"
+        } else {
+            return "暂无消费数据"
+        }
+    }
+    
+    // 获取星级文本
+    private var ratingText: String {
+        return "⭐️\(restaurant.rating)"
+    }
+    
     var body: some View {
         Group {
             // 守卫判断：只有对象上下文合法时才访问其属性
             if restaurant.modelContext != nil {
-                NavigationLink(destination: RestaurantDetailView(restaurant: restaurant, locationManager: locationManager)) { 
+
                     HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
                         // 封面图：使用 AsyncImageView 实现异步加载和预解码
                         AsyncImageView(
@@ -399,90 +434,115 @@ struct RestaurantCard: View {
                             )
                         )
                         .frame(width: AppTheme.Cards.restaurantCoverWidth, height: AppTheme.Cards.restaurantCoverHeight)
-                        .cornerRadius(AppTheme.Radius.image) // 封面图圆角与卡片圆角一致：16pt
+                        .cornerRadius(AppTheme.Radius.image) // 封面图圆角与卡片基座圆角一致
                         .clipped() // 确保内容不溢出容器
                         
-                        // 信息区域：调整顶部对齐，使餐厅名称与封面图上边缘齐平
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(restaurant.name)
-                                    .font(AppTheme.Fonts.headline)
-                                    .bold()
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                Spacer()
-                                Image(systemName: "ellipsis.circle")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                    .onTapGesture { showDeleteAlert = true }
-                            }
-                            
-                            // 评分和标签
-                            HStack(spacing: AppTheme.Spacing.xs) {
-                                // 评分星星
-                                ForEach(1...5, id: \.self) {
-                                    Image(systemName: $0 <= restaurant.rating ? "star.fill" : "star")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(AppTheme.Colors.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                // 标签：只显示前两个
-                                Text(restaurant.tags.prefix(2).joined(separator: ", "))
-                                    .font(.caption)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                            }
-                            
-                            // 距离和价格
-                            HStack {
-                                // 距离显示（如果有定位）
-                                if let userLocation = locationManager.userLocation {
-                                    Text(distanceText(from: userLocation, to: restaurant))
-                                        .font(.footnote)
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                } else {
-                                    Text("未定位")
-                                        .font(.footnote)
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                }
-                                
-                                Spacer()
-                                
-                                // 平均消费显示：如果有平均价格，显示"¥XX"，否则显示"暂无消费数据"
-                                if restaurant.averagePrice > 0 {
-                                    Text("¥\(Int(restaurant.averagePrice))")
-                                        .font(.footnote)
-                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        // 右侧内容列：高度与封面图一致，添加右侧内边距
+                        VStack(alignment: .leading, spacing: 0) {
+                            // MARK: 顶部组 - 包含餐厅名称、价格/地区/距离、星级/品类/标签
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                                // 第一行 - 餐厅名称和更多按钮
+                                HStack {
+                                    Text(restaurant.name)
+                                        .font(AppTheme.Fonts.headline)
                                         .bold()
-                                } else {
-                                    Text("暂无消费数据")
-                                        .font(.footnote)
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Image(systemName: "ellipsis.circle")
+                                        .font(.system(size: 20))
                                         .foregroundColor(AppTheme.Colors.textSecondary)
+                                        .onTapGesture { showDeleteAlert = true }
+                                }
+                                
+                                // 第二行 - 元信息：人均消费、地区、距离
+                                HStack(spacing: AppTheme.Spacing.sm) {
+                                    Text(priceText)
+                                        .font(AppTheme.Fonts.footnote)
+                                        .foregroundColor(AppTheme.Colors.accent)
+                                    
+                                    // 小圆点分隔符
+                                    Circle()
+                                        .frame(width: 3, height: 3)
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                    
+                                    Text(restaurant.district)
+                                        .font(AppTheme.Fonts.footnote)
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                    
+                                    // 小圆点分隔符
+                                    Circle()
+                                        .frame(width: 3, height: 3)
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                    
+                                    // 距离显示（如果有定位）
+                                    if let userLocation = locationManager.userLocation {
+                                        Text(distanceText(from: userLocation, to: restaurant))
+                                            .font(AppTheme.Fonts.footnote)
+                                            .foregroundColor(AppTheme.Colors.textPrimary)
+                                    } else {
+                                        Text("未定位")
+                                            .font(AppTheme.Fonts.footnote)
+                                            .foregroundColor(AppTheme.Colors.textPrimary)
+                                    }
+                                }
+                                
+                                // 第三行 - 属性：星级、品类、标签
+                                HStack(spacing: AppTheme.Spacing.sm) {
+                                    // 星级
+                                    Text(ratingText)
+                                        .font(AppTheme.Fonts.subheadline)
+                                        .foregroundColor(AppTheme.Colors.secondary)
+                                        .bold()
+                                    
+                                    // 品类
+                                    Text(restaurant.type)
+                                        .font(AppTheme.Fonts.caption)
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                    
+                                    // 标签：只显示前两个，使用小胶囊样式
+                                    ForEach(restaurant.tags.prefix(2), id: \.self) {
+                                        Text($0)
+                                            .font(AppTheme.Fonts.caption)
+                                            .foregroundColor(AppTheme.Colors.primary)
+                                            .padding(.horizontal, AppTheme.Spacing.xs)
+                                            .padding(.vertical, 2)
+                                            .background(AppTheme.Colors.primary.opacity(0.1))
+                                            .cornerRadius(AppTheme.Radius.circle)
+                                    }
                                 }
                             }
                             
-                            // 地址和评价
-                            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                                Text(restaurant.address)
-                                    .font(.footnote)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                    .lineLimit(1)
-                                
-                                if !restaurant.review.isEmpty {
-                                    Text(restaurant.review)
-                                        .font(AppTheme.Fonts.caption2)
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                            // 弹性占位符：将评论区域推到容器底部
+                            Spacer(minLength: 0)
+                            
+                            // MARK: 底部组 - 评论容器
+                            if !restaurant.review.isEmpty {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text("\"\(restaurant.review)\"")
+                                        .font(AppTheme.Fonts.footnote)
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
                                         .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                        .padding(.horizontal, AppTheme.Spacing.md)
+                                        .padding(.vertical, AppTheme.Spacing.sm)
+                                        .background(AppTheme.Colors.lightGray)
+                                        .cornerRadius(AppTheme.Radius.base)
                                 }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
+                        .frame(height: AppTheme.Cards.restaurantCoverHeight) // 确保右侧高度与左侧封面图一致
                     }
-                    .padding(AppTheme.Spacing.md)
                     .background(AppTheme.Colors.card)
-                    .cornerRadius(AppTheme.Radius.base)
-                    // ✅ 移除阴影效果
-                    .shadow(color: Color.black.opacity(0.0), radius: 0, x: 0, y: 0)
-                }
+                .cornerRadius(AppTheme.Radius.base) // 卡片基座圆角
+                .clipped() // 确保内容不溢出容器，保持圆角效果
+                .simultaneousGesture(
+                    TapGesture()
+                        .onEnded { _ in
+                            // 使用导航目标模式，点击时触发导航
+                        }
+                )
                 .alert("确认删除", isPresented: $showDeleteAlert) {
                     Button("删除", role: .destructive) {
                         modelContext.delete(restaurant)
