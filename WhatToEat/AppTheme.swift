@@ -7,7 +7,7 @@ struct AppTheme {
         static let navigationBar = Colors.background // 导航栏颜色 = 背景颜色，自动跟随背景色变化
         static let card = Color.white
         static let textPrimary = Color(hex: "#332E2B")
-        static let textSecondary = Color(hex: "#948E88")
+        static let textSecondary = Color(hex: "#77716b")
         
         // 🔴 核心强调色（小红书红）
         static let accent = Color(hex: "#FF2442")
