@@ -19,9 +19,9 @@ enum TabItem: String, CaseIterable {
     var iconName: String {
         switch self {
         case .library: return "pointer.arrow.ipad.square"
-        case .home: return "fork.knife.circle.badge.sparkles"
+        case .home: return "lasso.badge.sparkles"
         case .add: return "plus"
-        case .friends: return "pointer.arrow.ipad.square"
+        case .friends: return "pencil.and.scribble"
         case .profile: return "person.crop.circle"
         }
     }
