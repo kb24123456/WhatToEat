@@ -279,12 +279,24 @@ struct RestaurantDetailView: View {
 
     // MARK: - 辅助逻辑
     private func fetchDrivingRoute() async {
-        guard locationManager.userLocation != nil else { return }
-        isLoadingRoute = true
-        if let info = await locationManager.fetchRoute(to: restaurant.latitude, long: restaurant.longitude) {
-            drivingRoute = info
+        // 安全检查：确保locationManager和餐厅坐标都有效
+        guard let userLocation = locationManager.userLocation, 
+              restaurant.latitude != 0.0, 
+              restaurant.longitude != 0.0 else {
+            return
         }
-        isLoadingRoute = false
+        
+        isLoadingRoute = true
+        defer { isLoadingRoute = false } // 确保无论成功失败都会停止加载
+        
+        do {
+            // 使用do-catch确保异步操作不会崩溃
+            if let info = await locationManager.fetchRoute(to: restaurant.latitude, long: restaurant.longitude) {
+                drivingRoute = info
+            }
+        } catch {
+            print("获取路线失败: \(error.localizedDescription)")
+        }
     }
 
     private func updateCover(image: UIImage) {

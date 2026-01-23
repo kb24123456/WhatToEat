@@ -2,6 +2,15 @@ import SwiftUI
 import SwiftData
 import MapKit
 
+// 延迟加载视图包装器，避免在列表中预加载所有详情页
+struct LazyView<Content: View>: View {
+    let build: () -> Content
+    init(@ViewBuilder _ build: @escaping () -> Content) {
+        self.build = build
+    }
+    var body: Content { build() }
+}
+
 // MARK: - 1. 核心视图
 struct LibraryView: View {
     @Environment(\.modelContext) private var modelContext
@@ -255,7 +264,8 @@ struct RestaurantCard: View {
     // 使用 AsyncImageView 替代手动图片加载，实现预解码和缓存
     
     var body: some View {
-        NavigationLink(destination: RestaurantDetailView(restaurant: restaurant, locationManager: locationManager)) { 
+        // 使用lazy加载，只有在点击时才创建RestaurantDetailView实例
+        NavigationLink(destination: LazyView { RestaurantDetailView(restaurant: restaurant, locationManager: locationManager) }) { 
             HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
                 // 封面图：使用 AsyncImageView 实现异步加载和预解码
                 AsyncImageView(
