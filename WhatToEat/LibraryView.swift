@@ -285,7 +285,7 @@ struct RestaurantCard: View {
                         Button { showDeleteAlert = true } label: {
                             Image(systemName: "trash")
                                 .font(.caption)
-                                .foregroundColor(.gray.opacity(0.4)) 
+                                .foregroundColor(.gray.opacity(0.4))
                         }
                     }
                     
