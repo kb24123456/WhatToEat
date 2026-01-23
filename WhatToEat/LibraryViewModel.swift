@@ -231,14 +231,8 @@ class LibraryViewModel: ObservableObject {
     /// - Parameter restaurants: 餐厅数据数组
     /// - Returns: 去重后的餐厅类型数组
     func getAvailableTypes(from restaurants: [Restaurant]) -> [String] {
-        // 从餐厅数据中提取所有类型，去重并排序
-        let types = restaurants
-            .map { $0.type }
-            .filter { !$0.isEmpty }
-            .unique()
-            .sorted()
-        
-        return types
+        // 使用CategoryManager获取所有可用品类
+        return CategoryManager.shared.getAllCategories(from: restaurants)
     }
 }
 

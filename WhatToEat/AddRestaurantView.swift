@@ -35,18 +35,9 @@ struct AddRestaurantView: View {
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
     
-    // 品类相关状态
-    @State private var useCustomCategory = false
-    @State private var customCategoryInput = ""
-    
-    // 预设品类列表
-    private let presetCategories = ["火锅", "川菜", "粤菜", "家常菜", "东北菜", "西餐", "面馆", "烘焙", "早餐", "日料", "饮料", "甜品", "烧烤", "东南亚菜", "其他"]
-    
-    // 合并预设品类和从餐厅数据中提取的品类，去重排序后返回
+    // 从CategoryManager获取预设品类列表
     var categoryOptions: [String] {
-        let restaurantCategories = allRestaurants.map { $0.type }
-        let allCategories = presetCategories + restaurantCategories
-        return Array(Set(allCategories)).sorted()
+        CategoryManager.shared.getPresetCategories()
     }
     
     // 根据当前城市获取对应的预设地区列表
@@ -102,39 +93,21 @@ struct AddRestaurantView: View {
                             
                             // 品类
                             FormItemView(title: "品类") {
-                                if categoryOptions.isEmpty {
-                                    TextField("请输入品类", text: $category)
-                                        .font(AppTheme.Fonts.body)
-                                        .autocorrectionDisabled()
-                                } else {
-                                    Menu {
-                                        ForEach(categoryOptions, id: \.self) { option in
-                                            Button { category = option }
-                                            label: {
-                                                Label(option, systemImage: category == option ? "checkmark" : "")
-                                            }
-                                        }
-                                        Button { category = "__CUSTOM_CATEGORY__" }
+                                Menu {
+                                    ForEach(categoryOptions, id: \.self) { option in
+                                        Button { category = option }
                                         label: {
-                                            Label("+ 自定义品类", systemImage: category == "__CUSTOM_CATEGORY__" ? "checkmark" : "")
-                                        }
-                                    } label: {
-                                        HStack {
-                                            Text(category == "__CUSTOM_CATEGORY__" ? "自定义" : (category.isEmpty ? "请选择品类" : category))
-                                                .font(AppTheme.Fonts.body)
-                                                .foregroundColor(category.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
-                                            Spacer()
-                                            Image(systemName: "chevron.down")
-                                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                            Label(option, systemImage: category == option ? "checkmark" : "")
                                         }
                                     }
-                                    
-                                    if category == "__CUSTOM_CATEGORY__" {
-                                        TextField("请输入自定义品类", text: $customCategoryInput)
+                                } label: {
+                                    HStack {
+                                        Text(category.isEmpty ? "请选择品类" : category)
                                             .font(AppTheme.Fonts.body)
-                                            .autocorrectionDisabled()
-                                            .onSubmit { if !customCategoryInput.isEmpty { category = customCategoryInput; customCategoryInput = "" } }
-                                            .padding(.top, AppTheme.Spacing.sm)
+                                            .foregroundColor(category.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.down")
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
                                     }
                                 }
                             }
@@ -310,15 +283,8 @@ struct AddRestaurantView: View {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         
-        // 2. 处理品类：确保不保存占位符值，为空时使用默认值
-        let finalCategory: String
-        if category == "__CUSTOM_CATEGORY__" {
-            // 如果选择了自定义品类但未输入，使用默认值
-            finalCategory = !customCategoryInput.isEmpty ? customCategoryInput : "未分类"
-        } else {
-            // 如果直接选择的品类为空，使用默认值
-            finalCategory = !category.isEmpty ? category : "未分类"
-        }
+        // 2. 处理品类：如果未选择，使用默认值
+        let finalCategory = !category.isEmpty ? category : "未分类"
         
         // 3. 处理评分：如果未选择（为0），使用默认值3
         let finalRating = rating > 0 ? rating : 3
