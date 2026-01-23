@@ -14,6 +14,7 @@ struct AddRestaurantView: View {
     @State private var name = ""
     @State private var category = "" // 对应模型里的 type，已从"菜系"改为"品类"，初始为空
     @State private var district = "" // 初始为空
+    @State private var city = "" // 初始为空
     @State private var rating = 0 // 初始为0，无星星选中
     @State private var review = ""
     @State private var tagsInput = "" // 使用逗号分隔录入，更简洁
@@ -177,17 +178,6 @@ struct AddRestaurantView: View {
                     TextField("输入标签 (用逗号分隔)", text: $tagsInput)
                         .font(.subheadline)
                 }
-                
-                // 显示默认添加的城市
-                Section {
-                    let kSavedCityKey = "UserSelectedCity"
-                    let savedCity = UserDefaults.standard.string(forKey: kSavedCityKey) ?? "上海"
-                    Text("默认添加至：\(savedCity)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .listRowBackground(Color.clear)
             }
             .navigationTitle("新餐厅录入")
             .navigationBarTitleDisplayMode(.inline)
@@ -229,18 +219,14 @@ struct AddRestaurantView: View {
         }
     }
     
-    // ✅ 核心逻辑：保存时处理图片文件和标签，自动注入城市信息
+    // ✅ 核心逻辑：保存时处理图片文件和标签
     private func saveRestaurant() {
-        // 1. 从UserDefaults获取当前城市
-        let kSavedCityKey = "UserSelectedCity"
-        let savedCity = UserDefaults.standard.string(forKey: kSavedCityKey) ?? "上海"
-        
-        // 2. 处理标签字符串转数组
+        // 1. 处理标签字符串转数组
         let tags = tagsInput.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         
-        // 3. 处理品类：确保不保存占位符值，为空时使用默认值
+        // 2. 处理品类和地区：确保不保存占位符值，为空时使用默认值
         let finalCategory: String
         if category == "__CUSTOM_CATEGORY__" {
             // 如果选择了自定义品类但未输入，使用默认值
@@ -250,37 +236,6 @@ struct AddRestaurantView: View {
             finalCategory = !category.isEmpty ? category : "未分类"
         }
         
-        // 4. 处理评分：如果未选择（为0），使用默认值3
-        let finalRating = rating > 0 ? rating : 3
-        
-        // 5. 将图片保存到磁盘并获取文件名
-        let filename = selectedImage.flatMap { ImageManager.shared.saveImage($0) }
-        
-        // 6. 定义创建餐厅的函数
-        let createAndSaveRestaurant = { (district: String) in
-            // 创建餐厅对象
-            let newRestaurant = Restaurant(
-                name: name,
-                type: finalCategory,
-                district: district,
-                city: savedCity,
-                rating: finalRating,
-                address: address,
-                latitude: latitude,
-                longitude: longitude,
-                coverPhotoFilename: filename,
-                review: review,
-                tags: tags,
-                averagePrice: 0.0
-            )
-            
-            // 存入 SwiftData
-            modelContext.insert(newRestaurant)
-            dismiss()
-        }
-        
-        // 7. 处理行政区：使用现有的district输入或默认值
-        // 由于MKMapKit API在iOS 26.0中发生了较大变化，暂时简化实现
         let finalDistrict: String
         if district == "__CUSTOM_DISTRICT__" {
             // 如果选择了自定义地区但未输入，使用默认值
@@ -290,7 +245,30 @@ struct AddRestaurantView: View {
             finalDistrict = !district.isEmpty ? district : "其他"
         }
         
-        // 直接调用创建和保存餐厅的函数
-        createAndSaveRestaurant(finalDistrict)
+        // 3. 处理评分：如果未选择（为0），使用默认值3
+        let finalRating = rating > 0 ? rating : 3
+        
+        // 3. 将图片保存到磁盘并获取文件名
+        let filename = selectedImage.flatMap { ImageManager.shared.saveImage($0) }
+        
+        // 4. 创建餐厅对象
+        let newRestaurant = Restaurant(
+            name: name,
+            type: finalCategory,
+            district: finalDistrict,
+            city: city,
+            rating: finalRating,
+            address: address,
+            latitude: latitude,
+            longitude: longitude,
+            coverPhotoFilename: filename,
+            review: review,
+            tags: tags,
+            averagePrice: 0.0
+        )
+        
+        // 5. 存入 SwiftData
+        modelContext.insert(newRestaurant)
+        dismiss()
     }
 }

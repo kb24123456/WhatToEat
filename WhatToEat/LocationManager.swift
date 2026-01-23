@@ -89,20 +89,16 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     // 获取真实驾车距离和时间
     func fetchRoute(to lat: Double, long: Double) async -> (distance: String, time: String)? {
-        // 全面安全检查
-        guard let userLocation = userLocation, 
-              lat != 0.0, 
-              long != 0.0, 
-              CLLocationCoordinate2DIsValid(userLocation.coordinate),
-              CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: lat, longitude: long)) else {
-            print("无效的位置参数")
+        // 检查用户位置是否可用
+        guard let userLocation = userLocation else {
             return nil
         }
         
-        // 使用兼容的API创建MKMapItem
+        // 创建起点和终点
         let sourcePlacemark = MKPlacemark(coordinate: userLocation.coordinate)
         let destinationPlacemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: long))
         
+        // 创建起点和终点的 map item
         let sourceItem = MKMapItem(placemark: sourcePlacemark)
         let destinationItem = MKMapItem(placemark: destinationPlacemark)
         
@@ -113,13 +109,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         request.transportType = .automobile // 使用驾车方式
         
         do {
-            // 计算路线，添加超时保护
+            // 计算路线
             let directions = MKDirections(request: request)
             let response = try await directions.calculate()
             
             // 获取第一条路线
             guard let route = response.routes.first else {
-                print("未找到路线")
                 return nil
             }
             
