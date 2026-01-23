@@ -370,9 +370,11 @@ struct LibraryView: View {
         ScrollView {
             LazyVStack(spacing: AppTheme.Spacing.lg) {
                 ForEach(filteredRestaurants) { restaurant in
+                    // 使用 NavigationLink 包装卡片，value 传入餐厅对象
                     NavigationLink(value: restaurant) {
                         RestaurantCard(restaurant: restaurant, locationManager: locationManager)
                     }
+                    .buttonStyle(.plain) // 💡 关键：防止原生按钮样式破坏卡片视觉
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.lg) // 左右各16pt内边距，与顶部Header对齐
