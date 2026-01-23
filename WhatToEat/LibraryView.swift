@@ -53,6 +53,12 @@ struct LibraryView: View {
         NavigationStack {
             // ✅ 使用 topLeading，这是所有像素级对齐的基准
             ZStack(alignment: .topLeading) {
+                // 全屏点击手势，点击任意空白处取消搜索框焦点
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isSearchFocused = false
+                    }
                 VStack(alignment: .leading, spacing: 0) {
                     headerSection
                     filterBarSection
@@ -144,6 +150,11 @@ struct LibraryView: View {
         .padding(.horizontal, AppTheme.Spacing.lg)
         .padding(.vertical, AppTheme.Spacing.sm)
         .background(AppTheme.Colors.background)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // 点击背景时取消搜索框焦点
+            isSearchFocused = false
+        }
     }
     
     // MARK: - 筛选按钮栏
