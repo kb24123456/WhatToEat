@@ -75,6 +75,7 @@ class LibraryViewModel: ObservableObject {
     enum SortOption: String, CaseIterable {
         case distance = "距离最近"
         case createdAt = "创建时间倒序"
+        case smart = "智能排序"
         
         /// 枚举值的显示名称
         var displayName: String {
@@ -169,6 +170,36 @@ class LibraryViewModel: ObservableObject {
         return fromLocation.distance(from: toLocation)
     }
     
+    /// 计算智能排序得分
+    /// - Parameters:
+    ///   - restaurant: 餐厅对象
+    ///   - distance: 距离（米）
+    /// - Returns: 智能排序得分
+    private func calculateSmartScore(restaurant: Restaurant, distance: Double) -> Double {
+        var score: Double = 0.0
+        
+        // 因子 A：评分权重 (40%)
+        let ratingScore = Double(restaurant.rating) * 20.0
+        score += ratingScore * 0.4
+        
+        // 因子 B：距离权重 (40%)
+        // 检查是否有定位权限且userLocation不为空
+        if userLocation != nil {
+            let distanceInKilometers = distance / 1000 // 转换为公里
+            let distanceScore = max(0.0, 100.0 - (distanceInKilometers * 10))
+            score += distanceScore * 0.4
+        }
+        
+        // 因子 C：新鲜度权重 (20%)
+        // 检查是否是最近7天内创建的记录
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+        if restaurant.createdAt >= sevenDaysAgo {
+            score += 20.0 // 最近7天内创建，加20分
+        }
+        
+        return score
+    }
+    
     /// 对餐厅显示项进行排序
     /// - Parameters:
     ///   - items: 餐厅显示项数组
@@ -182,6 +213,13 @@ class LibraryViewModel: ObservableObject {
         case .createdAt:
             // 按创建时间倒序排列（最新创建的在前）
             return items.sorted { $0.restaurant.createdAt > $1.restaurant.createdAt }
+        case .smart:
+            // 智能排序：按加权得分降序排列
+            return items.sorted { item1, item2 in
+                let score1 = calculateSmartScore(restaurant: item1.restaurant, distance: item1.distance)
+                let score2 = calculateSmartScore(restaurant: item2.restaurant, distance: item2.distance)
+                return score1 > score2
+            }
         }
     }
     
