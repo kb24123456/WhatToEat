@@ -39,9 +39,14 @@ struct AddRestaurantView: View {
     @State private var useCustomCategory = false
     @State private var customCategoryInput = ""
     
-    // 从所有餐厅中提取唯一品类列表，排序后返回
+    // 预设品类列表
+    private let presetCategories = ["火锅", "川菜", "粤菜", "家常菜", "东北菜", "西餐", "面馆", "烘焙", "早餐", "日料", "饮料", "甜品", "烧烤", "东南亚菜", "其他"]
+    
+    // 合并预设品类和从餐厅数据中提取的品类，去重排序后返回
     var categoryOptions: [String] {
-        Array(Set(allRestaurants.map { $0.type })).sorted()
+        let restaurantCategories = allRestaurants.map { $0.type }
+        let allCategories = presetCategories + restaurantCategories
+        return Array(Set(allCategories)).sorted()
     }
     
     // 根据当前城市获取对应的预设地区列表
