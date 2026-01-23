@@ -308,9 +308,16 @@ struct AddRestaurantView: View {
             averagePrice: 0.0
         )
         
-        // 6. 存入 SwiftData
-        modelContext.insert(newRestaurant)
-        dismiss()
+        // 6. 在主线程中执行数据库操作
+        Task {
+            @MainActor in
+            // 存入 SwiftData
+            modelContext.insert(newRestaurant)
+            // 显式保存上下文
+            try? modelContext.save()
+            // 关闭页面
+            dismiss()
+        }
     }
     
     // 自定义卡片组件

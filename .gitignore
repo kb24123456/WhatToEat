@@ -1,0 +1,42 @@
+# Xcode
+*.xcuserstate
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserdatad
+*.xcscheme
+*.breakpoints
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Testing
+*.swiftpm
+
+# Build
+build/
+*.build
+*.dSYM
+
+# Temporary files
+*.tmp
+*.temp
+
+# IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Debug
+*.debug
+
+# Personal
+*.personal
+*.private
