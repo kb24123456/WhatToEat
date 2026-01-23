@@ -468,7 +468,7 @@ struct RestaurantCard: View {
                                     
                                     Text(restaurant.district)
                                         .font(AppTheme.Fonts.footnote)
-                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
                                     
                                     // 小圆点分隔符
                                     Circle()
@@ -479,11 +479,11 @@ struct RestaurantCard: View {
                                     if let userLocation = locationManager.userLocation {
                                         Text(distanceText(from: userLocation, to: restaurant))
                                             .font(AppTheme.Fonts.footnote)
-                                            .foregroundColor(AppTheme.Colors.textPrimary)
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
                                     } else {
                                         Text("未定位")
-                                            .font(AppTheme.Fonts.footnote)
-                                            .foregroundColor(AppTheme.Colors.textPrimary)
+                                        .font(AppTheme.Fonts.footnote)
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
                                     }
                                 }
                                 
@@ -498,7 +498,7 @@ struct RestaurantCard: View {
                                     // 品类
                                     Text(restaurant.type)
                                         .font(AppTheme.Fonts.caption)
-                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
                                     
                                     // 标签：只显示前两个，使用小胶囊样式
                                     ForEach(restaurant.tags.prefix(2), id: \.self) {
