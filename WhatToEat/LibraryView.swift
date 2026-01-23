@@ -370,10 +370,9 @@ struct LibraryView: View {
         ScrollView {
             LazyVStack(spacing: AppTheme.Spacing.lg) {
                 ForEach(filteredRestaurants) { restaurant in
-                    RestaurantCard(restaurant: restaurant, locationManager: locationManager)
-                        .onTapGesture {
-                            // 使用导航目标模式，点击时触发导航
-                        }
+                    NavigationLink(value: restaurant) {
+                        RestaurantCard(restaurant: restaurant, locationManager: locationManager)
+                    }
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.lg) // 左右各16pt内边距，与顶部Header对齐
