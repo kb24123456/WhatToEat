@@ -35,7 +35,10 @@ struct AddRestaurantView: View {
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
     
-    // --- 动态选项生成 ---
+    // 品类相关状态
+    @State private var useCustomCategory = false
+    @State private var customCategoryInput = ""
+    
     // 从所有餐厅中提取唯一品类列表，排序后返回
     var categoryOptions: [String] {
         Array(Set(allRestaurants.map { $0.type })).sorted()
@@ -46,405 +49,256 @@ struct AddRestaurantView: View {
         RegionManager.shared.getDistricts(for: city)
     }
     
-    // 品类相关状态
-    @State private var useCustomCategory = false
-    @State private var customCategoryInput = ""
-    
-    // 自定义标签组件
-    private func LabeledField(title: String, value: String, valueColor: Color = AppTheme.Colors.textPrimary) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-            Text(title)
-                .font(AppTheme.Fonts.caption2)
-                .foregroundColor(AppTheme.Colors.textSecondary)
-            Text(value)
-                .font(AppTheme.Fonts.body)
-                .foregroundColor(valueColor)
-                .lineLimit(1)
-        }
-    }
-    
-    // 自定义卡片容器
-    private func Card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .background(AppTheme.Colors.card)
-            .cornerRadius(AppTheme.Radius.base)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(AppTheme.Colors.divider, lineWidth: 1)
-            )
-            .shadow(
-                color: AppTheme.Shadows.light.color,
-                radius: AppTheme.Shadows.light.radius,
-                x: AppTheme.Shadows.light.x,
-                y: AppTheme.Shadows.light.y
-            )
-            .padding(.horizontal, AppTheme.Spacing.lg)
-    }
-    
     var body: some View {
         ZStack {
-            // 底层背景
-            AppTheme.Colors.background
-                .ignoresSafeArea()
+            // 背景色
+            AppTheme.Colors.background.ignoresSafeArea()
             
-            // 主内容区域
-            ScrollView {
-                VStack(spacing: AppTheme.Spacing.lg) {
-                    // ✅ 模块一：餐厅封面
-                    Card {
-                        if let image = selectedImage {
-                            ZStack(alignment: .topTrailing) {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: AppTheme.Spacing.md) {
+                        // 封面图卡片
+                        CardView {
+                            if let image = selectedImage {
                                 Image(uiImage: image)
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(height: 180)
+                                    .frame(height: 200)
                                     .clipped()
-                                    .cornerRadius(AppTheme.Radius.image)
-                                
-                                Button { selectedImage = nil } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.title)
-                                        .foregroundColor(.red)
-                                }
-                                .padding(8)
-                            }
-                        } else {
-                            Button { showActionSheet = true } label: {
-                                VStack(spacing: AppTheme.Spacing.sm) {
-                                    Image(systemName: "camera.fill")
-                                        .font(.largeTitle)
-                                    Text("添加封面图")
-                                        .font(AppTheme.Fonts.footnote)
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 180)
-                                .background(AppTheme.Colors.lightGray)
-                                .cornerRadius(AppTheme.Radius.image)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    
-                    // ✅ 模块二：基本信息卡片
-                    Card {
-                        VStack(spacing: AppTheme.Spacing.md) {
-                            // 餐厅名称
-                            TextField("餐厅名称", text: $name)
-                                .font(AppTheme.Fonts.title3)
-                                .padding(.bottom, AppTheme.Spacing.xs)
-                                .overlay(
-                                    Rectangle()
-                                        .frame(height: 1)
-                                        .foregroundColor(AppTheme.Colors.divider)
-                                        .alignmentGuide(.bottom) { $0[.bottom] }
-                                )
-                            
-                            // 字段合并：品类、城市、地区
-                            HStack(spacing: AppTheme.Spacing.md) {
-                                // 品类
-                                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                                    Text("品类")
-                                        .font(AppTheme.Fonts.caption2)
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                    
-                                    if categoryOptions.isEmpty {
-                                        // 无现有品类时，直接文本输入
-                                        TextField("输入品类", text: $category)
-                                            .font(AppTheme.Fonts.body)
-                                            .foregroundColor(AppTheme.Colors.textPrimary)
-                                            .autocorrectionDisabled()
-                                    } else {
-                                        // 有现有品类时，提供选择器 + 自定义选项
-                                        Menu {
-                                            ForEach(categoryOptions, id: \.self) { option in
-                                                Button {
-                                                    category = option
-                                                } label: {
-                                                    Label(option, systemImage: category == option ? "checkmark" : "")
-                                                }
-                                            }
-                                            Button {
-                                                category = "__CUSTOM_CATEGORY__"
-                                            } label: {
-                                                Label("+ 自定义品类", systemImage: category == "__CUSTOM_CATEGORY__" ? "checkmark" : "")
-                                            }
-                                        } label: {
-                                            HStack {
-                                                Text(category == "__CUSTOM_CATEGORY__" ? "自定义" : (category.isEmpty ? "选择品类" : category))
-                                                    .font(AppTheme.Fonts.body)
-                                                    .foregroundColor(category.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
-                                                    .lineLimit(1)
-                                                Spacer()
-                                                Image(systemName: "chevron.up.chevron.down")
-                                                    .font(.caption)
-                                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                            }
-                                        }
-                                        
-                                        // 显示自定义输入框
-                                        if category == "__CUSTOM_CATEGORY__" {
-                                            TextField("输入新品类", text: $customCategoryInput)
-                                                .font(AppTheme.Fonts.body)
-                                                .foregroundColor(AppTheme.Colors.textPrimary)
-                                                .autocorrectionDisabled()
-                                                .padding(.top, AppTheme.Spacing.xs)
-                                                .overlay(
-                                                    Rectangle()
-                                                        .frame(height: 1)
-                                                        .foregroundColor(AppTheme.Colors.divider)
-                                                        .alignmentGuide(.bottom) { $0[.bottom] }
-                                                )
-                                                .onSubmit {
-                                                    if !customCategoryInput.isEmpty {
-                                                        category = customCategoryInput
-                                                        customCategoryInput = ""
-                                                    }
-                                                }
-                                        }
+                                    .cornerRadius(AppTheme.Radius.base)
+                            } else {
+                                Button(action: { showActionSheet = true }) {
+                                    VStack(spacing: AppTheme.Spacing.sm) {
+                                        Image(systemName: "camera.fill")
+                                            .font(.system(size: 32))
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                        Text("添加封面图")
+                                            .font(AppTheme.Fonts.footnote)
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
                                     }
+                                    .frame(maxWidth: .infinity, minHeight: 200)
+                                    .background(AppTheme.Colors.lightGray)
+                                    .cornerRadius(AppTheme.Radius.base)
                                 }
-                                .frame(width: UIScreen.main.bounds.width * 0.4 - AppTheme.Spacing.lg * 2 - AppTheme.Spacing.md)
-                                
-                                // 城市
-                                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                                    Text("城市")
-                                        .font(AppTheme.Fonts.caption2)
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                    Text(city.isEmpty ? "定位中..." : city)
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        
+                        // 基本信息卡片
+                        CardView {
+                            // 餐厅名称
+                            FormItemView(title: "餐厅名称") {
+                                TextField("请输入餐厅名称", text: $name)
+                                    .font(AppTheme.Fonts.body)
+                                    .autocorrectionDisabled()
+                            }
+                            
+                            Divider().background(AppTheme.Colors.divider)
+                            
+                            // 品类
+                            FormItemView(title: "品类") {
+                                if categoryOptions.isEmpty {
+                                    TextField("请输入品类", text: $category)
                                         .font(AppTheme.Fonts.body)
-                                        .foregroundColor(city.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
-                                        .lineLimit(1)
-                                }
-                                .frame(width: UIScreen.main.bounds.width * 0.25 - AppTheme.Spacing.md / 2)
-                                
-                                // 地区
-                                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                                    Text("地区")
-                                        .font(AppTheme.Fonts.caption2)
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                    
-                                    // 地区选择：使用Menu组件，基于当前城市的预设地区
+                                        .autocorrectionDisabled()
+                                } else {
                                     Menu {
-                                        ForEach(districtOptions, id: \.self) { option in
-                                            Button {
-                                                self.district = option
-                                            } label: {
-                                                Label(option, systemImage: self.district == option ? "checkmark" : "")
+                                        ForEach(categoryOptions, id: \.self) { option in
+                                            Button { category = option }
+                                            label: {
+                                                Label(option, systemImage: category == option ? "checkmark" : "")
                                             }
+                                        }
+                                        Button { category = "__CUSTOM_CATEGORY__" }
+                                        label: {
+                                            Label("+ 自定义品类", systemImage: category == "__CUSTOM_CATEGORY__" ? "checkmark" : "")
                                         }
                                     } label: {
                                         HStack {
-                                            Text(district.isEmpty ? "选择地区" : district)
+                                            Text(category == "__CUSTOM_CATEGORY__" ? "自定义" : (category.isEmpty ? "请选择品类" : category))
                                                 .font(AppTheme.Fonts.body)
-                                                .foregroundColor(district.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
-                                                .lineLimit(1)
+                                                .foregroundColor(category.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
                                             Spacer()
-                                            Image(systemName: "chevron.up.chevron.down")
-                                                .font(.caption)
+                                            Image(systemName: "chevron.down")
                                                 .foregroundColor(AppTheme.Colors.textSecondary)
                                         }
                                     }
-                                }
-                                .frame(width: UIScreen.main.bounds.width * 0.35 - AppTheme.Spacing.lg * 2 - AppTheme.Spacing.md)
-                            }
-                        }
-                        .padding(AppTheme.Spacing.lg)
-                    }
-                    
-                    // ✅ 模块三：评分卡片
-                    Card {
-                        HStack(spacing: AppTheme.Spacing.md) {
-                            Text("评分")
-                                .font(AppTheme.Fonts.subheadline)
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                            Spacer()
-                            HStack(spacing: AppTheme.Spacing.xs) {
-                                ForEach(1...5, id: \.self) { index in
-                                    Image(systemName: index <= rating ? "star.fill" : "star")
-                                        .foregroundColor(index <= rating ? AppTheme.Colors.secondary : AppTheme.Colors.textSecondary)
-                                        .font(AppTheme.Fonts.headline)
-                                        .onTapGesture { rating = index }
+                                    
+                                    if category == "__CUSTOM_CATEGORY__" {
+                                        TextField("请输入自定义品类", text: $customCategoryInput)
+                                            .font(AppTheme.Fonts.body)
+                                            .autocorrectionDisabled()
+                                            .onSubmit { if !customCategoryInput.isEmpty { category = customCategoryInput; customCategoryInput = "" } }
+                                            .padding(.top, AppTheme.Spacing.sm)
+                                    }
                                 }
                             }
-                        }
-                        .padding(AppTheme.Spacing.lg)
-                    }
-                    
-                    // ✅ 模块四：位置信息卡片
-                    Card {
-                        VStack(spacing: AppTheme.Spacing.md) {
-                            Text("地理位置")
-                                .font(AppTheme.Fonts.subheadline)
-                                .foregroundColor(AppTheme.Colors.textPrimary)
                             
-                            if !address.isEmpty {
-                                Text(address)
+                            Divider().background(AppTheme.Colors.divider)
+                            
+                            // 城市
+                            FormItemView(title: "城市") {
+                                Text(city.isEmpty ? "定位中..." : city)
                                     .font(AppTheme.Fonts.body)
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                    .padding(.bottom, AppTheme.Spacing.xs)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .foregroundColor(city.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
                             }
                             
-                            // 定位按钮
-                            Button { showLocationPicker = true } label: {
-                                HStack(spacing: AppTheme.Spacing.md) {
-                                    Image(systemName: "map")
-                                        .foregroundColor(AppTheme.Colors.primary)
-                                    Text(address.isEmpty ? "点击选择位置" : "重新选择位置")
-                                        .font(AppTheme.Fonts.body)
-                                        .foregroundColor(AppTheme.Colors.primary)
+                            Divider().background(AppTheme.Colors.divider)
+                            
+                            // 地区
+                            FormItemView(title: "地区") {
+                                Menu {
+                                    ForEach(districtOptions, id: \.self) { option in
+                                        Button { self.district = option }
+                                        label: {
+                                            Label(option, systemImage: self.district == option ? "checkmark" : "")
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(district.isEmpty ? "请选择地区" : district)
+                                            .font(AppTheme.Fonts.body)
+                                            .foregroundColor(district.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.down")
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                    }
+                                }
+                            }
+                            
+                            Divider().background(AppTheme.Colors.divider)
+                            
+                            // 评分
+                            FormItemView(title: "评分") {
+                                HStack {
+                                    Spacer()
+                                    HStack(spacing: AppTheme.Spacing.sm) {
+                                        ForEach(1...5, id: \.self) { index in
+                                            Image(systemName: index <= rating ? "star.fill" : "star")
+                                                .foregroundColor(index <= rating ? AppTheme.Colors.secondary : AppTheme.Colors.textSecondary)
+                                                .font(.system(size: 24))
+                                                .onTapGesture { rating = index }
+                                        }
+                                    }
                                     Spacer()
                                 }
-                                .padding(AppTheme.Spacing.md)
-                                .background(AppTheme.Colors.lightBlue)
-                                .cornerRadius(AppTheme.Radius.base)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(AppTheme.Spacing.lg)
-                    }
-                    
-                    // ✅ 模块五：印象卡片
-                    Card {
-                        VStack(spacing: AppTheme.Spacing.md) {
-                            // 一句话评价
-                            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                                Text("一句话评价")
-                                    .font(AppTheme.Fonts.caption2)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                TextField("请输入你的评价", text: $review, axis: .vertical)
-                                    .font(AppTheme.Fonts.body)
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                    .lineLimit(3...5)
-                                    .padding(.bottom, AppTheme.Spacing.xs)
-                                    .overlay(
-                                        Rectangle()
-                                            .frame(height: 1)
-                                            .foregroundColor(AppTheme.Colors.divider)
-                                            .alignmentGuide(.bottom) { $0[.bottom] }
-                                    )
                             }
                             
-                            // 标签输入
-                            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                                Text("标签")
-                                    .font(AppTheme.Fonts.caption2)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                TextField("输入标签 (用逗号分隔)", text: $tagsInput)
-                                    .font(AppTheme.Fonts.body)
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                    .padding(.bottom, AppTheme.Spacing.xs)
-                                    .overlay(
-                                        Rectangle()
-                                            .frame(height: 1)
-                                            .foregroundColor(AppTheme.Colors.divider)
-                                            .alignmentGuide(.bottom) { $0[.bottom] }
-                                    )
+                            Divider().background(AppTheme.Colors.divider)
+                            
+                            // 地理位置
+                            FormItemView(title: "地理位置") {
+                                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                                    if !address.isEmpty {
+                                        Text(address)
+                                            .font(AppTheme.Fonts.body)
+                                            .foregroundColor(AppTheme.Colors.textPrimary)
+                                            .lineLimit(2)
+                                    }
+                                    Button(action: { showLocationPicker = true }) {
+                                        HStack {
+                                            Image(systemName: "map")
+                                                .foregroundColor(AppTheme.Colors.primary)
+                                            Text(address.isEmpty ? "点击选择位置" : "重新选择位置")
+                                                .font(AppTheme.Fonts.body)
+                                                .foregroundColor(AppTheme.Colors.primary)
+                                            Spacer()
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
                         }
-                        .padding(AppTheme.Spacing.lg)
+                        
+                        // 评价与标签卡片
+                        CardView {
+                            // 一句话评价
+                            FormItemView(title: "一句话评价") {
+                                TextField("请输入评价", text: $review, axis: .vertical)
+                                    .font(AppTheme.Fonts.body)
+                                    .lineLimit(3)
+                                    .textFieldStyle(.plain)
+                            }
+                            
+                            Divider().background(AppTheme.Colors.divider)
+                            
+                            // 标签
+                            FormItemView(title: "标签 (用逗号分隔)") {
+                                TextField("请输入标签", text: $tagsInput)
+                                    .font(AppTheme.Fonts.body)
+                                    .autocorrectionDisabled()
+                            }
+                        }
+                        
+                        // 底部间距
+                        Spacer(minLength: 120)
                     }
-                    
-                    // 底部间距，避免被底部按钮遮挡
-                    Spacer(minLength: 80)
+                    .padding(AppTheme.Spacing.lg)
                 }
-            }
-            .padding(.top, AppTheme.Spacing.lg)
-            
-            // 顶部导航栏
-            VStack {
-                HStack {
-                    // 左侧：取消按钮
-                    Button { dismiss() } label: {
-                        Text("取消")
-                            .font(AppTheme.Fonts.body)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    }
-                    
-                    Spacer()
-                    
-                    // 中间：标题
-                    Text("新餐厅录入")
-                        .font(AppTheme.Fonts.title3)
-                        .fontWeight(.bold)
+                .navigationTitle("新餐厅录入")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { dismiss() }
+                        .font(AppTheme.Fonts.body)
                         .foregroundColor(AppTheme.Colors.textPrimary)
-                    
-                    Spacer()
-                    
-                    // 右侧：占位，保持标题居中
-                    Color.clear
-                        .frame(width: 44)
-                }
-                .padding(.horizontal, AppTheme.Spacing.lg)
-                .padding(.top, 44)
-                .padding(.bottom, AppTheme.Spacing.md)
-                .background(AppTheme.Colors.background)
-                
-                Spacer()
-            }
-            .ignoresSafeArea(edges: .top)
-            
-            // 底部固定保存按钮
-            VStack {
-                Spacer()
-                Button { saveRestaurant() } label: {
-                    Text("保存")
-                        .font(AppTheme.Fonts.headline)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存") { saveRestaurant() }
+                        .font(AppTheme.Fonts.body)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
-                        .padding(AppTheme.Spacing.md)
-                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+                        .padding(.vertical, AppTheme.Spacing.sm)
                         .background(AppTheme.Colors.accent)
                         .cornerRadius(AppTheme.Radius.circle)
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                        .padding(.bottom, AppTheme.Spacing.lg)
+                        .disabled(name.isEmpty || address.isEmpty || district.isEmpty || city.isEmpty)
+                        .withHapticFeedback()
+                    }
                 }
-                .disabled(name.isEmpty || address.isEmpty || district.isEmpty || city.isEmpty)
-                .withHapticFeedback()
-            }
-        }
-        // --- 弹窗逻辑集锦 ---
-        .confirmationDialog("上传封面图", isPresented: $showActionSheet) {
-            Button("📸 拍照") { showCamera = true }
-            Button("🖼️ 从相册选择") { showPhotoPicker = true }
-            Button("取消", role: .cancel) { }
-        }
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker(selectedImage: $selectedImage)
-        }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
-        .onChange(of: photoPickerItem) { oldValue, newValue in
-            Task {
-                if let data = try? await newValue?.loadTransferable(type: Data.self),
-                   let uiImage = UIImage(data: data) {
-                    await MainActor.run { self.selectedImage = uiImage }
+                // 弹窗逻辑
+                .confirmationDialog("选择封面图来源", isPresented: $showActionSheet) {
+                    Button("拍照") { showCamera = true }
+                    Button("从相册选择") { showPhotoPicker = true }
+                    Button("取消", role: .cancel) {}
                 }
-            }
-        }
-        .sheet(isPresented: $showLocationPicker) {
-            LocationPicker { item in
-                self.name = item.name ?? self.name
-                self.address = item.placemark.title ?? ""
-                self.latitude = item.placemark.coordinate.latitude
-                self.longitude = item.placemark.coordinate.longitude
-            }
-        }
-        .onAppear {
-            // 视图加载时，获取当前城市
-            if let currentCity = locationManager.currentCity {
-                self.city = currentCity
-            }
-        }
-        .onChange(of: locationManager.currentCity) {
-            // 当定位城市变化时，更新表单中的城市
-            if let currentCity = locationManager.currentCity {
-                self.city = currentCity
+                .fullScreenCover(isPresented: $showCamera) {
+                    CameraPicker(selectedImage: $selectedImage)
+                }
+                .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
+                .onChange(of: photoPickerItem) { oldValue, newValue in
+                    Task {
+                        if let data = try? await newValue?.loadTransferable(type: Data.self),
+                           let uiImage = UIImage(data: data) {
+                            await MainActor.run { self.selectedImage = uiImage }
+                        }
+                    }
+                }
+                .sheet(isPresented: $showLocationPicker) {
+                    LocationPicker { item in
+                        self.name = item.name ?? self.name
+                        self.address = item.placemark.title ?? ""
+                        self.latitude = item.placemark.coordinate.latitude
+                        self.longitude = item.placemark.coordinate.longitude
+                    }
+                }
+                .onAppear {
+                    // 视图加载时，获取当前城市
+                    if let currentCity = locationManager.currentCity {
+                        self.city = currentCity
+                    }
+                }
+                .onChange(of: locationManager.currentCity) {
+                    // 当定位城市变化时，更新表单中的城市
+                    if let currentCity = locationManager.currentCity {
+                        self.city = currentCity
+                    }
+                }
             }
         }
     }
     
-    // ✅ 核心逻辑：保存时处理图片文件和标签
+    // 核心逻辑：保存时处理图片文件和标签
     private func saveRestaurant() {
         // 1. 处理标签字符串转数组
         let tags = tagsInput.split(separator: ",")
@@ -486,5 +340,45 @@ struct AddRestaurantView: View {
         // 6. 存入 SwiftData
         modelContext.insert(newRestaurant)
         dismiss()
+    }
+    
+    // 自定义卡片组件
+    private struct CardView<Content: View>: View {
+        let content: () -> Content
+        
+        init(@ViewBuilder content: @escaping () -> Content) {
+            self.content = content
+        }
+        
+        var body: some View {
+            VStack {
+                content()
+            }
+            .background(AppTheme.Colors.card)
+            .cornerRadius(AppTheme.Radius.base)
+            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
+        }
+    }
+    
+    // 自定义表单项组件
+    private struct FormItemView<Content: View>: View {
+        let title: String
+        let content: () -> Content
+        
+        init(title: String, @ViewBuilder content: @escaping () -> Content) {
+            self.title = title
+            self.content = content
+        }
+        
+        var body: some View {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                Text(title)
+                    .font(AppTheme.Fonts.caption2)
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .padding(.bottom, AppTheme.Spacing.xs)
+                content()
+            }
+            .padding(AppTheme.Spacing.lg)
+        }
     }
 }
