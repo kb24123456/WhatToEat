@@ -535,15 +535,10 @@ struct RestaurantCard: View {
                         }
                         .frame(height: AppTheme.Cards.restaurantCoverHeight) // 确保右侧高度与左侧封面图一致
                     }
+                    .contentShape(Rectangle()) // 👈 确保全卡片可点
                     .background(AppTheme.Colors.card)
                 .cornerRadius(AppTheme.Radius.base) // 卡片基座圆角
                 .clipped() // 确保内容不溢出容器，保持圆角效果
-                .simultaneousGesture(
-                    TapGesture()
-                        .onEnded { _ in
-                            // 使用导航目标模式，点击时触发导航
-                        }
-                )
                 .alert("确认删除", isPresented: $showDeleteAlert) {
                     Button("删除", role: .destructive) {
                         modelContext.delete(restaurant)
