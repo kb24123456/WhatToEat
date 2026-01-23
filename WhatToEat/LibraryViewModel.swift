@@ -65,7 +65,7 @@ class LibraryViewModel: ObservableObject {
     }
     
     /// 排序选项
-    @Published var sortOption: SortOption = .distance {
+    @Published var sortOption: SortOption = .smart {
         didSet {
             updateProcessedRestaurants()
         }
@@ -73,9 +73,10 @@ class LibraryViewModel: ObservableObject {
     
     /// 排序选项枚举
     enum SortOption: String, CaseIterable {
-        case distance = "距离最近"
-        case createdAt = "创建时间倒序"
         case smart = "智能排序"
+        case distance = "距离最近"
+        case rating = "评分最高"
+        case createdAt = "最近添加"
         
         /// 枚举值的显示名称
         var displayName: String {
@@ -207,12 +208,6 @@ class LibraryViewModel: ObservableObject {
     /// - Returns: 排序后的餐厅显示项数组
     private func sortDisplayItems(_ items: [RestaurantDisplayItem], by option: SortOption) -> [RestaurantDisplayItem] {
         switch option {
-        case .distance:
-            // 按距离升序排列（距离最近）
-            return items.sorted { $0.distance < $1.distance }
-        case .createdAt:
-            // 按创建时间倒序排列（最新创建的在前）
-            return items.sorted { $0.restaurant.createdAt > $1.restaurant.createdAt }
         case .smart:
             // 智能排序：按加权得分降序排列
             return items.sorted { item1, item2 in
@@ -220,6 +215,15 @@ class LibraryViewModel: ObservableObject {
                 let score2 = calculateSmartScore(restaurant: item2.restaurant, distance: item2.distance)
                 return score1 > score2
             }
+        case .distance:
+            // 按距离升序排列（距离最近）
+            return items.sorted { $0.distance < $1.distance }
+        case .rating:
+            // 按评分降序排列（评分最高）
+            return items.sorted { $0.restaurant.rating > $1.restaurant.rating }
+        case .createdAt:
+            // 按创建时间倒序排列（最近添加的在前）
+            return items.sorted { $0.restaurant.createdAt > $1.restaurant.createdAt }
         }
     }
     
