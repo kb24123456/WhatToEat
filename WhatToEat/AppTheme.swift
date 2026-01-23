@@ -105,6 +105,31 @@ extension Color {
     }
 }
 
+// MARK: - 输入框焦点效果插件
+struct FocusedInputEffectModifier: ViewModifier {
+    @FocusState.Binding var isFocused: Bool
+    
+    func body(content: Content) -> some View {
+        content
+            // 1. 动态边框：聚焦时显示强调色边框，失焦时隐藏
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                    .stroke(isFocused ? AppTheme.Colors.accent : Color.clear, lineWidth: 1.5)
+            )
+            // 2. 动态阴影：聚焦时增强阴影效果，失焦时恢复默认
+            .shadow(
+                color: isFocused ? AppTheme.Colors.accent.opacity(0.1) : Color.black.opacity(0.05),
+                radius: isFocused ? 15 : 5,
+                x: 0,
+                y: isFocused ? 8 : 2
+            )
+            // 3. 动态缩放：聚焦时轻微放大，增强视觉反馈
+            .scaleEffect(isFocused ? 1.02 : 1.0)
+            // 4. 平滑动画过渡
+            .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.2), value: isFocused)
+    }
+}
+
 // MARK: - 触感反馈插件
 struct HapticFeedbackModifier: ViewModifier {
     func body(content: Content) -> some View {
@@ -115,6 +140,11 @@ struct HapticFeedbackModifier: ViewModifier {
 }
 
 extension View {
+    /// 为输入框添加聚焦时的动态效果（边框高亮、阴影增强、缩放动画）
+    func withFocusedInputEffects(isFocused: FocusState<Bool>.Binding) -> some View {
+        self.modifier(FocusedInputEffectModifier(isFocused: isFocused))
+    }
+    
     func withHapticFeedback() -> some View {
         self.modifier(HapticFeedbackModifier())
     }

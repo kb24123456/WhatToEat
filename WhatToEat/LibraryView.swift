@@ -53,12 +53,6 @@ struct LibraryView: View {
         NavigationStack {
             // ✅ 使用 topLeading，这是所有像素级对齐的基准
             ZStack(alignment: .topLeading) {
-                // 全屏点击手势，点击任意空白处取消搜索框焦点
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        isSearchFocused = false
-                    }
                 VStack(alignment: .leading, spacing: 0) {
                     headerSection
                     filterBarSection
@@ -130,31 +124,12 @@ struct LibraryView: View {
             .padding(.vertical, 10)
             .background(AppTheme.Colors.card)
             .cornerRadius(AppTheme.Radius.base)
-            // 1. ✅ 动态边框：聚焦时显示“小红书红”，平时显示透明或极浅灰
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(isSearchFocused ? AppTheme.Colors.accent : Color.clear, lineWidth: 1.5)
-            )
-            // 2. ✅ 动态阴影：聚焦时变深变大，呈现“浮起”感
-            .shadow(
-                color: isSearchFocused ? AppTheme.Colors.accent.opacity(0.1) : Color.black.opacity(0.05),
-                radius: isSearchFocused ? 15 : 5,
-                x: 0,
-                y: isSearchFocused ? 8 : 2
-            )
-            // 3. ✅ 动态缩放与动画：带一点点 Q 弹感
-            .scaleEffect(isSearchFocused ? 1.02 : 1.0)
-            // 使用 matchedGeometryEffect 替代传统动画，提高性能
-            .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.2), value: isSearchFocused)
+            // 使用统一的输入框焦点效果修饰符
+            .withFocusedInputEffects(isFocused: $isSearchFocused)
         }
         .padding(.horizontal, AppTheme.Spacing.lg)
         .padding(.vertical, AppTheme.Spacing.sm)
         .background(AppTheme.Colors.background)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // 点击背景时取消搜索框焦点
-            isSearchFocused = false
-        }
     }
     
     // MARK: - 筛选按钮栏
