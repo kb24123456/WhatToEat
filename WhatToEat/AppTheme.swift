@@ -148,4 +148,16 @@ extension View {
     func withHapticFeedback() -> some View {
         self.modifier(HapticFeedbackModifier())
     }
+    
+    /// 强制收起键盘
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+    
+    /// 点击空白区域自动收起键盘
+    func onTapOutsideHideKeyboard() -> some View {
+        self.onTapGesture {
+            hideKeyboard()
+        }
+    }
 }

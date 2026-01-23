@@ -53,6 +53,10 @@ struct LibraryView: View {
         NavigationStack {
             // ✅ 使用 topLeading，这是所有像素级对齐的基准
             ZStack(alignment: .topLeading) {
+                // 背景层，用于捕获空白区域点击
+                Color.clear
+                    .onTapOutsideHideKeyboard()
+                    
                 VStack(alignment: .leading, spacing: 0) {
                     headerSection
                     filterBarSection
