@@ -380,6 +380,7 @@ struct LibraryView: View {
 struct RestaurantCard: View {
     let restaurant: Restaurant
     @ObservedObject var locationManager: LocationManager
+    @State private var showCheckInSheet = false
     
     // 计算距离文本
     private func distanceText(from: CLLocation, to restaurant: Restaurant) -> String {
@@ -431,7 +432,7 @@ struct RestaurantCard: View {
                         VStack(alignment: .leading, spacing: 0) {
                             // MARK: 顶部组 - 包含餐厅名称、价格/地区/距离、星级/品类/标签
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                                // 第一行 - 餐厅名称
+                                // 第一行 - 餐厅名称和红心打卡按钮
                                 HStack {
                                     Text(restaurant.name)
                                         .font(AppTheme.Fonts.headline)
@@ -439,6 +440,21 @@ struct RestaurantCard: View {
                                         .foregroundColor(AppTheme.Colors.textPrimary)
                                         .lineLimit(1)
                                     Spacer()
+                                    
+                                    // 红心打卡组件
+                                    Button {
+                                        showCheckInSheet = true
+                                    } label: {
+                                        VStack(spacing: 2) {
+                                            Image(systemName: "heart.fill")
+                                                .font(.system(size: 20))
+                                                .foregroundColor(AppTheme.Colors.secondary)
+                                            Text("\(restaurant.checkInCount)")
+                                                .font(AppTheme.Fonts.caption2)
+                                                .foregroundColor(AppTheme.Colors.textSecondary)
+                                        }
+                                    }
+                                    .buttonStyle(.plain) // 确保不触发NavigationLink跳转
                                 }
                                 
                                 // 第二行 - 元信息：人均消费、地区、距离
@@ -486,10 +502,7 @@ struct RestaurantCard: View {
                                         .font(AppTheme.Fonts.caption)
                                         .foregroundColor(AppTheme.Colors.textSecondary)
                                     
-                                    // 打卡统计
-                                    Text("🍴 打卡 \(restaurant.checkInCount) 次")
-                                        .font(AppTheme.Fonts.caption)
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
+
                                     
                                     // 标签：只显示前两个，使用小胶囊样式
                                     ForEach(restaurant.tags.prefix(2), id: \.self) {
@@ -532,6 +545,9 @@ struct RestaurantCard: View {
             } else {
                 EmptyView()
             }
+        }
+        .sheet(isPresented: $showCheckInSheet) {
+            CheckInView(restaurant: restaurant)
         }
     }
 }
