@@ -378,10 +378,8 @@ struct LibraryView: View {
 
 // MARK: - 餐厅卡片组件 (自适应尺寸，完美适配所有设备)
 struct RestaurantCard: View {
-    @Environment(\.modelContext) private var modelContext
     let restaurant: Restaurant
     @ObservedObject var locationManager: LocationManager
-    @State private var showDeleteAlert = false
     
     // 计算距离文本
     private func distanceText(from: CLLocation, to restaurant: Restaurant) -> String {
@@ -433,7 +431,7 @@ struct RestaurantCard: View {
                         VStack(alignment: .leading, spacing: 0) {
                             // MARK: 顶部组 - 包含餐厅名称、价格/地区/距离、星级/品类/标签
                             VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                                // 第一行 - 餐厅名称和更多按钮
+                                // 第一行 - 餐厅名称
                                 HStack {
                                     Text(restaurant.name)
                                         .font(AppTheme.Fonts.headline)
@@ -441,10 +439,6 @@ struct RestaurantCard: View {
                                         .foregroundColor(AppTheme.Colors.textPrimary)
                                         .lineLimit(1)
                                     Spacer()
-                                    Image(systemName: "ellipsis.circle")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                        .onTapGesture { showDeleteAlert = true }
                                 }
                                 
                                 // 第二行 - 元信息：人均消费、地区、距离
@@ -492,6 +486,11 @@ struct RestaurantCard: View {
                                         .font(AppTheme.Fonts.caption)
                                         .foregroundColor(AppTheme.Colors.textSecondary)
                                     
+                                    // 打卡统计
+                                    Text("🍴 打卡 \(restaurant.checkInCount) 次")
+                                        .font(AppTheme.Fonts.caption)
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                    
                                     // 标签：只显示前两个，使用小胶囊样式
                                     ForEach(restaurant.tags.prefix(2), id: \.self) {
                                         Text($0)
@@ -530,14 +529,6 @@ struct RestaurantCard: View {
                     .background(AppTheme.Colors.card)
                 .cornerRadius(AppTheme.Radius.base) // 卡片基座圆角
                 .clipped() // 确保内容不溢出容器，保持圆角效果
-                .alert("确认删除", isPresented: $showDeleteAlert) {
-                    Button("删除", role: .destructive) {
-                        modelContext.delete(restaurant)
-                    }
-                    Button("取消", role: .cancel) {}
-                } message: {
-                    Text("确定要删除餐厅 \(restaurant.name) 吗？")
-                }
             } else {
                 EmptyView()
             }
