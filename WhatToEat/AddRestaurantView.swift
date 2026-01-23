@@ -7,8 +7,11 @@ struct AddRestaurantView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
-    // 获取所有餐厅数据，用于动态生成品类和地区选项
+    // 获取所有餐厅数据，用于动态生成品类选项
     @Query private var allRestaurants: [Restaurant]
+    
+    // 定位管理器
+    @ObservedObject private var locationManager = LocationManager.shared
     
     // --- 1. 表单基础数据 ---
     @State private var name = ""
@@ -18,15 +21,6 @@ struct AddRestaurantView: View {
     @State private var rating = 0 // 初始为0，无星星选中
     @State private var review = ""
     @State private var tagsInput = "" // 使用逗号分隔录入，更简洁
-    
-    // --- 混合录入状态管理 ---
-    // 品类相关
-    @State private var useCustomCategory = false
-    @State private var customCategoryInput = ""
-    
-    // 地区相关
-    @State private var useCustomDistrict = false
-    @State private var customDistrictInput = ""
     
     // --- 2. 位置相关 ---
     @State private var address = ""
@@ -47,10 +41,14 @@ struct AddRestaurantView: View {
         Array(Set(allRestaurants.map { $0.type })).sorted()
     }
     
-    // 从所有餐厅中提取唯一地区列表，排序后返回
+    // 根据当前城市获取对应的预设地区列表
     var districtOptions: [String] {
-        Array(Set(allRestaurants.map { $0.district })).sorted()
+        RegionManager.shared.getDistricts(for: city)
     }
+    
+    // 品类相关状态
+    @State private var useCustomCategory = false
+    @State private var customCategoryInput = ""
     
     var body: some View {
         NavigationStack {
@@ -120,30 +118,35 @@ struct AddRestaurantView: View {
                         }
                     }
                     
-                    // 地区选择：动态混合录入
-                    if districtOptions.isEmpty {
-                        // 无现有地区时，直接文本输入
-                        TextField("输入地区", text: $district)
-                            .autocorrectionDisabled()
-                    } else {
-                        // 有现有地区时，提供选择器 + 自定义选项
-                        Picker("地区", selection: $district) {
-                            ForEach(districtOptions, id: \.self) { Text($0) }
-                            Text("+ 自定义地区")
-                                .tag("__CUSTOM_DISTRICT__")
+                    // 城市显示
+                    HStack {
+                        Text("城市")
+                        Spacer()
+                        Text(city.isEmpty ? "定位中..." : city)
+                            .font(.body)
+                            .foregroundColor(city.isEmpty ? .secondary : .primary)
+                    }
+                    
+                    // 地区选择：使用Menu组件，基于当前城市的预设地区
+                    Menu {
+                        ForEach(districtOptions, id: \.self) { district in
+                            Button {
+                                self.district = district
+                            } label: {
+                                Label(district, systemImage: self.district == district ? "checkmark" : "")
+                            }
                         }
-                        
-                        // 显示自定义输入框
-                        if district == "__CUSTOM_DISTRICT__" {
-                            TextField("输入新地区", text: $customDistrictInput)
-                                .autocorrectionDisabled()
-                                .onSubmit {
-                                    if !customDistrictInput.isEmpty {
-                                        district = customDistrictInput
-                                        customDistrictInput = ""
-                                    }
-                                }
+                    } label: {
+                        HStack {
+                            Text("地区")
+                            Spacer()
+                            Text(district.isEmpty ? "选择地区" : district)
+                                .foregroundColor(district.isEmpty ? .secondary : .primary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundColor(.gray)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     
                     // 漂亮的星级评分交互
@@ -187,7 +190,7 @@ struct AddRestaurantView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { saveRestaurant() }
-                        .disabled(name.isEmpty || address.isEmpty)
+                        .disabled(name.isEmpty || address.isEmpty || district.isEmpty || city.isEmpty)
                 }
             }
             // --- 弹窗逻辑集锦 ---
@@ -216,6 +219,18 @@ struct AddRestaurantView: View {
                     self.longitude = item.placemark.coordinate.longitude
                 }
             }
+            .onAppear {
+                // 视图加载时，获取当前城市
+                if let currentCity = locationManager.currentCity {
+                    self.city = currentCity
+                }
+            }
+            .onChange(of: locationManager.currentCity) {
+                // 当定位城市变化时，更新表单中的城市
+                if let currentCity = locationManager.currentCity {
+                    self.city = currentCity
+                }
+            }
         }
     }
     
@@ -226,7 +241,7 @@ struct AddRestaurantView: View {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         
-        // 2. 处理品类和地区：确保不保存占位符值，为空时使用默认值
+        // 2. 处理品类：确保不保存占位符值，为空时使用默认值
         let finalCategory: String
         if category == "__CUSTOM_CATEGORY__" {
             // 如果选择了自定义品类但未输入，使用默认值
@@ -236,26 +251,17 @@ struct AddRestaurantView: View {
             finalCategory = !category.isEmpty ? category : "未分类"
         }
         
-        let finalDistrict: String
-        if district == "__CUSTOM_DISTRICT__" {
-            // 如果选择了自定义地区但未输入，使用默认值
-            finalDistrict = !customDistrictInput.isEmpty ? customDistrictInput : "其他"
-        } else {
-            // 如果直接选择的地区为空，使用默认值
-            finalDistrict = !district.isEmpty ? district : "其他"
-        }
-        
         // 3. 处理评分：如果未选择（为0），使用默认值3
         let finalRating = rating > 0 ? rating : 3
         
-        // 3. 将图片保存到磁盘并获取文件名
+        // 4. 将图片保存到磁盘并获取文件名
         let filename = selectedImage.flatMap { ImageManager.shared.saveImage($0) }
         
-        // 4. 创建餐厅对象
+        // 5. 创建餐厅对象
         let newRestaurant = Restaurant(
             name: name,
             type: finalCategory,
-            district: finalDistrict,
+            district: district,
             city: city,
             rating: finalRating,
             address: address,
@@ -267,7 +273,7 @@ struct AddRestaurantView: View {
             averagePrice: 0.0
         )
         
-        // 5. 存入 SwiftData
+        // 6. 存入 SwiftData
         modelContext.insert(newRestaurant)
         dismiss()
     }
