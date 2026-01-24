@@ -64,114 +64,173 @@ struct ContentView: View {
     
     // 自定义导航栏组件 - 沉底设计
     private var customTabBar: some View {
-        HStack(spacing: 0) {
-            // 1. 食库按钮
-            Button {
-                withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
-                    selectedTab = .library
+        ZStack {
+            // 1. 底座背景：悬浮玻璃效果
+            HStack(spacing: 0) {
+                // 1. 食库按钮
+                Button {
+                    withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
+                        selectedTab = .library
+                    }
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: TabItem.library.iconName)
+                            .font(.system(size: 24))
+                            .frame(height: 24)
+                            .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
+                        Text(TabItem.library.rawValue)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .frame(height: 12)
+                    }
+                    .foregroundColor(selectedTab == .library ? AppTheme.Colors.accent : Color(hex: "#948E88"))
+                    .scaleEffect(selectedTab == .library ? 1.15 : 1.0)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
-            } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: TabItem.library.iconName)
-                        .font(.system(size: 24))
-                        .frame(height: 24)
-                    Text(TabItem.library.rawValue)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .frame(height: 12)
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: 60)
+                
+                // 2. 吃啥按钮
+                Button {
+                    withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
+                        selectedTab = .home
+                    }
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: TabItem.home.iconName)
+                            .font(.system(size: 24))
+                            .frame(height: 24)
+                            .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
+                        Text(TabItem.home.rawValue)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .frame(height: 12)
+                    }
+                    .foregroundColor(selectedTab == .home ? AppTheme.Colors.accent : Color(hex: "#948E88"))
+                    .scaleEffect(selectedTab == .home ? 1.15 : 1.0)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .foregroundColor(selectedTab == .library ? Color(hex: "#FF2442") : Color(hex: "#948E88"))
-                .scaleEffect(selectedTab == .library ? 1.15 : 1.0)
-                .frame(maxWidth: .infinity, alignment: .center)
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: 60)
+                
+                // 3. 中间圆形突出按钮占位
+                Button {}
+                    label: {
+                        Color.clear
+                            .frame(maxWidth: .infinity, maxHeight: 60)
+                    }
+                    .buttonStyle(.plain)
+                
+                // 4. 食记按钮
+                Button {
+                    withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
+                        selectedTab = .friends
+                    }
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: TabItem.friends.iconName)
+                            .font(.system(size: 24))
+                            .frame(height: 24)
+                            .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
+                        Text(TabItem.friends.rawValue)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .frame(height: 12)
+                    }
+                    .foregroundColor(selectedTab == .friends ? AppTheme.Colors.accent : Color(hex: "#948E88"))
+                    .scaleEffect(selectedTab == .friends ? 1.15 : 1.0)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: 60)
+                
+                // 5. 我的按钮
+                Button {
+                    withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
+                        selectedTab = .profile
+                    }
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: TabItem.profile.iconName)
+                            .font(.system(size: 24))
+                            .frame(height: 24)
+                            .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
+                        Text(TabItem.profile.rawValue)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .frame(height: 12)
+                    }
+                    .foregroundColor(selectedTab == .profile ? AppTheme.Colors.accent : Color(hex: "#948E88"))
+                    .scaleEffect(selectedTab == .profile ? 1.15 : 1.0)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: 60)
             }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, maxHeight: 60)
+            .padding(.horizontal, AppTheme.Spacing.lg) // 添加16pt水平间距
+            .frame(height: 60)
+            .background(
+                // 玻璃材质背景
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial) // 使用超薄材质，实现玻璃效果
+                    .overlay(
+                        // 顶部高光线
+                        Rectangle()
+                            .fill(Color.white.opacity(0.8)) // 白色半透明高光线
+                            .frame(height: 0.5)
+                            .alignmentGuide(.top) { $0[.top] }
+                    )
+                    .shadow(color: .black.opacity(0.04), radius: 10, y: -5) // 整体悬浮阴影
+            )
+            .padding(.bottom, 10) // 底部离开屏幕边缘，增加悬浮感
             
-            // 2. 吃啥按钮
-            Button {
-                withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
-                    selectedTab = .home
-                }
-            } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: TabItem.home.iconName)
-                        .font(.system(size: 24))
-                        .frame(height: 24)
-                    Text(TabItem.home.rawValue)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .frame(height: 12)
-                }
-                .foregroundColor(selectedTab == .home ? Color(hex: "#FF2442") : Color(hex: "#948E88"))
-                .scaleEffect(selectedTab == .home ? 1.15 : 1.0)
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, maxHeight: 60)
-            
-            // 3. 中间圆形突出按钮
+            // 2. 中间圆形突出按钮 - 宝石按钮
             Button {
                 // 打开添加餐厅表单
                 showAddRestaurant = true
             } label: {
                 ZStack {
+                    // 渐变背景
                     Circle()
-                        .fill(Color(hex: "#FF2442"))
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    AppTheme.Colors.accent, // 从强调色
+                                    Color(hex: "#E51E3A") // 到深一号的红
+                                ]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                         .frame(width: 56, height: 56)
-                        .shadow(color: Color(hex: "#FF2442").opacity(0.3), radius: 10, x: 0, y: 2)
+                        .shadow(
+                            color: AppTheme.Shadows.elevated.color,
+                            radius: AppTheme.Shadows.elevated.radius,
+                            x: AppTheme.Shadows.elevated.x,
+                            y: AppTheme.Shadows.elevated.y
+                        ) // 使用深度投影
+                    
+                    // 白色半圆渐变，模拟球形表面的反光
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.3), // 微弱的白色
+                                    Color.clear // 到透明
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 30, height: 30)
+                        .offset(x: -10, y: -10) // 左上角位置
+                    
+                    // 加号图标
                     Image(systemName: TabItem.add.iconName)
                         .font(.title2.bold())
                         .foregroundColor(.white)
+                        .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
                 }
-                .offset(y: 2) // 向上偏移，顶部距离导航栏上边缘4pt
+                .offset(y: -20) // 向上偏移，突出在导航栏上方
             }
             .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, maxHeight: 60, alignment: .center)
-            
-            // 4. 食记按钮
-            Button {
-                withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
-                    selectedTab = .friends
-                }
-            } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: TabItem.friends.iconName)
-                        .font(.system(size: 24))
-                        .frame(height: 24)
-                    Text(TabItem.friends.rawValue)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .frame(height: 12)
-                }
-                .foregroundColor(selectedTab == .friends ? Color(hex: "#FF2442") : Color(hex: "#948E88"))
-                .scaleEffect(selectedTab == .friends ? 1.15 : 1.0)
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, maxHeight: 60)
-            
-            // 5. 我的按钮
-            Button {
-                withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
-                    selectedTab = .profile
-                }
-            } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: TabItem.profile.iconName)
-                        .font(.system(size: 24))
-                        .frame(height: 24)
-                    Text(TabItem.profile.rawValue)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .frame(height: 12)
-                }
-                .foregroundColor(selectedTab == .profile ? Color(hex: "#FF2442") : Color(hex: "#948E88"))
-                .scaleEffect(selectedTab == .profile ? 1.15 : 1.0)
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, maxHeight: 60)
         }
-        .padding(.horizontal, AppTheme.Spacing.lg) // 添加16pt水平间距
-        .frame(height: 60)
-        .background(Color.white)
-
         .zIndex(100)
     }
 }

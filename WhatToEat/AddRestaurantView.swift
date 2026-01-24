@@ -155,6 +155,7 @@ struct AddRestaurantView: View {
                                             Image(systemName: index <= rating ? "star.fill" : "star")
                                                 .foregroundColor(index <= rating ? AppTheme.Colors.secondary : AppTheme.Colors.textSecondary)
                                                 .font(.system(size: 24))
+                                                .symbolRenderingMode(.hierarchical) // 增加层次感
                                                 .onTapGesture { rating = index }
                                         }
                                     }
@@ -176,6 +177,7 @@ struct AddRestaurantView: View {
                                     Button(action: { showLocationPicker = true }) {
                                         HStack {
                                             Image(systemName: "map")
+                                                .symbolRenderingMode(.hierarchical) // 增加层次感
                                                 .foregroundColor(AppTheme.Colors.primary)
                                             Text(address.isEmpty ? "点击选择位置" : "重新选择位置")
                                                 .font(AppTheme.Fonts.body)

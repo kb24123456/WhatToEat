@@ -7,7 +7,7 @@ struct AppTheme {
         static let navigationBar = Colors.background // 导航栏颜色 = 背景颜色，自动跟随背景色变化
         static let card = Color.white
         static let textPrimary = Color(hex: "#332E2B")
-        static let textSecondary = Color(hex: "#77716b")
+        static let textSecondary = Color(hex: "#7D7770") // 加深5%，增加纸质书写感
         
         // 🔴 核心强调色（小红书红）
         static let accent = Color(hex: "#FF2442")
@@ -31,7 +31,7 @@ struct AppTheme {
         static let navigationBarUseShadow = false // 导航栏不允许有阴影
         
         // 卡片规则
-        static let restaurantCardUseShadow = true // 餐厅信息卡片允许有阴影
+        static let restaurantCardUseShadow = false // 餐厅信息卡片不允许有阴影
     }
     
     // MARK: - 2. 字体预设

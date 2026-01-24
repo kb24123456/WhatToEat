@@ -62,7 +62,7 @@ struct LibraryView: View {
                     filterBarSection
                     listSection
                 }
-                .background(AppTheme.Colors.background)
+                .background(Color(hex: "#FBF9F7")) // 极淡的米白色背景，衬托纯白色卡片和半透明组件
             }
             .sheet(isPresented: $showImportSheet) { ImportDataView() }
             // 城市选择器
@@ -87,7 +87,8 @@ struct LibraryView: View {
             Text("吃啥呢")
                 .font(AppTheme.Fonts.largeTitle)
                 .fontWeight(.bold)
-                .foregroundColor(AppTheme.Colors.textPrimary)
+                .foregroundColor(Color(hex: "#443F3B")) // 比textPrimary稍浅的磨砂黑，增加呼吸感
+                .tracking(2) // 增加字体间距
             
             // 2. 城市选择器
             Button {
@@ -101,19 +102,19 @@ struct LibraryView: View {
                     Image(systemName: "chevron.down")
                         .font(.caption2)
                         .foregroundColor(.gray)
+                        .symbolRenderingMode(.hierarchical)
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .fill(AppTheme.Colors.card)
-                        .shadow(
-                            color: Color.black.opacity(0.05),
-                            radius: 5,
-                            x: 0,
-                            y: 2
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
                         )
                 )
+                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(.plain)
             
@@ -126,14 +127,21 @@ struct LibraryView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
-            .background(AppTheme.Colors.card)
-            .cornerRadius(AppTheme.Radius.base)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
             // 使用统一的输入框焦点效果修饰符
             .withFocusedInputEffects(isFocused: $isSearchFocused)
         }
         .padding(.horizontal, AppTheme.Spacing.lg)
         .padding(.vertical, AppTheme.Spacing.sm)
-        .background(AppTheme.Colors.background)
+        .background(Color(hex: "#FBF9F7")) // 与全局背景色保持一致
     }
     
     // MARK: - 筛选按钮栏

@@ -122,6 +122,7 @@ struct CitySelectionView: View {
             HStack {
                 // 定位图标
                 Image(systemName: "location.fill")
+                    .symbolRenderingMode(.hierarchical) // 增加层次感
                     .foregroundColor(locationManager.currentCity != nil ? AppTheme.Colors.accent : .gray)
                     .font(AppTheme.Fonts.headline)
                 
