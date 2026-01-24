@@ -31,7 +31,7 @@ struct AppTheme {
         static let navigationBarUseShadow = false // 导航栏不允许有阴影
         
         // 卡片规则
-        static let restaurantCardUseShadow = false // 餐厅信息卡片不允许有阴影
+        static let restaurantCardUseShadow = true // 餐厅信息卡片允许有阴影
     }
     
     // MARK: - 2. 字体预设

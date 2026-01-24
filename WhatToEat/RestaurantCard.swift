@@ -167,6 +167,7 @@ struct RestaurantCard: View {
                 .contentShape(Rectangle()) // 👈 确保全卡片可点
                 .background(AppTheme.Colors.card)
                 .cornerRadius(AppTheme.Radius.base) // 卡片基座圆角
+                .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y) // 添加轻微阴影效果
                 .clipped() // 确保内容不溢出容器，保持圆角效果
             } else {
                 EmptyView()
