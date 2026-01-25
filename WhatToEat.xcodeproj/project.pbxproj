@@ -8,7 +8,8 @@
 
 /* Begin PBXFileReference section */
 		12B7D1AD2F1A98940021A936 /* WhatToEat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhatToEat.app; sourceTree = BUILT_PRODUCTS_DIR; };
-/* End PBXFileReference section */
+		02DFA581459D4C249FDA917D /* regions.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = regions.json; sourceTree = "<group>"; };
+		/* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		12B7D1AF2F1A98940021A936 /* WhatToEat */ = {
@@ -109,7 +110,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
+				2CA70C2D9E3E411FA86D6049 /* regions.json in Resources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */

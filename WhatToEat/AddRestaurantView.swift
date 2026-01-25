@@ -43,12 +43,12 @@ struct AddRestaurantView: View {
     
     // --- 1. 表单基础数据 ---
     @State private var name = ""
-    @State private var category = "" // 对应模型里的 type，已从"菜系"改为"品类"，初始为空
-    @State private var district = "" // 初始为空
-    @State private var city = "" // 初始为空
-    @State private var rating = 0 // 初始为0，无星星选中
+    @State private var category = ""
+    @State private var district = ""
+    @State private var city = ""
+    @State private var rating = 0
     @State private var review = ""
-    @State private var tagsInput = "" // 使用逗号分隔录入，更简洁
+    @State private var tagsInput = ""
     
     // --- 2. 位置相关 ---
     @State private var address = ""
@@ -70,9 +70,15 @@ struct AddRestaurantView: View {
     
     // --- 5. 键盘高度监听 ---
     @State private var keyboardHeight: CGFloat = 0
+    @State private var keyboardVisible = false
     
     // --- 6. UI状态 ---
     @State private var isAutoFilled = false
+    // 标签系统：已选标签数组
+    @State private var selectedTags: [String] = []
+    
+    // 预设灵感标签池
+    let presetTags = ["氛围感", "老字号", "二刷", "排队王", "性价比"]
     
     // 从CategoryManager获取预设品类列表
     var categoryOptions: [String] {
@@ -84,736 +90,161 @@ struct AddRestaurantView: View {
         RegionManager.shared.getDistricts(for: city)
     }
     
-    // 智能标签池：提取最常用的前10个标签
-    var suggestedTags: [String] {
-        // 1. 收集所有餐厅的标签
-        let allTags = allRestaurants.flatMap { $0.tags }
-        
-        // 2. 统计每个标签出现的次数
-        var tagCounts: [String: Int] = [:]
-        for tag in allTags {
-            tagCounts[tag, default: 0] += 1
+    // MARK: - 主表单内容
+    private var formContent: some View {
+        VStack(spacing: 0) {
+            CoverImageView(selectedImage: $selectedImage, showActionSheet: $showActionSheet)
+            
+            Color.clear.frame(height: 12)
+            
+            SearchBar(poiQuery: $poiQuery, searchResults: $searchResults, isSearching: $isSearching, searchPOI: searchPOI, fillInfoFromMapItem: fillInfoFromMapItem)
+            
+            Color.clear.frame(height: 8)
+            
+            NameTextField(name: $name, isAutoFilled: isAutoFilled)
+            
+            Color.clear.frame(height: 8)
+            
+            DistrictCategoryRow(district: $district, category: $category, districtOptions: districtOptions, categoryOptions: categoryOptions)
+            
+            Color.clear.frame(height: 8)
+            
+            RatingRow(rating: $rating)
+            
+            Color.clear.frame(height: 8)
+            
+            ReviewSection(review: $review)
+            
+            Color.clear.frame(height: 8)
+            
+            TagSystemSection(
+                tagsInput: $tagsInput,
+                selectedTags: $selectedTags,
+                presetTags: presetTags
+            )
+            
+            Color.clear.frame(height: 24)
+            
+            ActionButtonsRow(
+                onClose: onClose,
+                dismissAction: { dismiss() },
+                saveAction: saveRestaurant,
+                isValid: !name.isEmpty && !address.isEmpty && !district.isEmpty
+            )
         }
-        
-        // 3. 按出现次数排序，取前10个
-        let sortedTags = tagCounts.sorted { $0.value > $1.value }
-        let topTags = sortedTags.prefix(10).map { $0.key }
-        
-        return topTags
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.bottom, 40)
     }
     
-    // 主内容视图
-        private var mainContent: some View {
-            // 极微弱线性渐变背景，模拟高级艺术纸张质感
-            LinearGradient(gradient: Gradient(colors: [Color.white, Color(hex: "#F9F7F5")]), startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-                .overlay {
-                    // 使用ZStack实现悬浮效果
-                    ZStack {
-                        // 内容卡片容器 - 精确控制间距
-                        VStack(spacing: 0) {
-                            // 1. 页面标题 - 艺术化设计，对标LibraryView顶部标题
-                            Text("新餐厅")
-                                .font(AppTheme.Fonts.largeTitle)
-                                .fontWeight(.bold)
-                                .foregroundColor(Color(hex: "#443F3B"))
-                                .tracking(2)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.top, AppTheme.Spacing.sm)
-                                
-                            // 增加标题下方间距，确保与封面图之间有充足的呼吸感
-                            Color.clear.frame(height: 24)
-                            
-                            // 2. 添加封面
-                            CoverImageView(selectedImage: $selectedImage, showActionSheet: $showActionSheet)
-                            
-                            // 封面图与搜索框间距：20pt
-            Color.clear.frame(height: 20)
-                            
-                            // 3. 位置搜索框
-                            SearchBar(poiQuery: $poiQuery, searchResults: $searchResults, isSearching: $isSearching, searchPOI: searchPOI, fillInfoFromMapItem: fillInfoFromMapItem)
-                            
-                            // 微信式搜索结果列表 - 位于搜索框下方，与搜索框视觉过渡自然
-                            if !isSearching && !searchResults.isEmpty {
-                                // 搜索结果容器 - 微信式设计，与搜索框形成整体感
-                                ScrollView {
-                                    VStack(spacing: 0) {
-                                        ForEach(searchResults, id: \.self) { mapItem in
-                                            Button(action: { 
-                                                fillInfoFromMapItem(mapItem)
-                                                // 点击后收起搜索列表
-                                                searchResults = []
-                                            }) {
-                                                HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
-                                                    // 添加小图标
-                                                    Image(systemName: "mappin.circle.fill")
-                                                        .foregroundColor(AppTheme.Colors.primary)
-                                                        .font(.system(size: 20))
-                                                        .padding(.top, 2)
-                                                    
-                                                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                                                        // 标题：餐厅名
-                                                        Text(mapItem.name ?? "未知")
-                                                            .font(AppTheme.Fonts.headline)
-                                                            .foregroundColor(AppTheme.Colors.textPrimary)
-                                                        
-                                                        // 副标题：距离 | 详细地址
-                                                        HStack(spacing: 8) {
-                                                            // 计算并显示距离
-                                                            if let userLocation = locationManager.userLocation {
-                                                                let mapItemLocation = CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)
-                                                                let distance = userLocation.distance(from: mapItemLocation)
-                                                                Text(String(format: "%.1fkm", distance / 1000))
-                                                                    .font(AppTheme.Fonts.caption)
-                                                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                                                
-                                                                // 分隔符
-                                                                Text("|")
-                                                                    .font(AppTheme.Fonts.caption)
-                                                                    .foregroundColor(AppTheme.Colors.divider)
-                                                            }
-                                                            
-                                                            // 详细地址
-                                                            if let address = mapItem.placemark.title {
-                                                                Text(address)
-                                                                    .font(AppTheme.Fonts.caption)
-                                                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                                                    .lineLimit(1)
-                                                            }
-                                                        }
-                                                    }
-                                                    Spacer()
-                                                }
-                                                .padding(AppTheme.Spacing.md)
-                                            }
-                                            .buttonStyle(.plain)
-                                            
-                                            // 分割线
-                                            Divider()
-                                        }
-                                    }
-                                }
-                                // 微信式高度约束：默认显示5行，支持滚动
-                                .frame(height: min(CGFloat(searchResults.count) * 60, 300)) // 每行约60pt，最大300pt
-                                .background(AppTheme.Colors.card)
-                                // 与搜索框相同的圆角，保持视觉一致性
-                                .cornerRadius(AppTheme.Radius.base)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
-                                )
-                                // 与搜索框相似的阴影效果，增强整体感
-                                .shadow(color: AppTheme.Colors.accent.opacity(0.1), radius: 8, x: 0, y: 2)
-                            }
-                            
-                            // 搜索框与餐厅名称间距：8pt
-            Color.clear.frame(height: 8)
-                            
-                            // 4. 餐厅名称
-                            NameTextField(name: $name, isAutoFilled: isAutoFilled)
-                            
-                            // 餐厅名称与城市地区间距：8pt
-            Color.clear.frame(height: 8)
-                            
-                            // 5. 城市与地区
-                            CityDistrictView(city: $city, district: $district, districtOptions: districtOptions)
-                            
-                            // 城市地区与品类评分间距：8pt
-            Color.clear.frame(height: 8)
-                            
-                            // 6. 品类与评分
-                            CategoryRatingView(category: $category, rating: $rating, categoryOptions: categoryOptions)
-                            
-                            // 品类评分与标签评价间距：8pt
-            Color.clear.frame(height: 8)
-                            
-                            // 7. 标签与评价
-                            TagsReviewView(tagsInput: $tagsInput, review: $review, isAutoFilled: isAutoFilled, suggestedTags: suggestedTags)
-                            
-                            // 标签评价与底部操作行间距
-                            Color.clear.frame(height: AppTheme.Spacing.md)
-                            
-                            // 8. 底部操作行 - 质感级重构，符合用户输入动线
-                            HStack(spacing: 16) {
-                                // 取消按钮 - 圆角矩形按钮，占据约30%宽度
-                                Button("取消") { 
-                                    if let onClose = onClose {
-                                        onClose()
-                                    } else {
-                                        dismiss()
-                                    }
-                                }
-                                .font(AppTheme.Fonts.headline)
-                                .foregroundColor(AppTheme.Colors.textPrimary)
-                                .padding(.horizontal, AppTheme.Spacing.md)
-                                .padding(.vertical, AppTheme.Spacing.sm)
-                                .background(AppTheme.Colors.lightGray)
-                                .cornerRadius(AppTheme.Radius.base)
-                                .withHapticFeedback()
-                                // 精确控制宽度比例
-                                .frame(width: UIScreen.main.bounds.width * 0.25) // 约30%宽度
-                                
-                                // 保存按钮 - 哑光微立体设计，占据约70%宽度
-                                Button("保存") { saveRestaurant() }
-                                    .font(AppTheme.Fonts.headline)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, AppTheme.Spacing.lg)
-                                    .padding(.vertical, AppTheme.Spacing.sm)
-                                    .background(AppTheme.Colors.accent)
-                                    .cornerRadius(AppTheme.Radius.base)
-                                    // 红色系深度投影，增强哑光微立体效果
-                                    .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 8, x: 0, y: 4)
-                                    .disabled(name.isEmpty || address.isEmpty || district.isEmpty || city.isEmpty)
-                                    .withHapticFeedback()
-                                    // 占据剩余空间，约70%宽度
-                                    .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .padding(AppTheme.Spacing.md)
-                        .padding(.bottom, keyboardHeight)
-                    }
-                }
-        }
-    
-
+    // MARK: - 表单背景
+    private var formBackground: some View {
+        Color.white
+    }
     
     var body: some View {
         NavigationStack {
-            mainContent
-                // 隐藏默认导航栏
-                .navigationBarHidden(true)
-                // 弹窗逻辑
-                .confirmationDialog("选择封面图来源", isPresented: $showActionSheet) {
-                    Button("拍照") { showCamera = true }
-                    Button("从相册选择") { showPhotoPicker = true }
-                    Button("取消", role: .cancel) {}
-                }
-                .fullScreenCover(isPresented: $showCamera) {
-                    CameraPicker(selectedImage: $selectedImage)
-                }
-                .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
-                .onChange(of: photoPickerItem) { oldValue, newValue in
-                    Task {
-                        if let data = try? await newValue?.loadTransferable(type: Data.self),
-                           let uiImage = UIImage(data: data) {
-                            await MainActor.run { self.selectedImage = uiImage }
-                        }
-                    }
-                }
-                .sheet(isPresented: $showLocationPicker) {
-                    LocationPicker { item in
-                        self.name = item.name ?? self.name
-                        self.address = item.placemark.title ?? ""
-                        self.latitude = item.placemark.coordinate.latitude
-                        self.longitude = item.placemark.coordinate.longitude
-                    }
-                }
-                // 生命周期逻辑
-                .onAppear {
-                    // 视图加载时，获取当前城市
-                    if let currentCity = locationManager.currentCity {
-                        self.city = currentCity
-                    }
-                    // 监听键盘事件
-                    setupKeyboardObservers()
-                }
-                .onDisappear {
-                    // 移除键盘事件监听
-                    removeKeyboardObservers()
-                }
-                .onChange(of: locationManager.currentCity) {
-                    // 当定位城市变化时，更新表单中的城市
-                    if let currentCity = locationManager.currentCity {
-                        self.city = currentCity
-                    }
-                }
+            formContent
+                .background(formBackground)
+                .ignoresSafeArea()
+        }
+        .navigationBarHidden(true)
+        .confirmationDialog("选择封面图来源", isPresented: $showActionSheet) {
+            Button("拍照") { showCamera = true }
+            Button("从相册选择") { showPhotoPicker = true }
+            Button("取消", role: .cancel) {}
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker(selectedImage: $selectedImage)
+        }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
+        .onChange(of: photoPickerItem) { _, newValue in
+            handlePhotoPickerChange(newValue)
+        }
+        .sheet(isPresented: $showLocationPicker) {
+            LocationPicker { item in
+                handleLocationSelect(item)
+            }
+        }
+        .onAppear {
+            handleViewAppear()
+        }
+        .onDisappear {
+            removeKeyboardObservers()
+        }
+        .onChange(of: locationManager.currentCity) { _, newValue in
+            handleCityChange(newValue)
         }
     }
     
-    // 键盘事件监听相关方法
+    // MARK: - 事件处理方法
+    private func handlePhotoPickerChange(_ newValue: PhotosPickerItem?) {
+        Task {
+            if let data = try? await newValue?.loadTransferable(type: Data.self),
+               let uiImage = UIImage(data: data) {
+                await MainActor.run { self.selectedImage = uiImage }
+            }
+        }
+    }
+    
+    private func handleLocationSelect(_ item: MKMapItem) {
+        self.name = item.name ?? self.name
+        self.address = item.placemark.title ?? ""
+        self.latitude = item.placemark.coordinate.latitude
+        self.longitude = item.placemark.coordinate.longitude
+    }
+    
+    private func handleViewAppear() {
+        if let currentCity = locationManager.currentCity {
+            self.city = currentCity
+        }
+        setupKeyboardObservers()
+    }
+    
+    private func handleCityChange(_ newCity: String?) {
+        if let currentCity = newCity {
+            self.city = currentCity
+        }
+    }
+    
+    // MARK: - 键盘事件监听
     private func setupKeyboardObservers() {
-        // 监听键盘显示事件
         NotificationCenter.default.addObserver(
             forName: UIResponder.keyboardWillShowNotification,
             object: nil,
             queue: .main
-        ) { notification in
-            if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
-                withAnimation {
-                    keyboardHeight = keyboardFrame.height
-                }
-            }
+        ) { _ in
+            self.keyboardVisible = true
         }
         
-        // 监听键盘隐藏事件
         NotificationCenter.default.addObserver(
             forName: UIResponder.keyboardWillHideNotification,
             object: nil,
             queue: .main
         ) { _ in
-            withAnimation {
-                keyboardHeight = 0
-            }
+            self.keyboardVisible = false
         }
     }
     
     private func removeKeyboardObservers() {
-        // 移除所有键盘事件监听
-        NotificationCenter.default.removeObserver(self,
-                                                 name: UIResponder.keyboardWillShowNotification,
-                                                 object: nil)
-        NotificationCenter.default.removeObserver(self,
-                                                 name: UIResponder.keyboardWillHideNotification,
-                                                 object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillHideNotification, object: nil)
     }
     
-    // 子视图：封面图 - 拍立得效果
-    private struct CoverImageView: View {
-        @Binding var selectedImage: UIImage?
-        @Binding var showActionSheet: Bool
-        
-        var body: some View {
-            ZStack {
-                if let image = selectedImage {
-                    // 拍立得照片效果 - 水平对齐
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(height: 160)
-                        .clipped()
-                        .cornerRadius(AppTheme.Radius.base)
-                        // 升级：增加照片的悬浮深度
-                        .shadow(color: .black.opacity(0.12), radius: 10, x: 2, y: 6)
-                        .overlay(
-                            Group {
-                                // 和纸胶带装饰块 - 水平对齐
-                                Rectangle()
-                                    .fill(Color.white.opacity(0.4))
-                                    .frame(height: 15)
-                                    .padding(.horizontal, 30)
-                                    .offset(y: -75)
-                                
-                                // 边框效果：升级为2.0pt纯白色描边
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                                    .stroke(Color.white, lineWidth: 2.0)
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                                    .stroke(AppTheme.Colors.divider, lineWidth: 1)
-                            }
-                        )
-                } else {
-                    // 空状态拍立得效果 - 水平对齐
-                    Button(action: { showActionSheet = true }) {
-                        VStack(spacing: AppTheme.Spacing.xs) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                            Text("添加封面图")
-                                .font(AppTheme.Fonts.footnote)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 160)
-                        // 升级：空状态背景色改为半透明浅灰色
-                        .background(AppTheme.Colors.lightGray.opacity(0.8))
-                        .cornerRadius(AppTheme.Radius.base)
-                        // 升级：增加照片的悬浮深度
-                        .shadow(color: .black.opacity(0.12), radius: 10, x: 2, y: 6)
-                        .overlay(
-                            Group {
-                                // 和纸胶带装饰块 - 水平对齐
-                                Rectangle()
-                                    .fill(Color.white.opacity(0.4))
-                                    .frame(height: 15)
-                                    .padding(.horizontal, 30)
-                                    .offset(y: -75)
-                                
-                                // 边框效果 - 升级为2.0pt纯白色描边
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                                    .stroke(Color.white, lineWidth: 2.0)
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                                    .stroke(AppTheme.Colors.divider, lineWidth: 1)
-                            }
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-    
-    // 子视图：搜索框
-    private struct SearchBar: View {
-        @Binding var poiQuery: String
-        @Binding var searchResults: [MKMapItem]
-        @Binding var isSearching: Bool
-        var searchPOI: () -> Void
-        var fillInfoFromMapItem: (MKMapItem) -> Void
-        
-        // 添加焦点状态，用于检测用户点击搜索框的动作
-        @FocusState private var isFocused: Bool
-        
-        var body: some View {
-            VStack(spacing: 0) {
-                // 搜索条 - 内凹压印效果，与下方列表过渡自然
-                HStack {
-                    // 突出智能搜索功能的图标
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(AppTheme.Colors.accent)
-                        .font(.system(size: 16))
-                        .symbolRenderingMode(.hierarchical)
-                    
-                    TextField("", text: $poiQuery, onCommit: { 
-                        searchPOI()
-                        // 提交搜索后保持焦点
-                        isFocused = true
-                    })
-                        .font(AppTheme.Fonts.body)
-                        .autocorrectionDisabled()
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .placeholder("输入店名智能填充信息...", 
-                                   color: AppTheme.Colors.textSecondary.opacity(0.8), 
-                                   isEmpty: poiQuery.isEmpty)
-                        .focused($isFocused)
-                        // 确保键盘显示搜索按钮
-                        .keyboardType(.default)
-                        .submitLabel(.search)
-                        // 当搜索框获得焦点时，自动加载附近POI
-                        .onChange(of: isFocused) {
-                            oldValue, newValue in
-                            if newValue {
-                                // 获得焦点时搜索
-                                if poiQuery.isEmpty {
-                                    searchPOI()
-                                }
-                            } else {
-                                // 失去焦点时，延迟关闭搜索结果，以便用户可以点击结果
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                    searchResults = []
-                                }
-                            }
-                        }
-                        // 实时搜索：当输入内容变化时，更新搜索结果
-                        .onChange(of: poiQuery) {
-                            _, _ in
-                            searchPOI()
-                        }
-                    
-                    if !poiQuery.isEmpty {
-                        Button(action: { 
-                            poiQuery = ""
-                            // 清空搜索框时，重新加载附近餐厅
-                            searchPOI()
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                                .font(.system(size: 16))
-                                .symbolRenderingMode(.hierarchical)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        Spacer()
-                    }
-                }
-                .frame(height: 40)
-                .padding(.horizontal, AppTheme.Spacing.md)
-                // Hero级搜索框：白色背景
-                .background(Color.white)
-                .overlay(
-                    // 红色描边效果
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .stroke(AppTheme.Colors.accent.opacity(0.4), lineWidth: 1.5)
-                )
-                // 标准圆角
-                .cornerRadius(AppTheme.Radius.base)
-                // 微悬浮投影效果
-                .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-                // 叠加淡红色呼吸灯阴影
-                .shadow(color: AppTheme.Colors.accent.opacity(0.2), radius: 12, x: 0, y: 0)
-                
-                // 搜索中状态指示器
-                if isSearching {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                            .padding(AppTheme.Spacing.md)
-                        Spacer()
-                    }
-                    .background(AppTheme.Colors.card)
-                    // 使用标准圆角，与搜索框和下方列表过渡自然
-                    .cornerRadius(AppTheme.Radius.base)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                            .stroke(AppTheme.Colors.divider, lineWidth: 1)
-                    )
-                    .shadow(color: AppTheme.Shadows.base.color, radius: AppTheme.Shadows.base.radius, x: AppTheme.Shadows.base.x, y: AppTheme.Shadows.base.y)
-                    // 与搜索框紧密连接，没有偏移
-                    .offset(y: 4)
-                }
-            }
-        }
-    }
-    
-    // 子视图：餐厅名称
-    private struct NameTextField: View {
-        @Binding var name: String
-        var isAutoFilled: Bool
-        
-        var body: some View {
-            HStack {
-                TextField("餐厅名称", text: $name)
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .autocorrectionDisabled()
-                    .padding(.horizontal, AppTheme.Spacing.md)
-                    .foregroundColor(isAutoFilled ? AppTheme.Colors.primary : .primary)
-            }
-            .frame(height: 44)
-            // 微悬浮卡片样式：白色背景 + 自动填充高亮
-            .background(Color.white)
-            .overlay(name.isEmpty ? nil : AppTheme.Colors.lightBlue.opacity(0.3))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
-            )
-            .cornerRadius(AppTheme.Radius.base)
-            // 微悬浮投影效果
-            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-        }
-    }
-    
-    // 子视图：城市与地区
-    private struct CityDistrictView: View {
-        @Binding var city: String
-        @Binding var district: String
-        var districtOptions: [String]
-        
-        var body: some View {
-            HStack(spacing: 12) {
-                // 城市名
-                Text(city.isEmpty ? "定位中..." : city)
-                    .font(AppTheme.Fonts.body)
-                    .foregroundColor(city.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
-                
-                // 垂直分隔线
-                Rectangle()
-                    .fill(AppTheme.Colors.divider)
-                    .frame(width: 0.5, height: 18)
-                
-                // 地区选择 Menu
-                Menu {
-                    ForEach(districtOptions, id: \.self) { option in
-                        Button { district = option }
-                        label: {
-                            Label(option, systemImage: district == option ? "checkmark" : "")
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(district.isEmpty ? "请选择地区" : district)
-                            .font(AppTheme.Fonts.body)
-                            .foregroundColor(district.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .font(.system(size: 12))
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                }
-                
-                Spacer()
-            }
-            .frame(height: 40)
-            .padding(.horizontal, AppTheme.Spacing.md)
-            // 微悬浮卡片样式：白色背景
-            .background(Color.white)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
-            )
-            .cornerRadius(AppTheme.Radius.base)
-            // 微悬浮投影效果
-            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-        }
-    }
-    
-    // 子视图：品类与评分
-    private struct CategoryRatingView: View {
-        @Binding var category: String
-        @Binding var rating: Int
-        var categoryOptions: [String]
-        
-        var body: some View {
-            HStack(spacing: AppTheme.Spacing.md) {
-                // 左侧品类 Menu - 平分空间
-                Menu {
-                    ForEach(categoryOptions, id: \.self) { option in
-                        Button { category = option }
-                        label: {
-                            Label(option, systemImage: category == option ? "checkmark" : "")
-                                .symbolRenderingMode(.hierarchical)
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Text(category.isEmpty ? "请选择品类" : category)
-                            .font(AppTheme.Fonts.body)
-                            .foregroundColor(category.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
-                            .lineLimit(1)
-                        Spacer()
-                        Image(systemName: "chevron.down")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .font(.system(size: 12))
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .padding(.horizontal, AppTheme.Spacing.md)
-                    .frame(maxWidth: .infinity)
-                }
-                
-                // 右侧五星评分 - 平分空间，星号大小18pt
-                HStack(spacing: 2) {
-                    ForEach(1...5, id: \.self) { index in
-                        Image(systemName: index <= rating ? "star.fill" : "star")
-                            .foregroundColor(index <= rating ? AppTheme.Colors.secondary : AppTheme.Colors.textSecondary)
-                            .font(.system(size: 18)) // 星号大小调整为18pt
-                            .symbolRenderingMode(.hierarchical)
-                            .onTapGesture { rating = index }
-                    }
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .frame(height: 40)
-            // 微悬浮卡片样式：白色背景
-            .background(Color.white)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
-            )
-            .cornerRadius(AppTheme.Radius.base)
-            // 微悬浮投影效果
-            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-        }
-    }
-    
-    // 子视图：标签与评价
-    private struct TagsReviewView: View {
-        @Binding var tagsInput: String
-        @Binding var review: String
-        var isAutoFilled: Bool
-        var suggestedTags: [String]
-        
-        var body: some View {
-            VStack(spacing: 8) {
-                // 标签行：内凹压印效果
-                HStack {
-                    TextField("标签 (用逗号分隔)", text: $tagsInput)
-                        .font(AppTheme.Fonts.body)
-                        .autocorrectionDisabled()
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, AppTheme.Spacing.md)
-                        .foregroundColor(isAutoFilled ? AppTheme.Colors.primary : .primary)
-                }
-                // 微悬浮卡片样式：白色背景 + 自动填充高亮
-                .background(
-                Group {
-                    Color.white
-                    // 自动填充背景色：极淡的蓝色
-                    if isAutoFilled {
-                        AppTheme.Colors.lightBlue.opacity(0.2)
-                    }
-                }
-            )
-                .overlay(tagsInput.isEmpty ? nil : AppTheme.Colors.lightBlue.opacity(0.3))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
-                )
-                .cornerRadius(AppTheme.Radius.base)
-                // 微悬浮投影效果
-                .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-                
-                // 智能标签池：水平滚动的预设标签
-                if !suggestedTags.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: AppTheme.Spacing.xs) {
-                            ForEach(suggestedTags, id: \.self) {
-                                tag in
-                                Button(action: {
-                                    // 点击预设标签，自动追加到tagsInput中
-                                    if tagsInput.isEmpty {
-                                        tagsInput = tag
-                                    } else {
-                                        // 检查是否已包含该标签
-                                        let existingTags = tagsInput.components(separatedBy: CharacterSet(charactersIn: ",， ")).filter { !$0.isEmpty }
-                                        if !existingTags.contains(tag) {
-                                            tagsInput += ", \(tag)"
-                                        }
-                                    }
-                                }) {
-                                    Text(tag)
-                                        .font(AppTheme.Fonts.footnote)
-                                        .foregroundColor(AppTheme.Colors.primary)
-                                        .padding(.horizontal, AppTheme.Spacing.sm)
-                                        .padding(.vertical, 4)
-                                        .background(AppTheme.Colors.lightBlue.opacity(0.5))
-                                        .cornerRadius(AppTheme.Radius.base)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, AppTheme.Spacing.md)
-                    }
-                    .frame(height: 30)
-                }
-                
-                // 一句话评价 - 重构设计，移除装饰线条
-                TextField("一句话评价", text: $review, axis: .vertical)
-                    .font(AppTheme.Fonts.body)
-                    .lineLimit(2)
-                    .textFieldStyle(.plain)
-                    // 增加垂直内边距，让文字在框内更居中舒展
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, AppTheme.Spacing.md)
-                    // 背景色：默认极浅的奶油色，自动填充时极淡的蓝色
-                    .background(
-                        Group {
-                            if isAutoFilled {
-                                AppTheme.Colors.lightBlue.opacity(0.2)
-                            } else {
-                                Color(hex: "#FFF9E6")
-                            }
-                        }
-                    )
-                    .cornerRadius(AppTheme.Radius.base)
-            }
-            // 调整整体高度，为标签池留出空间
-            .frame(height: 160)
-        }
-    }
-    
-
-    
-    // 核心逻辑：地图智能搜索 - 支持附近POI检索和距离排序
+    // MARK: - POI 搜索
     private func searchPOI() {
         isSearching = true
         
         let request = MKLocalSearch.Request()
         
-        // 1. 设置搜索参数
         if !poiQuery.isEmpty {
-            // 有输入时，使用自然语言查询
             request.naturalLanguageQuery = poiQuery
         } else {
-            // 无输入时，搜索附近的餐厅
             request.naturalLanguageQuery = "餐厅"
         }
         
-        // 只搜索兴趣点，优先显示餐厅
         request.resultTypes = .pointOfInterest
         
-        // 2. 设置搜索区域（如果有定位）
         if let userLocation = locationManager.userLocation {
-            // 以当前位置为中心，设置搜索半径
             let region = MKCoordinateRegion(center: userLocation.coordinate, latitudinalMeters: 5000, longitudinalMeters: 5000)
             request.region = region
         }
@@ -830,26 +261,21 @@ struct AddRestaurantView: View {
                 }
                 
                 if let response = response {
-                    // 3. 过滤出餐厅/餐饮类POI
                     var filteredResults = response.mapItems.filter { mapItem in
                         guard let categories = mapItem.pointOfInterestCategory else { return false }
                         let isRestaurant = categories == .restaurant || categories == .cafe || categories == .foodMarket
                         
-                        // 如果有搜索输入，还要确保名称包含搜索内容
                         if self.poiQuery.isEmpty {
                             return isRestaurant
                         } else {
-                            // 模糊搜索：名称包含搜索内容
                             let name = mapItem.name?.lowercased() ?? ""
                             let query = self.poiQuery.lowercased()
                             return isRestaurant && name.contains(query)
                         }
                     }
                     
-                    // 4. 按距离排序（如果有定位）
                     if let userLocation = self.locationManager.userLocation {
                         filteredResults.sort { mapItem1, mapItem2 in
-                            // 将CLLocationCoordinate2D转换为CLLocation对象，使用distance(from:)方法计算距离
                             let location1 = CLLocation(latitude: mapItem1.placemark.coordinate.latitude, longitude: mapItem1.placemark.coordinate.longitude)
                             let location2 = CLLocation(latitude: mapItem2.placemark.coordinate.latitude, longitude: mapItem2.placemark.coordinate.longitude)
                             let distance1 = location1.distance(from: userLocation)
@@ -858,7 +284,6 @@ struct AddRestaurantView: View {
                         }
                     }
                     
-                    // 5. 默认显示5行附近位置结果
                     self.searchResults = Array(filteredResults.prefix(5))
                 } else {
                     self.searchResults = []
@@ -867,7 +292,7 @@ struct AddRestaurantView: View {
         }
     }
     
-    // 核心逻辑：品类自动映射
+    // MARK: - 品类自动映射 (已修复：未匹配到预设品类时返回空字符串)
     private func mapPOICategoryToOurCategory(_ poiCategory: MKPointOfInterestCategory?) -> String {
         guard let poiCategory = poiCategory else { return "" }
         
@@ -883,47 +308,37 @@ struct AddRestaurantView: View {
         }
     }
     
-    // 核心逻辑：一键填充信息
+    // MARK: - 一键填充信息
     private func fillInfoFromMapItem(_ mapItem: MKMapItem) {
-        // 填充基本信息
         name = mapItem.name ?? ""
         
-        // 填充地址信息
         let placemark = mapItem.placemark
         address = placemark.title ?? ""
         latitude = placemark.coordinate.latitude
         longitude = placemark.coordinate.longitude
         
-        // 尝试从地址中提取城市和地区
-        if let city = placemark.locality {
-            self.city = city
+        if let cityName = placemark.locality {
+            self.city = cityName
         }
-        if let district = placemark.subLocality {
-            self.district = district
+        if let districtName = placemark.subLocality {
+            self.district = districtName
         } else if let administrativeArea = placemark.administrativeArea {
             self.district = administrativeArea
         }
         
-        // 自动映射品类：优先通过关键词匹配
         category = determineCategory(from: mapItem)
         
-        // 清空搜索结果
         searchResults = []
-        
-        // 设置自动填充标识，用于高亮效果
         isAutoFilled = true
     }
     
-    // 核心逻辑：通过多种方式确定品类
+    // MARK: - 通过多种方式确定品类 (已修复：禁止自动填入"美食")
     private func determineCategory(from mapItem: MKMapItem) -> String {
         let presetCategories = CategoryManager.shared.getPresetCategories()
-        
-        // 1. 首先通过关键词匹配店名
         let nameToCheck = mapItem.name ?? ""
         let titleToCheck = mapItem.placemark.title ?? ""
         let textToCheck = (nameToCheck + titleToCheck).lowercased()
         
-        // 关键词映射表
         let keywordMap: [String: String] = [
             "火锅": "火锅",
             "面": "面馆",
@@ -957,10 +372,8 @@ struct AddRestaurantView: View {
             "清吧": "酒吧"
         ]
         
-        // 遍历关键词映射表，寻找匹配
         for (keyword, categoryName) in keywordMap {
             if textToCheck.contains(keyword.lowercased()) {
-                // 检查是否在预设品类中
                 if presetCategories.contains(categoryName) {
                     return categoryName
                 }
@@ -968,114 +381,568 @@ struct AddRestaurantView: View {
             }
         }
         
-        // 2. 如果关键词匹配失败，使用 POI 品类映射
         if let poiCategory = mapItem.pointOfInterestCategory {
             let mappedCategory = mapPOICategoryToOurCategory(poiCategory)
-            if !mappedCategory.isEmpty {
-                // 检查是否在预设品类中
-                if presetCategories.contains(mappedCategory) {
-                    return mappedCategory
-                }
+            if !mappedCategory.isEmpty && presetCategories.contains(mappedCategory) {
                 return mappedCategory
             }
         }
         
-        // 3. 如果都失败了，返回空字符串
+        // 修复：未匹配到预设品类时，返回空字符串，禁止自动填入"美食"
         return ""
     }
     
-    // 核心逻辑：保存时处理图片文件和标签
+    // MARK: - 保存餐厅
     private func saveRestaurant() {
-        // 1. 处理标签字符串转数组 - 支持英文逗号(,)、中文逗号(，)、空格()作为分隔符
-        let tags = tagsInput.components(
-            separatedBy: CharacterSet(charactersIn: ",， ")
-        )
-        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .filter { !$0.isEmpty }
-        
-        // 2. 处理品类：如果未选择，使用默认值
-        let finalCategory = !category.isEmpty ? category : "未分类"
-        
-        // 3. 处理评分：如果未选择（为0），使用默认值3
-        let finalRating = rating > 0 ? rating : 3
-        
-        // 4. 将图片保存到磁盘并获取文件名
-        let filename = selectedImage.flatMap { ImageManager.shared.saveImage($0) }
-        
-        // 5. 创建餐厅对象
-        let newRestaurant = Restaurant(
-            name: name,
-            type: finalCategory,
-            district: district,
-            city: city,
-            rating: finalRating,
-            address: address,
-            latitude: latitude,
-            longitude: longitude,
-            coverPhotoFilename: filename,
-            review: review,
-            tags: tags,
-            averagePrice: 0.0
-        )
-        
-        // 6. 在主线程中执行数据库操作
-        Task {
-            @MainActor in
-            // 存入 SwiftData
+        Task { @MainActor in
+            // 合并已选标签和输入的标签
+            var allTags = selectedTags
+            let inputTags = tagsInput.components(
+                separatedBy: CharacterSet(charactersIn: ",， ")
+            )
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            allTags.append(contentsOf: inputTags)
+            let finalTags = Array(Set(allTags))
+            
+            let finalCategory = !category.isEmpty ? category : "未分类"
+            let finalRating = rating > 0 ? rating : 3
+            
+            // 城市兜底逻辑：确保城市信息被记录后再创建 Restaurant 对象
+            var finalCity = city
+            if finalCity.isEmpty {
+                // 优先使用 UserDefaults 中保存的城市
+                if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity") {
+                    finalCity = savedCity
+                } else if let currentCity = locationManager.currentCity {
+                    // 其次使用定位获取的当前城市
+                    finalCity = currentCity
+                } else {
+                    // 默认使用重庆
+                    finalCity = "重庆"
+                }
+            }
+            
+            // 保存城市到 UserDefaults，确保列表筛选能够正确匹配
+            UserDefaults.standard.set(finalCity, forKey: "UserSelectedCity")
+            
+            // 地理坐标处理：如果经纬度为 0，从地址进行逆地理编码获取
+            var finalLatitude = latitude
+            var finalLongitude = longitude
+            if finalLatitude == 0.0 && finalLongitude == 0.0 && !address.isEmpty {
+                // 使用地址进行逆地理编码（异步）
+                let geocoder = CLGeocoder()
+                do {
+                    let placemarks = try await geocoder.geocodeAddressString(address)
+                    if let placemark = placemarks.first, let location = placemark.location {
+                        finalLatitude = location.coordinate.latitude
+                        finalLongitude = location.coordinate.longitude
+                    }
+                } catch {
+                    print("逆地理编码失败: \(error.localizedDescription)")
+                }
+            }
+            
+            let filename = selectedImage.flatMap { ImageManager.shared.saveImage($0) }
+            
+            let newRestaurant = Restaurant(
+                name: name,
+                type: finalCategory,
+                district: district,
+                city: finalCity,
+                rating: finalRating,
+                address: address,
+                latitude: finalLatitude,
+                longitude: finalLongitude,
+                coverPhotoFilename: filename,
+                review: review,
+                tags: finalTags,
+                averagePrice: 0.0
+            )
+            
             modelContext.insert(newRestaurant)
-            // 显式保存上下文，确保保存成功后再关闭页面
             do {
                 try modelContext.save()
-                // 保存成功后，必须调用 onClose?() 闭包，触发加号缩回动画
+                // 延迟确保 SwiftData 刷新
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
                 if let onClose = onClose {
                     onClose()
                 } else {
                     dismiss()
                 }
             } catch {
-                // 保存失败，记录错误但不关闭页面
                 print("保存餐厅失败: \(error.localizedDescription)")
             }
         }
     }
+}
+
+// MARK: - 子视图：封面图 (160pt)
+struct CoverImageView: View {
+    @Binding var selectedImage: UIImage?
+    @Binding var showActionSheet: Bool
     
-    // 自定义卡片组件
-    private struct CardView<Content: View>: View {
-        let content: () -> Content
-        
-        init(@ViewBuilder content: @escaping () -> Content) {
-            self.content = content
-        }
-        
-        var body: some View {
-            VStack {
-                content()
+    var body: some View {
+        ZStack {
+            if let image = selectedImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 160)
+                    .clipped()
+                    .cornerRadius(AppTheme.Radius.base)
+                    .shadow(color: .black.opacity(0.12), radius: 10, x: 2, y: 6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                            .stroke(Color.white, lineWidth: 2.0)
+                    )
+            } else {
+                Button(action: { showActionSheet = true }) {
+                    VStack(spacing: AppTheme.Spacing.xs) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                        Text("添加封面图")
+                            .font(AppTheme.Fonts.footnote)
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 160)
+                    .background(AppTheme.Colors.lightGray.opacity(0.8))
+                    .cornerRadius(AppTheme.Radius.base)
+                    .shadow(color: .black.opacity(0.12), radius: 10, x: 2, y: 6)
+                }
+                .buttonStyle(.plain)
             }
-            .background(AppTheme.Colors.card)
-            .cornerRadius(AppTheme.Radius.base)
-            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
         }
     }
+}
+
+// MARK: - 子视图：POI 智能搜索条 (高亮发光效果)
+struct SearchBar: View {
+    @Binding var poiQuery: String
+    @Binding var searchResults: [MKMapItem]
+    @Binding var isSearching: Bool
+    var searchPOI: () -> Void
+    var fillInfoFromMapItem: (MKMapItem) -> Void
     
-    // 自定义表单项组件
-    private struct FormItemView<Content: View>: View {
-        let title: String
-        let content: () -> Content
-        
-        init(title: String, @ViewBuilder content: @escaping () -> Content) {
-            self.title = title
-            self.content = content
-        }
-        
-        var body: some View {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                Text(title)
-                    .font(AppTheme.Fonts.caption2)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
-                    .padding(.bottom, AppTheme.Spacing.xs)
-                content()
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(AppTheme.Colors.accent)
+                    .font(.system(size: 16))
+                    .symbolRenderingMode(.hierarchical)
+                
+                TextField("", text: $poiQuery, onCommit: { 
+                    searchPOI()
+                    isFocused = true
+                })
+                    .font(AppTheme.Fonts.body)
+                    .autocorrectionDisabled()
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .placeholder("输入店名智能填充信息...", 
+                               color: AppTheme.Colors.textSecondary.opacity(0.8), 
+                               isEmpty: poiQuery.isEmpty)
+                    .focused($isFocused)
+                    .keyboardType(.default)
+                    .submitLabel(.search)
+                    .onChange(of: isFocused) { _, newValue in
+                        if newValue && poiQuery.isEmpty {
+                            searchPOI()
+                        } else if !newValue {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                searchResults = []
+                            }
+                        }
+                    }
+                    .onChange(of: poiQuery) { _, _ in
+                        searchPOI()
+                    }
+                
+                if !poiQuery.isEmpty {
+                    Button(action: { 
+                        poiQuery = ""
+                        searchPOI()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(AppTheme.Colors.textSecondary)
+                            .font(.system(size: 16))
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Spacer()
+                }
             }
-            .padding(AppTheme.Spacing.lg)
+            .frame(height: 44)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .background(Color.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                    .stroke(AppTheme.Colors.accent.opacity(0.6), lineWidth: 1.5)
+            )
+            .cornerRadius(AppTheme.Radius.base)
+            // 高亮发光效果
+            .shadow(color: AppTheme.Colors.accent.opacity(0.15), radius: 12, x: 0, y: 0)
+            
+            // 搜索结果列表
+            if !isSearching && !searchResults.isEmpty {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(searchResults, id: \.self) { mapItem in
+                            Button(action: { 
+                                fillInfoFromMapItem(mapItem)
+                                searchResults = []
+                            }) {
+                                HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                        .font(.system(size: 20))
+                                        .padding(.top, 2)
+                                    
+                                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                                        Text(mapItem.name ?? "未知")
+                                            .font(AppTheme.Fonts.headline)
+                                            .foregroundColor(AppTheme.Colors.textPrimary)
+                                        
+                                        HStack(spacing: 8) {
+                                            if let userLocation = LocationManager.shared.userLocation {
+                                                let mapItemLocation = CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)
+                                                let distance = userLocation.distance(from: mapItemLocation)
+                                                Text(String(format: "%.1fkm", distance / 1000))
+                                                    .font(AppTheme.Fonts.caption)
+                                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                                
+                                                Text("|")
+                                                    .font(AppTheme.Fonts.caption)
+                                                    .foregroundColor(AppTheme.Colors.divider)
+                                            }
+                                            
+                                            if let address = mapItem.placemark.title {
+                                                Text(address)
+                                                    .font(AppTheme.Fonts.caption)
+                                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                                                    .lineLimit(1)
+                                            }
+                                        }
+                                    }
+                                    Spacer()
+                                }
+                                .padding(AppTheme.Spacing.md)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            Divider()
+                        }
+                    }
+                }
+                .frame(height: min(CGFloat(searchResults.count) * 60, 300))
+                .background(AppTheme.Colors.card)
+                .cornerRadius(AppTheme.Radius.base)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
+                )
+                .shadow(color: AppTheme.Colors.accent.opacity(0.1), radius: 8, x: 0, y: 2)
+                .offset(y: 4)
+            }
+            
+            // 搜索中状态
+            if isSearching {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .padding(AppTheme.Spacing.md)
+                    Spacer()
+                }
+                .frame(height: 60)
+                .background(AppTheme.Colors.card)
+                .cornerRadius(AppTheme.Radius.base)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
+                )
+                .offset(y: 4)
+            }
+        }
+    }
+}
+
+// MARK: - 子视图：餐厅名称 (title3, 加粗)
+struct NameTextField: View {
+    @Binding var name: String
+    var isAutoFilled: Bool
+    
+    var body: some View {
+        TextField("餐厅名称", text: $name)
+            .font(.title3)
+            .fontWeight(.bold)
+            .autocorrectionDisabled()
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, 12)
+            .foregroundColor(isAutoFilled ? AppTheme.Colors.primary : .primary)
+            .background(Color.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
+            )
+            .cornerRadius(AppTheme.Radius.base)
+            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
+    }
+}
+
+// MARK: - 子视图：合并行 HStack (左侧地区，右侧品类，0.5pt细线分割)
+struct DistrictCategoryRow: View {
+    @Binding var district: String
+    @Binding var category: String
+    var districtOptions: [String]
+    var categoryOptions: [String]
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // 左侧地区选择
+            Menu {
+                ForEach(districtOptions, id: \.self) { option in
+                    Button { 
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            district = option
+                        }
+                    } label: {
+                        Label(option, systemImage: district == option ? "checkmark" : "")
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(district.isEmpty ? "请选择地区" : district)
+                        .font(AppTheme.Fonts.body)
+                        .foregroundColor(district.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .font(.system(size: 12))
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+            }
+            .frame(maxWidth: .infinity)
+            
+            // 中间细线分割 (0.5pt)
+            Rectangle()
+                .fill(AppTheme.Colors.divider)
+                .frame(width: 0.5)
+            
+            // 右侧品类选择
+            Menu {
+                ForEach(categoryOptions, id: \.self) { option in
+                    Button { 
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            category = option
+                        }
+                    } label: {
+                        Label(option, systemImage: category == option ? "checkmark" : "")
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(category.isEmpty ? "请选择品类" : category)
+                        .font(AppTheme.Fonts.body)
+                        .foregroundColor(category.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                        .font(.system(size: 12))
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .frame(height: 44)
+        .background(Color.white)
+        .cornerRadius(AppTheme.Radius.base)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
+        )
+        // 微立体感
+        .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
+    }
+}
+
+// MARK: - 子视图：巨幕评分行 (28pt星号，12pt间距)
+struct RatingRow: View {
+    @Binding var rating: Int
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ForEach(1...5, id: \.self) { index in
+                Image(systemName: index <= rating ? "star.fill" : "star")
+                    .foregroundColor(index <= rating ? AppTheme.Colors.secondary : AppTheme.Colors.textSecondary)
+                    .font(.system(size: 28))
+                    .symbolRenderingMode(.hierarchical)
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            rating = index
+                        }
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(Color.white)
+        .cornerRadius(AppTheme.Radius.base)
+        // 微立体感
+        .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
+    }
+}
+
+// MARK: - 子视图：一句话评价 (奶油色底，不带红线)
+struct ReviewSection: View {
+    @Binding var review: String
+    
+    var body: some View {
+        TextField("一句话评价", text: $review, axis: .vertical)
+            .font(AppTheme.Fonts.body)
+            .lineLimit(2)
+            .textFieldStyle(.plain)
+            .padding(.vertical, 12)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .background(Color(hex: "#FFF9E6"))
+            .cornerRadius(AppTheme.Radius.base)
+            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
+    }
+}
+
+// MARK: - 子视图：沉浸式标签系统
+struct TagSystemSection: View {
+    @Binding var tagsInput: String
+    @Binding var selectedTags: [String]
+    let presetTags: [String]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 已选标签区：输入框上方显示已添加的标签胶囊
+            if !selectedTags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(selectedTags.indices, id: \.self) { index in
+                            HStack(spacing: 4) {
+                                Text(selectedTags[index])
+                                    .font(AppTheme.Fonts.footnote)
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        selectedTags.remove(atOffsets: [index])
+                                    }
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(AppTheme.Colors.textSecondary)
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: "#EBF3FF"))
+                            .opacity(0.6)
+                            .cornerRadius(16)
+                        }
+                    }
+                }
+                .frame(height: 32)
+            }
+            
+            // 输入框：极简线条风格 TextField
+            TextField("添加标签...", text: $tagsInput)
+                .font(AppTheme.Fonts.body)
+                .autocorrectionDisabled()
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, 10)
+                .background(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                        .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
+                )
+                .cornerRadius(AppTheme.Radius.base)
+            
+            // 灵感标签池：使用 | 字符分割
+            if !presetTags.isEmpty {
+                HStack(spacing: 0) {
+                    ForEach(presetTags.indices, id: \.self) { index in
+                        Button(action: {
+                            if !selectedTags.contains(presetTags[index]) && !tagsInput.contains(presetTags[index]) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    selectedTags.append(presetTags[index])
+                                }
+                            }
+                        }) {
+                            Text(presetTags[index])
+                                .font(AppTheme.Fonts.footnote)
+                                .foregroundColor(AppTheme.Colors.primary)
+                                .padding(.vertical, 6)
+                        }
+                        
+                        if index < presetTags.count - 1 {
+                            Text("|")
+                                .font(AppTheme.Fonts.footnote)
+                                .foregroundColor(AppTheme.Colors.divider)
+                                .padding(.vertical, 6)
+                        }
+                    }
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.top, 4)
+            }
+        }
+        .padding(.vertical, 12)
+        .background(Color.white)
+        .cornerRadius(AppTheme.Radius.base)
+        .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
+    }
+}
+
+// MARK: - 子视图：底部操作行
+struct ActionButtonsRow: View {
+    var onClose: (() -> Void)?
+    var dismissAction: () -> Void
+    var saveAction: () -> Void
+    var isValid: Bool
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            Button("取消") { 
+                if let onClose = onClose {
+                    onClose()
+                } else {
+                    dismissAction()
+                }
+            }
+            .font(AppTheme.Fonts.headline)
+            .foregroundColor(AppTheme.Colors.textPrimary)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.sm)
+            .background(AppTheme.Colors.lightGray)
+            .cornerRadius(AppTheme.Radius.base)
+            .frame(width: UIScreen.main.bounds.width * 0.25)
+            .withHapticFeedback()
+            
+            Button("保存") { saveAction() }
+                .font(AppTheme.Fonts.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .padding(.horizontal, AppTheme.Spacing.lg)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .background(isValid ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary)
+                .cornerRadius(AppTheme.Radius.base)
+                .shadow(color: isValid ? AppTheme.Colors.accent.opacity(0.3) : Color.clear, radius: 8, x: 0, y: 4)
+                .disabled(!isValid)
+                .withHapticFeedback()
+                .frame(maxWidth: .infinity)
         }
     }
 }

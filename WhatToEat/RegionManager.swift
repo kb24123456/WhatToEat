@@ -17,14 +17,27 @@ class RegionManager {
     
     // 私有初始化方法，防止外部创建实例
     private init() {
-        // 从Bundle读取并解析regions.json文件
         do {
-            if let fileURL = Bundle.main.url(forResource: "regions", withExtension: "json") {
-                let data = try Data(contentsOf: fileURL)
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String]] {
-                    cityDistricts = json
-                    return
+            if let appSupportDir = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first {
+                let appDirectory = appSupportDir.appendingPathComponent("WhatToEat")
+                let fileURL = appDirectory.appendingPathComponent("regions.json")
+                print("RegionManager: Looking for regions.json at \(fileURL.path)")
+                if FileManager.default.fileExists(atPath: fileURL.path) {
+                    print("RegionManager: regions.json found, loading...")
+                    let data = try Data(contentsOf: fileURL)
+                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String]] {
+                        cityDistricts = json
+                        print("RegionManager: Successfully loaded \(json.count) cities")
+                        return
+                    }
+                } else {
+                    print("RegionManager: regions.json NOT found at \(fileURL.path)")
                 }
+            } else {
+                print("RegionManager: Could not find Application Support directory")
             }
             // 如果读取失败，使用默认空字典
             cityDistricts = [:]

@@ -25,6 +25,9 @@ struct LibraryView: View {
     // 城市存储键
     private let kSavedCityKey = "UserSelectedCity"
     
+    // 用于调试
+    @State private var debugMessage: String = ""
+    
     // 初始化方法
     init() {
         // 从UserDefaults加载保存的城市，默认使用"上海"
@@ -33,6 +36,13 @@ struct LibraryView: View {
         } else {
             _selectedCity = State(initialValue: "上海")
         }
+    }
+    
+    // 获取当前选中城市的区域列表（用于调试）
+    private var currentDistricts: [String] {
+        let districts = RegionManager.shared.getDistricts(for: selectedCity)
+        print("LibraryView: selectedCity='\(selectedCity)', districts count=\(districts.count)")
+        return districts
     }
     
     // MARK: - 生命周期
@@ -56,7 +66,8 @@ struct LibraryView: View {
                         selectedDistrict: $selectedDistrict,
                         selectedType: $selectedType,
                         sortOption: $sortOption,
-                        restaurants: restaurants
+                        restaurants: restaurants,
+                        districts: currentDistricts
                     )
                     RestaurantListView(
                         filteredRestaurants: filteredRestaurants,
@@ -172,6 +183,7 @@ private struct FilterBarView: View {
     @Binding var selectedType: String?
     @Binding var sortOption: SortOption
     let restaurants: [Restaurant]
+    let districts: [String]
     
     var body: some View {
         HStack(spacing: 12) {
@@ -181,7 +193,7 @@ private struct FilterBarView: View {
                 Button("全区") { selectedDistrict = nil }
                 Divider()
                 // 动态获取当前城市的区列表
-                ForEach(RegionManager.shared.getDistricts(for: selectedCity), id: \.self) { district in
+                ForEach(districts, id: \.self) { district in
                     Button(district) { selectedDistrict = district }
                 }
             } label: {
@@ -324,13 +336,31 @@ private struct FilterBarView: View {
     
     /// 过滤和排序后的餐厅列表
     private var filteredRestaurants: [Restaurant] {
+        print("=== Filtering Restaurants ===")
+        print("selectedCity: '\(selectedCity)'")
+        print("selectedDistrict: \(selectedDistrict ?? "nil")")
+        print("selectedType: \(selectedType ?? "nil")")
+        print("Total restaurants in Query: \(restaurants.count)")
+        
+        // 打印所有餐厅的城市信息
+        for restaurant in restaurants {
+            print("  Restaurant: \(restaurant.name), city: '\(restaurant.city)', district: '\(restaurant.district)'")
+        }
+        
         // 1. 过滤餐厅
         var result = restaurants.filter { restaurant in
             // 🛑 核心修复：防止访问尚未就绪的对象
-            guard restaurant.modelContext != nil else { return false }
+            guard restaurant.modelContext != nil else {
+                print("  SKIP \(restaurant.name): modelContext is nil")
+                return false
+            }
             
             // 按城市过滤
-            guard restaurant.city == selectedCity else {
+            let cityMatch = restaurant.city == selectedCity
+            if !cityMatch {
+                print("  SKIP \(restaurant.name): city '\(restaurant.city)' != selectedCity '\(selectedCity)'")
+            }
+            guard cityMatch else {
                 return false
             }
             

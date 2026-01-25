@@ -24,6 +24,41 @@ struct WhatToEatApp: App {
         }
     }()
 
+    init() {
+        setupRegionsFile()
+    }
+
+    private func setupRegionsFile() {
+        guard let executablePath = Bundle.main.executablePath else {
+            print("Could not find executable path")
+            return
+        }
+        let executableDirectory = (executablePath as NSString).deletingLastPathComponent
+        let sourcePath = (executableDirectory as NSString).appendingPathComponent("regions.json")
+        
+        guard let appSupportDir = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            print("Could not find Application Support directory")
+            return
+        }
+        let appDirectory = appSupportDir.appendingPathComponent("WhatToEat", isDirectory: true)
+        let destinationPath = appDirectory.appendingPathComponent("regions.json")
+
+        do {
+            try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: destinationPath.path) {
+                if FileManager.default.fileExists(atPath: sourcePath) {
+                    try FileManager.default.copyItem(at: URL(fileURLWithPath: sourcePath), to: destinationPath)
+                    print("regions.json copied to \(destinationPath.path)")
+                }
+            }
+        } catch {
+            print("Failed to copy regions.json: \(error)")
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
