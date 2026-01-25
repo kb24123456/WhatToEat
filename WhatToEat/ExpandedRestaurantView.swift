@@ -1,15 +1,13 @@
 import SwiftUI
 import MapKit
 import SwiftData
-import UIKit
 import PhotosUI
 
-struct RestaurantDetailView: View {
+struct ExpandedRestaurantView: View {
     let restaurant: Restaurant
     @Environment(\.modelContext) private var modelContext
     let locationManager: LocationManager
     let animation: Namespace.ID
-    @Binding var isPresented: Bool
     let onDismiss: () -> Void
     
     @State private var drivingRoute: (distance: String, time: String)?
@@ -25,40 +23,21 @@ struct RestaurantDetailView: View {
     @State private var selectedNewCover: UIImage?
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
-                Color(hex: "#FBF9F7")
-                    .ignoresSafeArea()
-                    .opacity(0.95)
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        heroSection
-                        
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-                            titleSection
-                            
-                            metaSection
-                            
-                            statsCardSection
-                            
-                            tagsSection
-                            
-                            routeInfoSection
-                            
-                            restaurantReviewSection
-                            
-                            checkInHistoryList
-                        }
-                        .padding(.top, AppTheme.Spacing.lg)
-                        .padding(.bottom, 100)
-                    }
-                }
-                .ignoresSafeArea(edges: .top)
-                
-                closeButton
-            }
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+            statsCardSection
+            
+            tagsSection
+            
+            routeInfoSection
+            
+            restaurantReviewSection
+            
+            checkInHistoryList
+            
+            closeButton
         }
+        .padding(.horizontal, AppTheme.Spacing.lg)
+        .padding(.bottom, AppTheme.Spacing.lg)
         .task { await fetchDrivingRoute() }
         .sheet(isPresented: $showSheet) {
             CheckInView(restaurant: restaurant, editingLog: logToEdit)
@@ -79,79 +58,6 @@ struct RestaurantDetailView: View {
         .onChange(of: selectedNewCover) { _, newValue in
             if let image = newValue { updateCover(image: image) }
         }
-    }
-    
-    private var heroSection: some View {
-        ZStack(alignment: .bottomLeading) {
-            AsyncImageView(
-                filename: restaurant.coverPhotoFilename,
-                placeholder: AnyView(
-                    Rectangle()
-                        .fill(AppTheme.Colors.primary.opacity(0.1))
-                        .overlay(
-                            Image(systemName: "fork.knife.circle.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(AppTheme.Colors.primary.opacity(0.3))
-                                .symbolRenderingMode(.hierarchical)
-                        )
-                )
-            )
-            .matchedGeometryEffect(id: "coverImage-\(restaurant.id)", in: animation)
-            .frame(height: 280)
-            .clipped()
-            
-            LinearGradient(
-                colors: [Color.clear, Color.black.opacity(0.3)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-            .frame(height: 100)
-        }
-    }
-    
-    private var closeButton: some View {
-        Button {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                isPresented = false
-            }
-            onDismiss()
-        } label: {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 28))
-                .foregroundStyle(.white, .black.opacity(0.2))
-                .symbolRenderingMode(.hierarchical)
-        }
-        .padding(.top, 60)
-        .padding(.leading, AppTheme.Spacing.lg)
-    }
-    
-    private var titleSection: some View {
-        Text(restaurant.name)
-            .font(AppTheme.Fonts.title)
-            .fontWeight(.bold)
-            .foregroundColor(AppTheme.Colors.textPrimary)
-            .matchedGeometryEffect(id: "title-\(restaurant.id)", in: animation)
-            .padding(.horizontal, AppTheme.Spacing.lg)
-    }
-    
-    private var metaSection: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            Text(priceText)
-                .font(AppTheme.Fonts.subheadline)
-                .foregroundColor(AppTheme.Colors.price)
-                .matchedGeometryEffect(id: "price-\(restaurant.id)", in: animation)
-            
-            Text(restaurant.district)
-                .font(AppTheme.Fonts.subheadline)
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .matchedGeometryEffect(id: "district-\(restaurant.id)", in: animation)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(AppTheme.Colors.lightGray.opacity(0.2))
-        .cornerRadius(AppTheme.Radius.base)
-        .matchedGeometryEffect(id: "meta-\(restaurant.id)", in: animation)
-        .padding(.horizontal, AppTheme.Spacing.lg)
     }
     
     private var statsCardSection: some View {
@@ -178,7 +84,7 @@ struct RestaurantDetailView: View {
         .background(Color.white)
         .cornerRadius(AppTheme.Radius.base)
         .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-        .padding(.horizontal, AppTheme.Spacing.lg)
+        .matchedGeometryEffect(id: "stats-\(restaurant.id)", in: animation)
     }
     
     private func statsItem(icon: String, title: String, value: String) -> some View {
@@ -220,7 +126,6 @@ struct RestaurantDetailView: View {
                     }
                 }
                 .matchedGeometryEffect(id: "tags-\(restaurant.id)", in: animation)
-                .padding(.horizontal, AppTheme.Spacing.lg)
             }
         }
     }
@@ -251,7 +156,7 @@ struct RestaurantDetailView: View {
         .background(Color.white)
         .cornerRadius(AppTheme.Radius.base)
         .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-        .padding(.horizontal, AppTheme.Spacing.lg)
+        .matchedGeometryEffect(id: "route-\(restaurant.id)", in: animation)
     }
     
     private var restaurantReviewSection: some View {
@@ -274,7 +179,6 @@ struct RestaurantDetailView: View {
                 .cornerRadius(AppTheme.Radius.base)
                 .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
                 .matchedGeometryEffect(id: "review-\(restaurant.id)", in: animation)
-                .padding(.horizontal, AppTheme.Spacing.lg)
             }
         }
     }
@@ -285,7 +189,6 @@ struct RestaurantDetailView: View {
                 .font(AppTheme.Fonts.subheadline)
                 .fontWeight(.medium)
                 .foregroundColor(AppTheme.Colors.textPrimary)
-                .padding(.horizontal, AppTheme.Spacing.lg)
             
             if restaurant.logs.isEmpty {
                 VStack(spacing: AppTheme.Spacing.sm) {
@@ -300,14 +203,13 @@ struct RestaurantDetailView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, AppTheme.Spacing.xl)
-                .padding(.horizontal, AppTheme.Spacing.lg)
             } else {
                 ForEach(restaurant.logs.sorted(by: { $0.date > $1.date })) { log in
                     checkInLogCard(log: log)
                 }
-                .padding(.horizontal, AppTheme.Spacing.lg)
             }
         }
+        .matchedGeometryEffect(id: "logs-\(restaurant.id)", in: animation)
     }
     
     private func checkInLogCard(log: VisitLog) -> some View {
@@ -397,12 +299,24 @@ struct RestaurantDetailView: View {
         }
     }
     
-    private var priceText: String {
-        if restaurant.averagePrice > 0 {
-            return "¥\(Int(restaurant.averagePrice))/人"
-        } else {
-            return "暂无消费数据"
+    private var closeButton: some View {
+        Button {
+            onDismiss()
+        } label: {
+            HStack {
+                Image(systemName: "chevron.up")
+                Text("收起")
+            }
+            .font(AppTheme.Fonts.footnote)
+            .foregroundColor(AppTheme.Colors.textSecondary)
+            .padding(.vertical, AppTheme.Spacing.sm)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .background(Color.white)
+            .cornerRadius(AppTheme.Radius.base)
+            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, AppTheme.Spacing.sm)
     }
     
     private func fetchDrivingRoute() async {

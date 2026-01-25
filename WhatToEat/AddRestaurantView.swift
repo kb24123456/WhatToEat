@@ -46,7 +46,7 @@ struct AddRestaurantView: View {
     @State private var category = ""
     @State private var district = ""
     @State private var city = ""
-    @State private var rating = 0
+    @State private var rating = 0.0
     @State private var review = ""
     @State private var tagsInput = ""
     
@@ -148,6 +148,7 @@ struct AddRestaurantView: View {
                 .ignoresSafeArea()
         }
         .navigationBarHidden(true)
+        .toolbar(.hidden, for: .tabBar)
         .confirmationDialog("选择封面图来源", isPresented: $showActionSheet) {
             Button("拍照") { showCamera = true }
             Button("从相册选择") { showPhotoPicker = true }
@@ -776,18 +777,18 @@ struct DistrictCategoryRow: View {
 
 // MARK: - 子视图：巨幕评分行 (28pt星号，12pt间距)
 struct RatingRow: View {
-    @Binding var rating: Int
+    @Binding var rating: Double
     
     var body: some View {
         HStack(spacing: 12) {
             ForEach(1...5, id: \.self) { index in
-                Image(systemName: index <= rating ? "star.fill" : "star")
-                    .foregroundColor(index <= rating ? AppTheme.Colors.secondary : AppTheme.Colors.textSecondary)
+                Image(systemName: index <= Int(rating) ? "star.fill" : "star")
+                    .foregroundColor(index <= Int(rating) ? AppTheme.Colors.secondary : AppTheme.Colors.textSecondary)
                     .font(.system(size: 28))
                     .symbolRenderingMode(.hierarchical)
                     .onTapGesture {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            rating = index
+                            rating = Double(index)
                         }
                     }
             }

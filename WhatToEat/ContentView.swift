@@ -31,21 +31,21 @@ enum TabItem: String, CaseIterable {
 struct ContentView: View {
     @State private var selectedTab: TabItem = .library
     @Namespace private var tabAnimation
-    @Namespace private var animationNamespace // 新增命名空间，用于展开动画
+    @Namespace private var animationNamespace
     @State private var showAddRestaurant = false
-    @State private var isAdding: Bool = false // 新增状态，控制是否显示添加卡片
+    @State private var isAdding: Bool = false
+    @State private var isTabBarHidden: Bool = false
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            // 1. 主内容区域切换
             Group {
                 switch selectedTab {
                 case .library:
-                    LibraryView() // 这里的实现已经搬到了 LibraryView.swift
+                    LibraryView()
                 case .home:
                     PlaceholderView(title: "吃啥", description: "随机抽取功能即将上线")
                 case .add:
-                    EmptyView() // 加号按钮只用于触发动作，不显示内容
+                    EmptyView()
                 case .friends:
                     PlaceholderView(title: "事友圈", description: "社交功能即将上线")
                 case .profile:
@@ -54,23 +54,20 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
-            // 2. 沉底导航栏：使用 ZStack 的 bottom 对齐确保始终紧贴屏幕底部
-            customTabBar
+            if !isTabBarHidden {
+                customTabBar
+            }
             
-            // 3. 添加模式：半透明遮罩 + 录入大卡片
             if isAdding {
                 ZStack {
-                    // 半透明黑色遮罩 - 移除多余的 padding，确保覆盖全屏
                     Color.black.opacity(0.3)
                         .edgesIgnoringSafeArea(.all)
                         .onTapGesture {
-                            // 点击遮罩关闭添加模式
                             withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
                                 isAdding = false
                             }
                         }
                     
-                    // 悬浮展示 AddRestaurantView
                     AddRestaurantView(onClose: { 
                         withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
                             isAdding = false
@@ -90,12 +87,22 @@ struct ContentView: View {
                         .matchedGeometryEffect(id: "ADD_BUTTON", in: animationNamespace)
                         .padding(AppTheme.Spacing.lg)
                 }
-                .zIndex(1000) // 确保 AddRestaurantView 显示在 TabBar 之上
+                .zIndex(1000)
             }
         }
-        .ignoresSafeArea(.keyboard) // 防止键盘弹出时导航栏乱跑
+        .ignoresSafeArea(.keyboard)
         .sheet(isPresented: $showAddRestaurant) {
             AddRestaurantView()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hideTabBar)) { _ in
+            withAnimation {
+                isTabBarHidden = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .restoreTabBar)) { _ in
+            withAnimation {
+                isTabBarHidden = false
+            }
         }
     }
     

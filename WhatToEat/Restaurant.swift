@@ -8,20 +8,19 @@ final class Restaurant {
     var type: String
     var district: String
     var city: String
-    var rating: Int
+    var rating: Double
     var address: String
     var latitude: Double
     var longitude: Double
-    var coverPhotoFilename: String?  // 只能存字符串文件名
+    var coverPhotoFilename: String?
     var review: String
     var tags: [String]
     var averagePrice: Double
     var createdAt: Date
     
-    // 关系：确保这里写得标准
     @Relationship(deleteRule: .cascade) var logs: [VisitLog] = []
     
-    init(name: String = "", type: String = "未分类", district: String = "其他", city: String = "", rating: Int = 3, address: String = "", latitude: Double = 0.0, longitude: Double = 0.0, coverPhotoFilename: String? = nil, review: String = "", tags: [String] = [], averagePrice: Double = 0.0) {
+    init(name: String = "", type: String = "未分类", district: String = "其他", city: String = "", rating: Double = 3.0, address: String = "", latitude: Double = 0.0, longitude: Double = 0.0, coverPhotoFilename: String? = nil, review: String = "", tags: [String] = [], averagePrice: Double = 0.0) {
         self.id = UUID()
         self.name = name
         self.type = type

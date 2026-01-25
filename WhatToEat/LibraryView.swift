@@ -10,7 +10,7 @@ struct LibraryView: View {
     // 状态管理
     @State private var showImportSheet = false
     @State private var showCityPicker = false
-    @FocusState private var isSearchFocused: Bool // ✅ 专门监听搜索框是否被点中
+    @FocusState private var isSearchFocused: Bool
     
     @StateObject private var locationManager = LocationManager.shared
     
@@ -25,12 +25,19 @@ struct LibraryView: View {
     // 城市存储键
     private let kSavedCityKey = "UserSelectedCity"
     
+    // 动画命名空间（用于英雄动画）
+    @Namespace private var animation
+    
+    // 选中餐厅（用于详情页展开）
+    @State private var selectedRestaurant: Restaurant?
+    @State private var isDetailPresented = false
+    @State private var isTabBarHidden = false
+    
     // 用于调试
     @State private var debugMessage: String = ""
     
     // 初始化方法
     init() {
-        // 从UserDefaults加载保存的城市，默认使用"上海"
         if let savedCity = UserDefaults.standard.string(forKey: kSavedCityKey) {
             _selectedCity = State(initialValue: savedCity)
         } else {
@@ -38,58 +45,75 @@ struct LibraryView: View {
         }
     }
     
-    // 获取当前选中城市的区域列表（用于调试）
     private var currentDistricts: [String] {
-        let districts = RegionManager.shared.getDistricts(for: selectedCity)
-        print("LibraryView: selectedCity='\(selectedCity)', districts count=\(districts.count)")
-        return districts
+        RegionManager.shared.getDistricts(for: selectedCity)
     }
     
     // MARK: - 生命周期
     var body: some View {
-        NavigationStack {
-            // ✅ 使用 topLeading，这是所有像素级对齐的基准
-            ZStack(alignment: .topLeading) {
-                // 背景层，用于捕获空白区域点击
-                Color.clear
-                    .onTapOutsideHideKeyboard()
-                    
-                VStack(alignment: .leading, spacing: 0) {
-                    HeaderView(
-                        selectedCity: selectedCity,
-                        showCityPicker: $showCityPicker,
-                        searchText: $searchText,
-                        isSearchFocused: _isSearchFocused
-                    )
-                    FilterBarView(
-                        selectedCity: selectedCity,
-                        selectedDistrict: $selectedDistrict,
-                        selectedType: $selectedType,
-                        sortOption: $sortOption,
-                        restaurants: restaurants,
-                        districts: currentDistricts
-                    )
-                    RestaurantListView(
-                        filteredRestaurants: filteredRestaurants,
-                        locationManager: locationManager
-                    )
-                }
-                .background(Color(hex: "#FBF9F7")) // 极淡的米白色背景，衬托纯白色卡片和半透明组件
+        ZStack(alignment: .topLeading) {
+            Color(hex: "#FBF9F7")
+                .ignoresSafeArea()
+            
+            VStack(alignment: .leading, spacing: 0) {
+                HeaderView(
+                    selectedCity: selectedCity,
+                    showCityPicker: $showCityPicker,
+                    searchText: $searchText,
+                    isSearchFocused: _isSearchFocused
+                )
+                FilterBarView(
+                    selectedCity: selectedCity,
+                    selectedDistrict: $selectedDistrict,
+                    selectedType: $selectedType,
+                    sortOption: $sortOption,
+                    restaurants: restaurants,
+                    districts: currentDistricts
+                )
+                RestaurantListView(
+                    filteredRestaurants: filteredRestaurants,
+                    locationManager: locationManager,
+                    animation: animation,
+                    selectedRestaurant: $selectedRestaurant,
+                    isDetailPresented: $isDetailPresented
+                )
             }
-            .sheet(isPresented: $showImportSheet) { ImportDataView() }
-            // 城市选择器
-            .sheet(isPresented: $showCityPicker) {
-                CitySelectionView(selectedCity: $selectedCity)
-            }
-            // 导航目标配置
-            .navigationDestination(for: Restaurant.self) {
-                RestaurantDetailView(restaurant: $0, locationManager: locationManager)
-            }
-            // 当城市变化时，保存到UserDefaults
-            .onChange(of: selectedCity) {
-                UserDefaults.standard.set($0, forKey: kSavedCityKey)
+            
+            if let restaurant = selectedRestaurant {
+                CenteredDetailCardView(
+                    restaurant: restaurant,
+                    locationManager: locationManager,
+                    animation: animation,
+                    isPresented: $isDetailPresented,
+                    onDismiss: {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            selectedRestaurant = nil
+                        }
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: selectedRestaurant?.id)
+        .sheet(isPresented: $showImportSheet) { ImportDataView() }
+        .sheet(isPresented: $showCityPicker) {
+            CitySelectionView(selectedCity: $selectedCity)
+        }
+        .onChange(of: selectedCity) {
+            UserDefaults.standard.set($0, forKey: kSavedCityKey)
+        }
+        .onChange(of: isDetailPresented) { _, newValue in
+            if !newValue {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    selectedRestaurant = nil
+                }
+            }
+            isTabBarHidden = newValue
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .restoreTabBar)) { _ in
+            isTabBarHidden = false
+        }
+        .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
     }
     
     // MARK: - 顶部 Header 子视图
@@ -309,11 +333,11 @@ private struct FilterBarView: View {
     ///   - rating: 评分
     ///   - createdAt: 创建时间
     /// - Returns: 智能排序得分
-    private func calculateSmartScore(distance: Double, rating: Int, createdAt: Date) -> Double {
+    private func calculateSmartScore(distance: Double, rating: Double, createdAt: Date) -> Double {
         var score: Double = 0.0
         
         // 因子 A：评分权重 (40%)
-        let ratingScore = Double(rating) * 20.0
+        let ratingScore = rating * 20.0
         score += ratingScore * 0.4
         
         // 因子 B：距离权重 (40%)
@@ -336,49 +360,27 @@ private struct FilterBarView: View {
     
     /// 过滤和排序后的餐厅列表
     private var filteredRestaurants: [Restaurant] {
-        print("=== Filtering Restaurants ===")
-        print("selectedCity: '\(selectedCity)'")
-        print("selectedDistrict: \(selectedDistrict ?? "nil")")
-        print("selectedType: \(selectedType ?? "nil")")
-        print("Total restaurants in Query: \(restaurants.count)")
-        
-        // 打印所有餐厅的城市信息
-        for restaurant in restaurants {
-            print("  Restaurant: \(restaurant.name), city: '\(restaurant.city)', district: '\(restaurant.district)'")
-        }
-        
-        // 1. 过滤餐厅
         var result = restaurants.filter { restaurant in
-            // 🛑 核心修复：防止访问尚未就绪的对象
             guard restaurant.modelContext != nil else {
-                print("  SKIP \(restaurant.name): modelContext is nil")
                 return false
             }
             
-            // 按城市过滤
-            let cityMatch = restaurant.city == selectedCity
-            if !cityMatch {
-                print("  SKIP \(restaurant.name): city '\(restaurant.city)' != selectedCity '\(selectedCity)'")
-            }
-            guard cityMatch else {
+            guard restaurant.city == selectedCity else {
                 return false
             }
             
-            // 按行政区过滤（可选）
             if let district = selectedDistrict {
                 guard restaurant.district == district else {
                     return false
                 }
             }
             
-            // 按餐厅类型过滤（可选）
             if let type = selectedType {
                 guard restaurant.type == type else {
                     return false
                 }
             }
             
-            // 按搜索文本过滤
             if !searchText.isEmpty {
                 let searchLower = searchText.lowercased()
                 return restaurant.name.lowercased().contains(searchLower) || 
@@ -389,11 +391,8 @@ private struct FilterBarView: View {
             return true
         }
         
-        // 2. 排序餐厅
-        // 确保所有打分在过滤之后、渲染之前一次性完成
         let userLocation = locationManager.userLocation
         result = result.sorted { restaurant1, restaurant2 in
-            // 提前读取所有需要的属性，避免在排序过程中重复访问SwiftData
             let (distance1, rating1, createdAt1) = (
                 calculateDistance(from: userLocation, to: restaurant1),
                 restaurant1.rating,
@@ -407,7 +406,6 @@ private struct FilterBarView: View {
             
             switch sortOption {
             case .smart:
-                // 智能排序得分计算
                 let score1 = calculateSmartScore(distance: distance1, rating: rating1, createdAt: createdAt1)
                 let score2 = calculateSmartScore(distance: distance2, rating: rating2, createdAt: createdAt2)
                 return score1 > score2
@@ -427,19 +425,34 @@ private struct FilterBarView: View {
 private struct RestaurantListView: View {
     let filteredRestaurants: [Restaurant]
     let locationManager: LocationManager
+    let animation: Namespace.ID
+    @Binding var selectedRestaurant: Restaurant?
+    @Binding var isDetailPresented: Bool
     
     var body: some View {
         ScrollView {
             LazyVStack(spacing: AppTheme.Spacing.lg) {
                 ForEach(filteredRestaurants) { restaurant in
-                    // 使用 NavigationLink 包装卡片，value 传入餐厅对象
-                    NavigationLink(value: restaurant) {
-                        RestaurantCard(restaurant: restaurant, locationManager: locationManager)
+                    RestaurantCard(
+                        restaurant: restaurant,
+                        locationManager: locationManager,
+                        animation: animation,
+                        isExpanded: selectedRestaurant?.id == restaurant.id
+                    )
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            if selectedRestaurant?.id == restaurant.id {
+                                selectedRestaurant = nil
+                                isDetailPresented = false
+                            } else {
+                                selectedRestaurant = restaurant
+                                isDetailPresented = true
+                            }
+                        }
                     }
-                    .buttonStyle(.plain) // 💡 关键：防止原生按钮样式破坏卡片视觉
                 }
             }
-            .padding(.horizontal, AppTheme.Spacing.lg) // 左右各16pt内边距，与顶部Header对齐
+            .padding(.horizontal, AppTheme.Spacing.lg)
             .padding(.bottom, 90)
         }
     }
