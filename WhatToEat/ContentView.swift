@@ -31,10 +31,12 @@ enum TabItem: String, CaseIterable {
 struct ContentView: View {
     @State private var selectedTab: TabItem = .library
     @Namespace private var tabAnimation
+    @Namespace private var animationNamespace // 新增命名空间，用于展开动画
     @State private var showAddRestaurant = false
+    @State private var isAdding: Bool = false // 新增状态，控制是否显示添加卡片
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             // 1. 主内容区域切换
             Group {
                 switch selectedTab {
@@ -51,10 +53,45 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            // 2. 沉底导航栏：使用safeAreaInset确保底部安全区域被正确处理
+            
+            // 2. 沉底导航栏：使用 ZStack 的 bottom 对齐确保始终紧贴屏幕底部
             customTabBar
+            
+            // 3. 添加模式：半透明遮罩 + 录入大卡片
+            if isAdding {
+                ZStack {
+                    // 半透明黑色遮罩 - 移除多余的 padding，确保覆盖全屏
+                    Color.black.opacity(0.3)
+                        .edgesIgnoringSafeArea(.all)
+                        .onTapGesture {
+                            // 点击遮罩关闭添加模式
+                            withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
+                                isAdding = false
+                            }
+                        }
+                    
+                    // 悬浮展示 AddRestaurantView
+                    AddRestaurantView(onClose: { 
+                        withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
+                            isAdding = false
+                        }
+                    })
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                                .fill(AppTheme.Colors.background)
+                                .shadow(
+                                    color: AppTheme.Shadows.base.color,
+                                    radius: AppTheme.Shadows.base.radius,
+                                    x: AppTheme.Shadows.base.x,
+                                    y: AppTheme.Shadows.base.y
+                                )
+                        )
+                        .matchedGeometryEffect(id: "ADD_BUTTON", in: animationNamespace)
+                        .padding(AppTheme.Spacing.lg)
+                }
+                .zIndex(1000) // 确保 AddRestaurantView 显示在 TabBar 之上
+            }
         }
         .ignoresSafeArea(.keyboard) // 防止键盘弹出时导航栏乱跑
         .sheet(isPresented: $showAddRestaurant) {
@@ -189,8 +226,10 @@ struct ContentView: View {
             
             // 2. 中间圆形突出按钮 - 宝石按钮
             Button {
-                // 打开添加餐厅表单
-                showAddRestaurant = true
+                // 打开添加餐厅表单（原位展开）
+                withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
+                    isAdding = true
+                }
             } label: {
                 ZStack {
                     // 纯色背景 - 哑光材质
@@ -218,6 +257,7 @@ struct ContentView: View {
                     Image(systemName: TabItem.add.iconName)
                         .font(.system(size: 26, weight: .bold)) // 略微加粗
                         .foregroundColor(.white)
+                        .matchedGeometryEffect(id: "ADD_BUTTON", in: animationNamespace)
                 }
                 .offset(y: -20) // 向上偏移，突出在导航栏上方
             }

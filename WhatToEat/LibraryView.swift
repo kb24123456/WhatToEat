@@ -20,19 +20,6 @@ struct LibraryView: View {
     @State private var selectedType: String?
     @State private var searchText = ""
     
-    // 排序选项枚举
-    enum SortOption: String, CaseIterable {
-        case smart = "智能排序"
-        case distance = "距离最近"
-        case rating = "评分最高"
-        case createdAt = "最近添加"
-        
-        /// 枚举值的显示名称
-        var displayName: String {
-            return self.rawValue
-        }
-    }
-    
     @State private var sortOption: SortOption = .smart
     
     // 城市存储键
@@ -58,9 +45,23 @@ struct LibraryView: View {
                     .onTapOutsideHideKeyboard()
                     
                 VStack(alignment: .leading, spacing: 0) {
-                    headerSection
-                    filterBarSection
-                    listSection
+                    HeaderView(
+                        selectedCity: selectedCity,
+                        showCityPicker: $showCityPicker,
+                        searchText: $searchText,
+                        isSearchFocused: _isSearchFocused
+                    )
+                    FilterBarView(
+                        selectedCity: selectedCity,
+                        selectedDistrict: $selectedDistrict,
+                        selectedType: $selectedType,
+                        sortOption: $sortOption,
+                        restaurants: restaurants
+                    )
+                    RestaurantListView(
+                        filteredRestaurants: filteredRestaurants,
+                        locationManager: locationManager
+                    )
                 }
                 .background(Color(hex: "#FBF9F7")) // 极淡的米白色背景，衬托纯白色卡片和半透明组件
             }
@@ -80,8 +81,14 @@ struct LibraryView: View {
         }
     }
     
-    // MARK: - 顶部 Header (整合标题、搜索框和地图图标)
-    private var headerSection: some View {
+    // MARK: - 顶部 Header 子视图
+private struct HeaderView: View {
+    let selectedCity: String
+    @Binding var showCityPicker: Bool
+    @Binding var searchText: String
+    @FocusState var isSearchFocused: Bool
+    
+    var body: some View {
         HStack(spacing: AppTheme.Spacing.md) {
             // 1. 标题"吃啥呢"
             Text("吃啥呢")
@@ -143,9 +150,30 @@ struct LibraryView: View {
         .padding(.vertical, AppTheme.Spacing.sm)
         .background(Color(hex: "#FBF9F7")) // 与全局背景色保持一致
     }
+}
     
-    // MARK: - 筛选按钮栏
-    private var filterBarSection: some View {
+    // MARK: - 排序选项枚举
+enum SortOption: String, CaseIterable {
+    case smart = "智能排序"
+    case distance = "距离最近"
+    case rating = "评分最高"
+    case createdAt = "最近添加"
+    
+    /// 枚举值的显示名称
+    var displayName: String {
+        return self.rawValue
+    }
+}
+
+// MARK: - 筛选按钮栏子视图
+private struct FilterBarView: View {
+    let selectedCity: String
+    @Binding var selectedDistrict: String?
+    @Binding var selectedType: String?
+    @Binding var sortOption: SortOption
+    let restaurants: [Restaurant]
+    
+    var body: some View {
         HStack(spacing: 12) {
             // 1. 地区筛选
             Menu {
@@ -249,6 +277,7 @@ struct LibraryView: View {
         .padding(.top, AppTheme.Spacing.xs) // 与搜索框的最小间距
         .padding(.bottom, AppTheme.Spacing.md)
     }
+}
     
     // MARK: - 辅助方法
     
@@ -364,8 +393,12 @@ struct LibraryView: View {
         return result
     }
     
-    // MARK: - 餐厅列表
-    private var listSection: some View {
+    // MARK: - 餐厅列表子视图
+private struct RestaurantListView: View {
+    let filteredRestaurants: [Restaurant]
+    let locationManager: LocationManager
+    
+    var body: some View {
         ScrollView {
             LazyVStack(spacing: AppTheme.Spacing.lg) {
                 ForEach(filteredRestaurants) { restaurant in
@@ -380,6 +413,7 @@ struct LibraryView: View {
             .padding(.bottom, 90)
         }
     }
+}
 
 
 }
