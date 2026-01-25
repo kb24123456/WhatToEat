@@ -62,10 +62,10 @@ struct AppTheme {
     
     // MARK: - 4. 极致圆角
     struct Radius {
-        static let base: CGFloat = 16 // 卡片圆角：16pt
-        static let small: CGFloat = 16
+        static let base: CGFloat = 24 // 卡片圆角：24pt，营造更柔和的现代感
+        static let small: CGFloat = 24
         static let sm: CGFloat = 8
-        static let image: CGFloat = 16 // 图片圆角与卡片圆角一致
+        static let image: CGFloat = 24 // 图片圆角与卡片圆角一致
         static let circle: CGFloat = 100
     }
     
