@@ -101,23 +101,13 @@ struct RestaurantCard: View {
                             Color.clear.frame(height: 14)
                             
                             // 第二行 - 元信息：人均消费、地区、距离
-                            HStack(spacing: AppTheme.Spacing.sm) {
+                            HStack(spacing: AppTheme.Spacing.md) {
                                 Text(priceText)
                                     .font(AppTheme.Fonts.subheadline)
                                     .foregroundColor(AppTheme.Colors.price)
                                 
-                                // 小圆点分隔符
-                                Circle()
-                                    .frame(width: 3, height: 3)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                
                                 Text(restaurant.district)
                                     .font(AppTheme.Fonts.subheadline)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                
-                                // 小圆点分隔符
-                                Circle()
-                                    .frame(width: 3, height: 3)
                                     .foregroundColor(AppTheme.Colors.textSecondary)
                                 
                                 // 距离显示（如果有定位）

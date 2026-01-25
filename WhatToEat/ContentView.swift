@@ -82,12 +82,14 @@ struct ContentView: View {
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .frame(height: 12)
                     }
-                    .foregroundColor(selectedTab == .library ? AppTheme.Colors.accent : Color(hex: "#948E88"))
+                    .foregroundColor(selectedTab == .library ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.6))
                     .scaleEffect(selectedTab == .library ? 1.15 : 1.0)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, maxHeight: 60)
+                .scaleEffect(0.96) // 轻微的缩放反馈
+                .withHapticFeedback() // 触感反馈
                 
                 // 2. 吃啥按钮
                 Button {
@@ -104,12 +106,14 @@ struct ContentView: View {
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .frame(height: 12)
                     }
-                    .foregroundColor(selectedTab == .home ? AppTheme.Colors.accent : Color(hex: "#948E88"))
+                    .foregroundColor(selectedTab == .home ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.6))
                     .scaleEffect(selectedTab == .home ? 1.15 : 1.0)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, maxHeight: 60)
+                .scaleEffect(0.96) // 轻微的缩放反馈
+                .withHapticFeedback() // 触感反馈
                 
                 // 3. 中间圆形突出按钮占位
                 Button {}
@@ -134,12 +138,14 @@ struct ContentView: View {
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .frame(height: 12)
                     }
-                    .foregroundColor(selectedTab == .friends ? AppTheme.Colors.accent : Color(hex: "#948E88"))
+                    .foregroundColor(selectedTab == .friends ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.6))
                     .scaleEffect(selectedTab == .friends ? 1.15 : 1.0)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, maxHeight: 60)
+                .scaleEffect(0.96) // 轻微的缩放反馈
+                .withHapticFeedback() // 触感反馈
                 
                 // 5. 我的按钮
                 Button {
@@ -156,29 +162,30 @@ struct ContentView: View {
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .frame(height: 12)
                     }
-                    .foregroundColor(selectedTab == .profile ? AppTheme.Colors.accent : Color(hex: "#948E88"))
+                    .foregroundColor(selectedTab == .profile ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.6))
                     .scaleEffect(selectedTab == .profile ? 1.15 : 1.0)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, maxHeight: 60)
+                .scaleEffect(0.96) // 轻微的缩放反馈
+                .withHapticFeedback() // 触感反馈
             }
-            .padding(.horizontal, AppTheme.Spacing.lg) // 添加16pt水平间距
+            .padding(.horizontal, AppTheme.Spacing.md) // 内部水平间距
             .frame(height: 60)
             .background(
-                // 玻璃材质背景
-                RoundedRectangle(cornerRadius: 12)
+                // 玻璃材质背景 - 悬浮岛样式
+                RoundedRectangle(cornerRadius: AppTheme.Radius.circle)
                     .fill(.ultraThinMaterial) // 使用超薄材质，实现玻璃效果
                     .overlay(
-                        // 顶部高光线
-                        Rectangle()
-                            .fill(Color.white.opacity(0.8)) // 白色半透明高光线
-                            .frame(height: 0.5)
-                            .alignmentGuide(.top) { $0[.top] }
+                        // 白色半透明描边
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.circle)
+                            .stroke(.white.opacity(0.4), lineWidth: 0.5)
                     )
                     .shadow(color: .black.opacity(0.04), radius: 10, y: -5) // 整体悬浮阴影
             )
-            .padding(.bottom, 10) // 底部离开屏幕边缘，增加悬浮感
+            .padding(.horizontal, AppTheme.Spacing.lg) // 左右各留出16pt外边距
+            .padding(.bottom, 10) // 底部留出10pt外边距
             
             // 2. 中间圆形突出按钮 - 宝石按钮
             Button {
@@ -186,50 +193,37 @@ struct ContentView: View {
                 showAddRestaurant = true
             } label: {
                 ZStack {
-                    // 渐变背景
+                    // 纯色背景 - 哑光材质
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    AppTheme.Colors.accent, // 从强调色
-                                    Color(hex: "#E51E3A") // 到深一号的红
-                                ]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .fill(AppTheme.Colors.accent) // 使用纯色强调色
                         .frame(width: 56, height: 56)
-                        .shadow(
-                            color: AppTheme.Shadows.elevated.color,
-                            radius: AppTheme.Shadows.elevated.radius,
-                            x: AppTheme.Shadows.elevated.x,
-                            y: AppTheme.Shadows.elevated.y
-                        ) // 使用深度投影
-                    
-                    // 白色半圆渐变，模拟球形表面的反光
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.white.opacity(0.3), // 微弱的白色
-                                    Color.clear // 到透明
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                        .shadow(color: Color(hex: "#FF2442").opacity(0.3), radius: 8, x: 0, y: 4) // 底层投影
+                        .overlay(
+                            // 微弱内发光：在按钮内部顶端模拟极细的浅色内边缘
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.white.opacity(0.2), // 微弱的白色
+                                            Color.clear // 到透明
+                                        ]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: 52, height: 52) // 比按钮略小
                         )
-                        .frame(width: 30, height: 30)
-                        .offset(x: -10, y: -10) // 左上角位置
                     
-                    // 加号图标
+                    // 加号图标 - 白色加粗
                     Image(systemName: TabItem.add.iconName)
-                        .font(.title2.bold())
+                        .font(.system(size: 26, weight: .bold)) // 略微加粗
                         .foregroundColor(.white)
-                        .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
                 }
                 .offset(y: -20) // 向上偏移，突出在导航栏上方
             }
             .buttonStyle(.plain)
+            .scaleEffect(0.96) // 轻微的缩放反馈
+            .withHapticFeedback() // 触感反馈
         }
         .zIndex(100)
     }
