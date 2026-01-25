@@ -84,6 +84,24 @@ struct AddRestaurantView: View {
         RegionManager.shared.getDistricts(for: city)
     }
     
+    // 智能标签池：提取最常用的前10个标签
+    var suggestedTags: [String] {
+        // 1. 收集所有餐厅的标签
+        let allTags = allRestaurants.flatMap { $0.tags }
+        
+        // 2. 统计每个标签出现的次数
+        var tagCounts: [String: Int] = [:]
+        for tag in allTags {
+            tagCounts[tag, default: 0] += 1
+        }
+        
+        // 3. 按出现次数排序，取前10个
+        let sortedTags = tagCounts.sorted { $0.value > $1.value }
+        let topTags = sortedTags.prefix(10).map { $0.key }
+        
+        return topTags
+    }
+    
     // 主内容视图
         private var mainContent: some View {
             // 极微弱线性渐变背景，模拟高级艺术纸张质感
@@ -109,8 +127,8 @@ struct AddRestaurantView: View {
                             // 2. 添加封面
                             CoverImageView(selectedImage: $selectedImage, showActionSheet: $showActionSheet)
                             
-                            // 增大封面图与搜索框之间的垂直距离，从8pt增加到16pt
-                            Color.clear.frame(height: 16)
+                            // 封面图与搜索框间距：20pt
+            Color.clear.frame(height: 20)
                             
                             // 3. 位置搜索框
                             SearchBar(poiQuery: $poiQuery, searchResults: $searchResults, isSearching: $isSearching, searchPOI: searchPOI, fillInfoFromMapItem: fillInfoFromMapItem)
@@ -188,29 +206,29 @@ struct AddRestaurantView: View {
                                 .shadow(color: AppTheme.Colors.accent.opacity(0.1), radius: 8, x: 0, y: 2)
                             }
                             
-                            // 搜索框与餐厅名称间距
-                            Color.clear.frame(height: 6)
+                            // 搜索框与餐厅名称间距：8pt
+            Color.clear.frame(height: 8)
                             
                             // 4. 餐厅名称
                             NameTextField(name: $name, isAutoFilled: isAutoFilled)
                             
-                            // 餐厅名称与城市地区间距
-                            Color.clear.frame(height: 6)
+                            // 餐厅名称与城市地区间距：8pt
+            Color.clear.frame(height: 8)
                             
                             // 5. 城市与地区
                             CityDistrictView(city: $city, district: $district, districtOptions: districtOptions)
                             
-                            // 城市地区与品类评分间距
-                            Color.clear.frame(height: 6)
+                            // 城市地区与品类评分间距：8pt
+            Color.clear.frame(height: 8)
                             
                             // 6. 品类与评分
                             CategoryRatingView(category: $category, rating: $rating, categoryOptions: categoryOptions)
                             
-                            // 品类评分与标签评价间距
-                            Color.clear.frame(height: 6)
+                            // 品类评分与标签评价间距：8pt
+            Color.clear.frame(height: 8)
                             
                             // 7. 标签与评价
-                            TagsReviewView(tagsInput: $tagsInput, review: $review, isAutoFilled: isAutoFilled)
+                            TagsReviewView(tagsInput: $tagsInput, review: $review, isAutoFilled: isAutoFilled, suggestedTags: suggestedTags)
                             
                             // 标签评价与底部操作行间距
                             Color.clear.frame(height: AppTheme.Spacing.md)
@@ -365,7 +383,8 @@ struct AddRestaurantView: View {
                         .frame(height: 160)
                         .clipped()
                         .cornerRadius(AppTheme.Radius.base)
-                        .shadow(color: .black.opacity(0.15), radius: 8, x: 2, y: 5)
+                        // 升级：增加照片的悬浮深度
+                        .shadow(color: .black.opacity(0.12), radius: 10, x: 2, y: 6)
                         .overlay(
                             Group {
                                 // 和纸胶带装饰块 - 水平对齐
@@ -375,9 +394,9 @@ struct AddRestaurantView: View {
                                     .padding(.horizontal, 30)
                                     .offset(y: -75)
                                 
-                                // 边框效果
+                                // 边框效果：升级为2.0pt纯白色描边
                                 RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                                    .stroke(Color.white.opacity(0.5), lineWidth: 2)
+                                    .stroke(Color.white, lineWidth: 2.0)
                                 RoundedRectangle(cornerRadius: AppTheme.Radius.base)
                                     .stroke(AppTheme.Colors.divider, lineWidth: 1)
                             }
@@ -394,9 +413,11 @@ struct AddRestaurantView: View {
                                 .foregroundColor(AppTheme.Colors.textSecondary)
                         }
                         .frame(maxWidth: .infinity, minHeight: 160)
-                        .background(AppTheme.Colors.lightGray)
+                        // 升级：空状态背景色改为半透明浅灰色
+                        .background(AppTheme.Colors.lightGray.opacity(0.8))
                         .cornerRadius(AppTheme.Radius.base)
-                        .shadow(color: .black.opacity(0.15), radius: 8, x: 2, y: 5)
+                        // 升级：增加照片的悬浮深度
+                        .shadow(color: .black.opacity(0.12), radius: 10, x: 2, y: 6)
                         .overlay(
                             Group {
                                 // 和纸胶带装饰块 - 水平对齐
@@ -406,9 +427,9 @@ struct AddRestaurantView: View {
                                     .padding(.horizontal, 30)
                                     .offset(y: -75)
                                 
-                                // 边框效果 - 保持2.0pt白色描边
+                                // 边框效果 - 升级为2.0pt纯白色描边
                                 RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                                    .stroke(Color.white.opacity(0.5), lineWidth: 2)
+                                    .stroke(Color.white, lineWidth: 2.0)
                                 RoundedRectangle(cornerRadius: AppTheme.Radius.base)
                                     .stroke(AppTheme.Colors.divider, lineWidth: 1)
                             }
@@ -495,17 +516,19 @@ struct AddRestaurantView: View {
                 }
                 .frame(height: 40)
                 .padding(.horizontal, AppTheme.Spacing.md)
-                // Hero级搜索框设计 - 发光效果，引导用户优先点击
-                .background(AppTheme.Colors.lightGray.opacity(0.3)) // 极浅灰色背景，突出红色发光效果
+                // Hero级搜索框：白色背景
+                .background(Color.white)
                 .overlay(
-                    // 顶部圆角边框，与下方列表过渡自然
+                    // 红色描边效果
                     RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .stroke(AppTheme.Colors.accent.opacity(0.4), lineWidth: 1.5) // 强化红色边框
+                        .stroke(AppTheme.Colors.accent.opacity(0.4), lineWidth: 1.5)
                 )
-                // 使用标准圆角，与下方列表形成自然过渡
+                // 标准圆角
                 .cornerRadius(AppTheme.Radius.base)
-                // 呼吸感的红色外发光效果
-                .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 10, x: 0, y: 0)
+                // 微悬浮投影效果
+                .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
+                // 叠加淡红色呼吸灯阴影
+                .shadow(color: AppTheme.Colors.accent.opacity(0.2), radius: 12, x: 0, y: 0)
                 
                 // 搜索中状态指示器
                 if isSearching {
@@ -545,25 +568,16 @@ struct AddRestaurantView: View {
                     .foregroundColor(isAutoFilled ? AppTheme.Colors.primary : .primary)
             }
             .frame(height: 44)
-            // 内凹压印效果 + 自动填充高亮
-            .background(
-                Group {
-                    AppTheme.Colors.lightGray.opacity(0.5)
-                    // 极其微弱的蓝色呼吸灯效果
-                    if isAutoFilled {
-                        AppTheme.Colors.lightBlue.opacity(0.15)
-                            .animation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isAutoFilled)
-                    }
-                }
-            )
+            // 微悬浮卡片样式：白色背景 + 自动填充高亮
+            .background(Color.white)
             .overlay(name.isEmpty ? nil : AppTheme.Colors.lightBlue.opacity(0.3))
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(AppTheme.Colors.divider.opacity(0.5), lineWidth: 0.5)
+                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
             )
             .cornerRadius(AppTheme.Radius.base)
-            // 极轻的背景投影，增强层级感
-            .shadow(color: .black.opacity(0.03), radius: 4, x: 0, y: 2)
+            // 微悬浮投影效果
+            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
         }
     }
     
@@ -610,17 +624,15 @@ struct AddRestaurantView: View {
             }
             .frame(height: 40)
             .padding(.horizontal, AppTheme.Spacing.md)
-            // 内凹压印效果：深色描边 + 浅色背景
-            .background(AppTheme.Colors.lightGray.opacity(0.5))
+            // 微悬浮卡片样式：白色背景
+            .background(Color.white)
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(AppTheme.Colors.divider.opacity(0.5), lineWidth: 0.5)
+                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
             )
             .cornerRadius(AppTheme.Radius.base)
-            // 极轻的背景投影，增强层级感
-            .shadow(color: .black.opacity(0.03), radius: 4, x: 0, y: 2)
-            // 极轻的背景投影，增强层级感
-            .shadow(color: .black.opacity(0.03), radius: 4, x: 0, y: 2)
+            // 微悬浮投影效果
+            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
         }
     }
     
@@ -671,13 +683,15 @@ struct AddRestaurantView: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .frame(height: 40)
-            // 内凹压印效果：深色描边 + 浅色背景
-            .background(AppTheme.Colors.lightGray.opacity(0.5))
+            // 微悬浮卡片样式：白色背景
+            .background(Color.white)
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(AppTheme.Colors.divider.opacity(0.5), lineWidth: 0.5)
+                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
             )
             .cornerRadius(AppTheme.Radius.base)
+            // 微悬浮投影效果
+            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
         }
     }
     
@@ -686,6 +700,7 @@ struct AddRestaurantView: View {
         @Binding var tagsInput: String
         @Binding var review: String
         var isAutoFilled: Bool
+        var suggestedTags: [String]
         
         var body: some View {
             VStack(spacing: 8) {
@@ -698,24 +713,58 @@ struct AddRestaurantView: View {
                         .padding(.horizontal, AppTheme.Spacing.md)
                         .foregroundColor(isAutoFilled ? AppTheme.Colors.primary : .primary)
                 }
-                // 内凹压印效果：深色描边 + 浅色背景 + 自动填充高亮
+                // 微悬浮卡片样式：白色背景 + 自动填充高亮
                 .background(
-                    Group {
-                        AppTheme.Colors.lightGray.opacity(0.5)
-                        if isAutoFilled {
-                            AppTheme.Colors.lightBlue.opacity(0.15)
-                                .animation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isAutoFilled)
-                        }
+                Group {
+                    Color.white
+                    // 自动填充背景色：极淡的蓝色
+                    if isAutoFilled {
+                        AppTheme.Colors.lightBlue.opacity(0.2)
                     }
-                )
+                }
+            )
                 .overlay(tagsInput.isEmpty ? nil : AppTheme.Colors.lightBlue.opacity(0.3))
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .stroke(AppTheme.Colors.divider.opacity(0.5), lineWidth: 0.5)
+                        .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
                 )
                 .cornerRadius(AppTheme.Radius.base)
-                // 极轻的背景投影，增强层级感，与自动填充高亮效果完美融合
-                .shadow(color: .black.opacity(0.03), radius: 4, x: 0, y: 2)
+                // 微悬浮投影效果
+                .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
+                
+                // 智能标签池：水平滚动的预设标签
+                if !suggestedTags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: AppTheme.Spacing.xs) {
+                            ForEach(suggestedTags, id: \.self) {
+                                tag in
+                                Button(action: {
+                                    // 点击预设标签，自动追加到tagsInput中
+                                    if tagsInput.isEmpty {
+                                        tagsInput = tag
+                                    } else {
+                                        // 检查是否已包含该标签
+                                        let existingTags = tagsInput.components(separatedBy: CharacterSet(charactersIn: ",， ")).filter { !$0.isEmpty }
+                                        if !existingTags.contains(tag) {
+                                            tagsInput += ", \(tag)"
+                                        }
+                                    }
+                                }) {
+                                    Text(tag)
+                                        .font(AppTheme.Fonts.footnote)
+                                        .foregroundColor(AppTheme.Colors.primary)
+                                        .padding(.horizontal, AppTheme.Spacing.sm)
+                                        .padding(.vertical, 4)
+                                        .background(AppTheme.Colors.lightBlue.opacity(0.5))
+                                        .cornerRadius(AppTheme.Radius.base)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, AppTheme.Spacing.md)
+                    }
+                    .frame(height: 30)
+                }
                 
                 // 一句话评价 - 重构设计，移除装饰线条
                 TextField("一句话评价", text: $review, axis: .vertical)
@@ -725,12 +774,20 @@ struct AddRestaurantView: View {
                     // 增加垂直内边距，让文字在框内更居中舒展
                     .padding(.vertical, 12)
                     .padding(.horizontal, AppTheme.Spacing.md)
-                    // 极浅的奶油色背景，像一张平整的便签
-                    .background(Color(hex: "#FFF9E6"))
+                    // 背景色：默认极浅的奶油色，自动填充时极淡的蓝色
+                    .background(
+                        Group {
+                            if isAutoFilled {
+                                AppTheme.Colors.lightBlue.opacity(0.2)
+                            } else {
+                                Color(hex: "#FFF9E6")
+                            }
+                        }
+                    )
                     .cornerRadius(AppTheme.Radius.base)
             }
-            // 调整整体高度，确保评价框高度适合固定两行文本
-            .frame(height: 130)
+            // 调整整体高度，为标签池留出空间
+            .frame(height: 160)
         }
     }
     
