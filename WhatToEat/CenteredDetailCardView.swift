@@ -27,6 +27,10 @@ struct CenteredDetailCardView: View {
     @State private var showEditReviewSheet = false
     @State private var editedReview: String = ""
     
+    @State private var showEditTagsSheet = false
+    @State private var editingTags: [String] = []
+    @State private var tagsInput: String = ""
+    
     private var screenWidth: CGFloat {
         UIScreen.main.bounds.width - (AppTheme.Spacing.lg * 2) - 28
     }
@@ -36,13 +40,9 @@ struct CenteredDetailCardView: View {
     }
     
     var body: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             ZStack(alignment: .center) {
-                Color.black.opacity(0.5)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        dismissDetail()
-                    }
+                backgroundOverlay
                 
                 VStack(spacing: 0) {
                     Spacer()
@@ -68,6 +68,9 @@ struct CenteredDetailCardView: View {
         .sheet(isPresented: $showEditReviewSheet) {
             editReviewSheet
         }
+        .sheet(isPresented: $showEditTagsSheet) {
+            tagEditSheet
+        }
         .confirmationDialog("更换封面图", isPresented: $showActionSheet) {
             Button("📸 拍照") { showCamera = true }
             Button("🖼️ 从相册选择") { showPhotoPicker = true }
@@ -87,6 +90,16 @@ struct CenteredDetailCardView: View {
         .onDisappear {
             restoreTabBar()
         }
+    }
+    
+    private var backgroundOverlay: some View {
+        Color.black.opacity(0.5)
+            .ignoresSafeArea()
+            .onTapGesture {
+                dismissDetail()
+            }
+            .opacity(isPresented ? 1 : 0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.72), value: isPresented)
     }
     
     private func hideTabBar() {
@@ -146,8 +159,10 @@ struct CenteredDetailCardView: View {
                 )
             )
             .matchedGeometryEffect(id: "coverImage-\(restaurant.id)", in: animation)
+            .animation(.spring(response: 0.15, dampingFraction: 0.72), value: isPresented)
             .frame(height: 180)
             .clipped()
+            .zIndex(1)
             
             Button {
                 showActionSheet = true
@@ -172,30 +187,20 @@ struct CenteredDetailCardView: View {
                         .fontWeight(.bold)
                         .foregroundColor(AppTheme.Colors.textPrimary)
                         .lineLimit(2)
-                        .matchedGeometryEffect(id: "title-\(restaurant.id)", in: animation)
                     
                     HStack(spacing: 8) {
                         categoryButton
                         ratingButton
                     }
                 }
+                .zIndex(1)
                 
                 Spacer()
                 
-                Button {
-                    logToEdit = nil
-                    showSheet = true
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(AppTheme.Colors.accent)
-                        Text("打卡")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                }
+                checkInButton
             }
+            
+            tagRow
             
             HStack(spacing: AppTheme.Spacing.md) {
                 HStack(spacing: 4) {
@@ -205,7 +210,6 @@ struct CenteredDetailCardView: View {
                     Text(restaurant.district)
                         .font(AppTheme.Fonts.footnote)
                         .foregroundColor(AppTheme.Colors.textSecondary)
-                        .matchedGeometryEffect(id: "district-\(restaurant.id)", in: animation)
                 }
                 
                 if let userLocation = locationManager.userLocation {
@@ -254,7 +258,6 @@ struct CenteredDetailCardView: View {
             .background(AppTheme.Colors.primary.opacity(0.1))
             .cornerRadius(AppTheme.Radius.base)
         }
-        .matchedGeometryEffect(id: "type-\(restaurant.id)", in: animation)
     }
     
     private var ratingButton: some View {
@@ -269,6 +272,7 @@ struct CenteredDetailCardView: View {
             }
         }
         .matchedGeometryEffect(id: "rating-\(restaurant.id)", in: animation)
+        .animation(.spring(response: 0.15, dampingFraction: 0.72), value: isPresented)
     }
     
     private func starIcon(for star: Int) -> some View {
@@ -277,6 +281,67 @@ struct CenteredDetailCardView: View {
             .font(.system(size: 14))
             .foregroundColor(Color(hex: "#FFD700"))
             .symbolRenderingMode(.hierarchical)
+    }
+    
+    private var tagRow: some View {
+        Group {
+            if !restaurant.tags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(restaurant.tags.indices, id: \.self) { index in
+                            Text(restaurant.tags[index])
+                                .font(AppTheme.Fonts.caption)
+                                .foregroundColor(AppTheme.Colors.primary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(AppTheme.Colors.primary.opacity(0.08))
+                                .cornerRadius(12)
+                        }
+                        
+                        Button {
+                            editingTags = restaurant.tags
+                            tagsInput = ""
+                            showEditTagsSheet = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.Colors.accent)
+                        }
+                    }
+                }
+                .frame(height: 28)
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "tag.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                    
+                    Button("添加标签") {
+                        editingTags = restaurant.tags
+                        tagsInput = ""
+                        showEditTagsSheet = true
+                    }
+                    .font(AppTheme.Fonts.caption)
+                    .foregroundColor(AppTheme.Colors.accent)
+                }
+            }
+        }
+    }
+    
+    private var checkInButton: some View {
+        Button {
+            logToEdit = nil
+            showSheet = true
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "pencil.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(AppTheme.Colors.accent)
+                Text("打卡")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+            }
+        }
     }
     
     private var statsSection: some View {
@@ -288,7 +353,6 @@ struct CenteredDetailCardView: View {
         .padding(.vertical, 10)
         .background(Color.white)
         .cornerRadius(AppTheme.Radius.base)
-        .matchedGeometryEffect(id: "stats-\(restaurant.id)", in: animation)
     }
     
     private func statItem(icon: String, title: String, value: String) -> some View {
@@ -306,6 +370,110 @@ struct CenteredDetailCardView: View {
                 .foregroundColor(AppTheme.Colors.textSecondary)
         }
         .frame(maxWidth: .infinity)
+    }
+    
+    private var tagEditSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                if !editingTags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(editingTags.indices, id: \.self) { index in
+                                HStack(spacing: 4) {
+                                    Text(editingTags[index])
+                                        .font(AppTheme.Fonts.footnote)
+                                        .foregroundColor(AppTheme.Colors.textPrimary)
+                                    
+                                    Button(action: {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            editingTags.remove(atOffsets: [index])
+                                        }
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(AppTheme.Colors.textSecondary)
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color(hex: "#EBF3FF"))
+                                .opacity(0.6)
+                                .cornerRadius(16)
+                            }
+                        }
+                    }
+                    .frame(height: 32)
+                }
+                
+                TextField("添加标签...", text: $tagsInput)
+                    .font(AppTheme.Fonts.body)
+                    .autocorrectionDisabled()
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                    .padding(.vertical, 10)
+                    .background(Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                            .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
+                    )
+                    .cornerRadius(AppTheme.Radius.base)
+                
+                let presetTags = ["氛围感", "老字号", "二刷", "排队王", "性价比"]
+                if !presetTags.isEmpty {
+                    HStack(spacing: 0) {
+                        ForEach(presetTags.indices, id: \.self) { index in
+                            Button(action: {
+                                if !editingTags.contains(presetTags[index]) && !tagsInput.contains(presetTags[index]) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        editingTags.append(presetTags[index])
+                                    }
+                                }
+                            }) {
+                                Text(presetTags[index])
+                                    .font(AppTheme.Fonts.footnote)
+                                    .foregroundColor(AppTheme.Colors.primary)
+                                    .padding(.vertical, 6)
+                            }
+                            
+                            if index < presetTags.count - 1 {
+                                Text("|")
+                                    .font(AppTheme.Fonts.footnote)
+                                    .foregroundColor(AppTheme.Colors.divider)
+                                    .padding(.vertical, 6)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.md)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            .padding(.top, AppTheme.Spacing.lg)
+            .navigationTitle("编辑标签")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        showEditTagsSheet = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        let inputTags = tagsInput.components(
+                            separatedBy: CharacterSet(charactersIn: ",， ")
+                        )
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                        
+                        var allTags = editingTags
+                        allTags.append(contentsOf: inputTags)
+                        restaurant.tags = Array(Set(allTags))
+                        showEditTagsSheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
     
     private var infoSection: some View {
@@ -344,7 +512,6 @@ struct CenteredDetailCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
         .cornerRadius(AppTheme.Radius.base)
-        .matchedGeometryEffect(id: "route-\(restaurant.id)", in: animation)
     }
     
     private var reviewSection: some View {
@@ -378,7 +545,6 @@ struct CenteredDetailCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
         .cornerRadius(AppTheme.Radius.base)
-        .matchedGeometryEffect(id: "review-\(restaurant.id)", in: animation)
     }
     
     private var logsSection: some View {
@@ -419,7 +585,6 @@ struct CenteredDetailCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
         .cornerRadius(AppTheme.Radius.base)
-        .matchedGeometryEffect(id: "logs-\(restaurant.id)", in: animation)
     }
     
     private func logMiniCard(log: VisitLog) -> some View {
@@ -487,10 +652,12 @@ struct CenteredDetailCardView: View {
     }
     
     private func dismissDetail() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.72)) {
             isPresented = false
         }
-        onDismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            onDismiss()
+        }
     }
     
     private func fetchDrivingRoute() async {

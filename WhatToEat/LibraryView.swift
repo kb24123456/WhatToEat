@@ -32,6 +32,7 @@ struct LibraryView: View {
     @State private var selectedRestaurant: Restaurant?
     @State private var isDetailPresented = false
     @State private var isTabBarHidden = false
+    @State private var isAnimatingOut = false
     
     // 用于调试
     @State private var debugMessage: String = ""
@@ -86,15 +87,16 @@ struct LibraryView: View {
                     animation: animation,
                     isPresented: $isDetailPresented,
                     onDismiss: {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.72)) {
                             selectedRestaurant = nil
                         }
                     }
                 )
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .scaleEffect(isDetailPresented ? 1.0 : 0.95)
+                .opacity(isDetailPresented ? 1.0 : 0.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.72), value: isDetailPresented)
             }
         }
-        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: selectedRestaurant?.id)
         .sheet(isPresented: $showImportSheet) { ImportDataView() }
         .sheet(isPresented: $showCityPicker) {
             CitySelectionView(selectedCity: $selectedCity)
@@ -103,9 +105,13 @@ struct LibraryView: View {
             UserDefaults.standard.set($0, forKey: kSavedCityKey)
         }
         .onChange(of: isDetailPresented) { _, newValue in
-            if !newValue {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    selectedRestaurant = nil
+            if !newValue && !isAnimatingOut {
+                isAnimatingOut = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.72)) {
+                        selectedRestaurant = nil
+                    }
+                    isAnimatingOut = false
                 }
             }
             isTabBarHidden = newValue
