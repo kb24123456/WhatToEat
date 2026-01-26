@@ -20,7 +20,7 @@ struct ExpandedRestaurantView: View {
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
-    @State private var selectedNewCover: UIImage?
+    @State private var newCoverImages: [UIImage] = []
     
     var body: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
@@ -52,10 +52,10 @@ struct ExpandedRestaurantView: View {
             }
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker(selectedImage: $selectedNewCover)
+            CameraPickerView(selectedImages: $newCoverImages)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
-        .onChange(of: selectedNewCover) { _, newValue in
+        .onChange(of: newCoverImages.first) { _, newValue in
             if let image = newValue { updateCover(image: image) }
         }
     }
@@ -228,9 +228,9 @@ struct ExpandedRestaurantView: View {
                     .foregroundColor(AppTheme.Colors.accent)
             }
             
-            if log.photoFilename != nil {
+            if let firstFilename = log.photoFilenames.first {
                 AsyncImageView(
-                    filename: log.photoFilename,
+                    filename: firstFilename,
                     placeholder: AnyView(EmptyView())
                 )
                 .frame(height: 160)

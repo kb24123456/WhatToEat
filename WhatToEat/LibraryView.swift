@@ -2,6 +2,11 @@ import SwiftUI
 import SwiftData
 import MapKit
 
+// MARK: - 通知名称扩展
+extension Notification.Name {
+    static let restaurantListShouldRefresh = Notification.Name("restaurantListShouldRefresh")
+}
+
 // MARK: - 1. 核心视图
 struct LibraryView: View {
     @Environment(\.modelContext) private var modelContext
@@ -79,30 +84,15 @@ struct LibraryView: View {
                     isDetailPresented: $isDetailPresented
                 )
             }
-            
+        }
+        .fullScreenCover(isPresented: $isDetailPresented) {
             if let restaurant = selectedRestaurant {
-                CenteredDetailCardView(
+                RestaurantDetailView(
                     restaurant: restaurant,
                     locationManager: locationManager,
-                    animation: animation,
-                    isPresented: $isDetailPresented,
-                    onDismiss: {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.72)) {
-                            selectedRestaurant = nil
-                        }
-                    }
+                    isPresented: $isDetailPresented
                 )
-                .scaleEffect(isDetailPresented ? 1.0 : 0.95)
-                .opacity(isDetailPresented ? 1.0 : 0.0)
-                .animation(.spring(response: 0.2, dampingFraction: 0.72), value: isDetailPresented)
             }
-        }
-        .sheet(isPresented: $showImportSheet) { ImportDataView() }
-        .sheet(isPresented: $showCityPicker) {
-            CitySelectionView(selectedCity: $selectedCity)
-        }
-        .onChange(of: selectedCity) {
-            UserDefaults.standard.set($0, forKey: kSavedCityKey)
         }
         .onChange(of: isDetailPresented) { _, newValue in
             if !newValue && !isAnimatingOut {
@@ -119,7 +109,19 @@ struct LibraryView: View {
         .onReceive(NotificationCenter.default.publisher(for: .restoreTabBar)) { _ in
             isTabBarHidden = false
         }
+        .onReceive(NotificationCenter.default.publisher(for: .restaurantListShouldRefresh)) { _ in
+            // 收到刷新通知时，强制刷新 @Query
+            // SwiftData 的 @Query 会自动响应上下文变化，此处仅作日志
+            print("RestaurantListRefresh: 收到刷新通知")
+        }
         .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
+        .sheet(isPresented: $showImportSheet) { ImportDataView() }
+        .sheet(isPresented: $showCityPicker) {
+            CitySelectionView(selectedCity: $selectedCity)
+        }
+        .onChange(of: selectedCity) {
+            UserDefaults.standard.set($0, forKey: kSavedCityKey)
+        }
     }
     
     // MARK: - 顶部 Header 子视图

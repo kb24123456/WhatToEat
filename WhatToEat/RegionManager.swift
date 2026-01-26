@@ -17,6 +17,16 @@ class RegionManager {
     
     // 私有初始化方法，防止外部创建实例
     private init() {
+        // 首先尝试从应用 bundle 目录直接加载文件路径
+        if let bundlePath = Bundle.main.path(forResource: "regions", ofType: "json"),
+           let data = try? Data(contentsOf: URL(fileURLWithPath: bundlePath)),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String]] {
+            cityDistricts = json
+            print("RegionManager: Successfully loaded regions.json from bundle path, \(json.count) cities")
+            return
+        }
+        
+        // 如果 bundle 中没有，尝试从 Application Support 目录加载
         do {
             if let appSupportDir = FileManager.default.urls(
                 for: .applicationSupportDirectory,
@@ -24,22 +34,15 @@ class RegionManager {
             ).first {
                 let appDirectory = appSupportDir.appendingPathComponent("WhatToEat")
                 let fileURL = appDirectory.appendingPathComponent("regions.json")
-                print("RegionManager: Looking for regions.json at \(fileURL.path)")
                 if FileManager.default.fileExists(atPath: fileURL.path) {
-                    print("RegionManager: regions.json found, loading...")
                     let data = try Data(contentsOf: fileURL)
                     if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String]] {
                         cityDistricts = json
-                        print("RegionManager: Successfully loaded \(json.count) cities")
+                        print("RegionManager: Successfully loaded \(json.count) cities from AppSupport")
                         return
                     }
-                } else {
-                    print("RegionManager: regions.json NOT found at \(fileURL.path)")
                 }
-            } else {
-                print("RegionManager: Could not find Application Support directory")
             }
-            // 如果读取失败，使用默认空字典
             cityDistricts = [:]
         } catch {
             print("Error loading regions.json: \(error)")

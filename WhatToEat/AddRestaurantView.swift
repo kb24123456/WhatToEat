@@ -57,7 +57,7 @@ struct AddRestaurantView: View {
     @State private var showLocationPicker = false
     
     // --- 3. 封面图相关 ---
-    @State private var selectedImage: UIImage?
+    @State private var coverImages: [UIImage] = []
     @State private var showActionSheet = false
     @State private var showCamera = false
     @State private var showPhotoPicker = false
@@ -93,7 +93,7 @@ struct AddRestaurantView: View {
     // MARK: - 主表单内容
     private var formContent: some View {
         VStack(spacing: 0) {
-            CoverImageView(selectedImage: $selectedImage, showActionSheet: $showActionSheet)
+            CoverImageView(coverImages: $coverImages, showActionSheet: $showActionSheet)
             
             Color.clear.frame(height: 12)
             
@@ -155,7 +155,7 @@ struct AddRestaurantView: View {
             Button("取消", role: .cancel) {}
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker(selectedImage: $selectedImage)
+            CameraPickerView(selectedImages: $coverImages)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
         .onChange(of: photoPickerItem) { _, newValue in
@@ -182,7 +182,7 @@ struct AddRestaurantView: View {
         Task {
             if let data = try? await newValue?.loadTransferable(type: Data.self),
                let uiImage = UIImage(data: data) {
-                await MainActor.run { self.selectedImage = uiImage }
+                await MainActor.run { self.coverImages = [uiImage] }
             }
         }
     }
@@ -444,7 +444,7 @@ struct AddRestaurantView: View {
                 }
             }
             
-            let filename = selectedImage.flatMap { ImageManager.shared.saveImage($0) }
+            let filename = coverImages.first.flatMap { ImageManager.shared.saveImage($0) }
             
             let newRestaurant = Restaurant(
                 name: name,
@@ -464,6 +464,7 @@ struct AddRestaurantView: View {
             modelContext.insert(newRestaurant)
             do {
                 try modelContext.save()
+                NotificationCenter.default.post(name: .restaurantListShouldRefresh, object: nil)
                 // 延迟确保 SwiftData 刷新
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
                 if let onClose = onClose {
@@ -480,13 +481,13 @@ struct AddRestaurantView: View {
 
 // MARK: - 子视图：封面图 (160pt)
 struct CoverImageView: View {
-    @Binding var selectedImage: UIImage?
+    @Binding var coverImages: [UIImage]
     @Binding var showActionSheet: Bool
     
     var body: some View {
         ZStack {
-            if let image = selectedImage {
-                Image(uiImage: image)
+            if let firstImage = coverImages.first {
+                Image(uiImage: firstImage)
                     .resizable()
                     .scaledToFill()
                     .frame(height: 160)

@@ -88,6 +88,26 @@ struct AppTheme {
         static let restaurantCoverHeight: CGFloat = 133.33
         static let restaurantCoverRatio: CGFloat = 3/4
     }
+    
+    // MARK: - 7. 二次编辑动效规范
+    struct Animations {
+        // 编辑状态切换弹簧动画（用于信息、印象等）
+        static let editingSpring = Animation.spring(response: 0.35, dampingFraction: 0.8)
+        
+        // 标签操作弹簧动画
+        static let tagSpring = Animation.spring(response: 0.3, dampingFraction: 0.75)
+        
+        // 缩放淡入过渡
+        static let transitionScaleOpacity: AnyTransition = .scale.combined(with: .opacity)
+        
+        // 从顶部滑入过渡
+        static let transitionMoveTop: AnyTransition = .move(edge: .top).combined(with: .opacity)
+        
+        // 触感反馈生成器
+        static let lightImpact = UIImpactFeedbackGenerator(style: .light)
+        static let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
+        static let successFeedback = UINotificationFeedbackGenerator()
+    }
 }
 
 // MARK: - 颜色 Hex 支持

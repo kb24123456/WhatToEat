@@ -2,13 +2,38 @@
 //  CheckInView.swift
 //  WhatToEat
 //
-//  Created by 廖云丰 on 2026/1/17.
+//  重构：高级手账质感 UI - 双层阴影、紧凑布局、横格纸底纹
 //
 
 import SwiftUI
 import SwiftData
 import UIKit
 import PhotosUI
+
+enum MoodType: String, CaseIterable {
+    case satisfied = "😋"
+    case neutral = "😐"
+    case terrible = "💣"
+    case amazing = "🤩"
+    
+    var title: String {
+        switch self {
+        case .satisfied: return "满意"
+        case .neutral: return "一般"
+        case .terrible: return "踩雷"
+        case .amazing: return "惊艳"
+        }
+    }
+    
+    var glowColor: Color {
+        switch self {
+        case .satisfied: return Color(hex: "#FFB3BA")
+        case .neutral: return Color(hex: "#E8E8E8")
+        case .terrible: return Color(hex: "#666666")
+        case .amazing: return Color(hex: "#FFE566")
+        }
+    }
+}
 
 struct CheckInView: View {
     @Environment(\.modelContext) private var modelContext
@@ -17,267 +42,807 @@ struct CheckInView: View {
     let restaurant: Restaurant
     var editingLog: VisitLog? = nil
     
-    // 表单数据
     @State private var date = Date()
     @State private var peopleCount = 2
-    @State private var expense = 0.0
-    @State private var goodDishes = ""
-    @State private var badDishes = ""
+    @State private var expenseText = ""
+    @State private var goodTags: [String] = []
+    @State private var badTags: [String] = []
+    @State private var inputGoodTag = ""
+    @State private var inputBadTag = ""
     @State private var review = ""
+    @State private var selectedMood: MoodType?
     
-    // 照片相关
-    @State private var selectedImage: UIImage?
-    
-    // 状态变量
+    @State private var selectedImages: [UIImage] = []
     @State private var showActionSheet = false
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
     
-    // 辅助计算属性
+    @State private var showConfetti = false
+    @State private var perPersonBounce = false
+    @State private var deletingImageIndex: Int?
+    
+    @State private var animatedPerPersonPrice: Double = 0
+    
+    private var expense: Double {
+        Double(expenseText) ?? 0
+    }
+    
     private var currentPerPersonPrice: Double {
-        if peopleCount > 0 {
-            return expense / Double(peopleCount)
-        } else {
-            return 0.0
-        }
+        guard peopleCount > 0 else { return 0 }
+        return expense / Double(peopleCount)
     }
     
     var body: some View {
         NavigationStack {
-            Form {
-                // 1. 基本信息
-                basicInfoSection
-                
-                // 2. 红黑榜
-                redBlackListSection
-                
-                // 3. 用餐照片 (最复杂的部分，已拆分)
-                photoSection
-                
-                // 4. 评价
-                reviewSection
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 20) {
+                    multiPhotoSection
+                    
+                    receiptCardView
+                    
+                    HStack(spacing: 12) {
+                        stickyNoteView(
+                            type: .red,
+                            title: "👍 必点推荐",
+                            tags: $goodTags,
+                            inputText: $inputGoodTag,
+                            placeholder: "输入菜名..."
+                        )
+                        
+                        stickyNoteView(
+                            type: .gray,
+                            title: "💣 避雷提醒",
+                            tags: $badTags,
+                            inputText: $inputBadTag,
+                            placeholder: "输入菜名..."
+                        )
+                    }
+                    
+                    moodSelectorView
+                    
+                    reviewEditorView
+                    
+                    saveButton
+                }
+                .padding(.vertical, 20)
+                .frame(maxWidth: 400)
+                .frame(maxWidth: .infinity)
             }
-            .navigationTitle(editingLog != nil ? "编辑打卡" : "打卡")
+            .background(AppTheme.Colors.background)
+            .navigationTitle(editingLog != nil ? "编辑打卡" : "记录美食")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden()
-            // 表单回填（编辑模式）
-            .onAppear {
-                if let log = editingLog {
-                    // 数据回填
-                    date = log.date
-                    expense = log.expense
-                    peopleCount = log.peopleCount
-                    goodDishes = log.goodDishes
-                    badDishes = log.badDishes
-                    review = log.review
-                    
-                    // 图片加载（在后台线程）
-                    Task {
-                        if let filename = log.photoFilename {
-                            let image = ImageManager.shared.loadImage(filename: filename)
-                            await MainActor.run { self.selectedImage = image }
-                        }
-                    }
-                }
-            }
-            
-            // 弹窗与选择器配置
-            .confirmationDialog("选择照片来源", isPresented: $showActionSheet, titleVisibility: .visible) {
-                Button("📸 拍照") { showCamera = true }
-                Button("🖼️ 从相册选择") { showPhotoPicker = true }
-                Button("取消", role: .cancel) { }
-            }
-            .fullScreenCover(isPresented: $showCamera) {
-                CameraPicker(selectedImage: $selectedImage)
-                    .ignoresSafeArea()
-            }
-            .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
-            .onChange(of: photoPickerItem) { oldValue, newItem in
-                Task {
-                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
-                        if let image = UIImage(data: data) {
-                            await MainActor.run { self.selectedImage = image }
-                        }
-                    }
-                }
-            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") { dismiss() }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("保存") { saveCheckIn() }
-                        .disabled(expense <= 0)
+            }
+            .onAppear {
+                if let log = editingLog {
+                    loadEditingLog(log)
+                }
+                animatedPerPersonPrice = currentPerPersonPrice
+            }
+            .onChange(of: currentPerPersonPrice) { _, newValue in
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    animatedPerPersonPrice = newValue
+                }
+            }
+            .confirmationDialog("选择照片", isPresented: $showActionSheet) {
+                Button("📸 拍照") { showCamera = true }
+                Button("🖼️ 从相册选择") { showPhotoPicker = true }
+                if !selectedImages.isEmpty {
+                    Button("🗑️ 清空所有照片", role: .destructive) {
+                        for filename in (editingLog?.photoFilenames ?? []) {
+                            ImageManager.shared.deleteImage(filename: filename)
+                        }
+                        selectedImages = []
+                    }
+                }
+            }
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraPickerView(selectedImages: $selectedImages).ignoresSafeArea()
+            }
+            .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
+            .onChange(of: photoPickerItem) { (_, newItem: PhotosPickerItem?) in
+                Task {
+                    if let data = try? await newItem?.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedImages.append(image)
+                        }
+                    }
+                    photoPickerItem = nil
+                }
+            }
+            .overlay {
+                if showConfetti {
+                    ConfettiView()
+                        .allowsHitTesting(false)
                 }
             }
         }
     }
     
-    // MARK: - 拆分的视图模块 (解决编译器超时)
-    
-    @ViewBuilder
-    private var basicInfoSection: some View {
-        Section {
-            DatePicker("日期", selection: $date, displayedComponents: [.date, .hourAndMinute])
+    // MARK: - 多图上传卡片
+    private var multiPhotoSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("上传照片")
+                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                .foregroundColor(Color(hex: "#999"))
+                .tracking(1)
             
-            Stepper("人数: \(peopleCount)", value: $peopleCount, in: 1...20)
-            
-            TextField("消费金额", value: $expense, format: .currency(code: "CNY"))
-                .keyboardType(.decimalPad)
-            
-            Text("本次人均: \(currentPerPersonPrice.formatted(.currency(code: "CNY")))")
-                .foregroundColor(.gray)
-        } header: {
-            Text("基本信息")
-        }
-    }
-    
-    @ViewBuilder
-    private var redBlackListSection: some View {
-        Section {
-            TextField("红榜菜品", text: $goodDishes, prompt: Text("好吃的菜品"))
-            TextField("黑榜菜品", text: $badDishes, prompt: Text("不好吃的菜品"))
-        } header: {
-            Text("红黑榜")
-        }
-    }
-    
-    @ViewBuilder
-    private var photoSection: some View {
-        Section {
-            if let image = selectedImage {
-                ZStack(alignment: .topTrailing) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(height: 200)
-                        .clipped()
-                        .cornerRadius(8)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    addPhotoButton
                     
-                    Button(action: { selectedImage = nil }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title)
-                            .foregroundColor(.red)
+                    ForEach(selectedImages.indices, id: \.self) { index in
+                        photoThumbnail(at: index)
                     }
-                    .padding(8)
                 }
-            } else {
-                Button(action: { showActionSheet = true }) {
-                    VStack(spacing: 12) {
-                        Image(systemName: "camera")
-                            .font(.system(size: 48))
-                            .foregroundColor(.gray)
-                        Text("添加照片")
-                            .font(.headline)
-                            .foregroundColor(.gray)
-                    }
-                    .padding(32)
-                    .frame(maxWidth: .infinity)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
             }
-        } header: {
-            Text("用餐照片")
+            .frame(height: 88)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
+                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+        )
+    }
+    
+    // MARK: - 添加照片按钮
+    private var addPhotoButton: some View {
+        Button {
+            showActionSheet = true
+            triggerHaptic()
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(hex: "#F5F5F5"))
+                    .frame(width: 80, height: 80)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                    )
+                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+                
+                VStack(spacing: 2) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(Color(hex: "#999"))
+                    Text("添加")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Color(hex: "#999"))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // MARK: - 照片缩略图
+    private func photoThumbnail(at index: Int) -> some View {
+        let image = selectedImages[index]
+        let isSelected = deletingImageIndex == index
+        
+        return ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 80, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
+                .scaleEffect(isSelected ? 0.92 : 1.0)
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+            
+            Button {
+                deletingImageIndex = index
+                triggerHaptic()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        let filename = editingLog?.photoFilenames[safe: index]
+                        if let filename = filename {
+                            ImageManager.shared.deleteImage(filename: filename)
+                        }
+                        selectedImages.remove(at: index)
+                    }
+                    deletingImageIndex = nil
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.white, Color.black.opacity(0.4))
+            }
+            .scaleEffect(isSelected ? 1.15 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isSelected)
         }
     }
     
-    @ViewBuilder
-    private var reviewSection: some View {
-        Section {
-            // ✅ 修改后： axis 设为垂直，评价再长也会向下自动换行
-            TextField("分享你的用餐体验", text: $review, axis: .vertical)
-                .lineLimit(3...6) // 限制最小3行，最大6行
+    // MARK: - 费用信息卡片（三栏布局）
+    private var receiptCardView: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                peopleSection
+                
+                verticalDivider
+                
+                expenseSection
+                
+                verticalDivider
+                
+                perPersonSection
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
+                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+        )
+    }
+    
+    private var verticalDivider: some View {
+        Rectangle()
+            .fill(Color.black.opacity(0.06))
+            .frame(width: 1, height: 50)
+    }
+    
+    private var peopleSection: some View {
+        VStack(spacing: 6) {
+            Text("用餐人数")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Color(hex: "#999"))
+                .tracking(1)
+            
+            HStack(spacing: 12) {
+                Button {
+                    if peopleCount > 1 {
+                        peopleCount -= 1
+                        triggerHaptic()
+                        triggerPerPersonBounce()
+                    }
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(peopleCount > 1 ? Color(hex: "#FF2442") : Color(hex: "#E0E0E0"))
+                }
+                .disabled(peopleCount <= 1)
+                
+                Text("\(peopleCount)")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "#332E2B"))
+                    .frame(minWidth: 24)
+                
+                Button {
+                    peopleCount += 1
+                    triggerHaptic()
+                    triggerPerPersonBounce()
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(Color(hex: "#FF2442"))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    private var expenseSection: some View {
+        VStack(spacing: 6) {
+            Text("消费总额")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Color(hex: "#999"))
+                .tracking(1)
+            
+            HStack(spacing: 2) {
+                Text("¥")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Color(hex: "#FF2442"))
+                
+                TextField("0", text: $expenseText)
+                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color(hex: "#332E2B"))
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 70)
+                    .onChange(of: expenseText) { _, _ in
+                        triggerPerPersonBounce()
+                    }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(hex: "#F8F8F8"))
+            )
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    private var perPersonSection: some View {
+        VStack(spacing: 6) {
+            Text("人均")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Color(hex: "#999"))
+                .tracking(1)
+            
+            HStack(spacing: 2) {
+                Text("¥")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Color(hex: "#FF2442"))
+                
+                Text("\(Int(animatedPerPersonPrice))")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "#FF2442"))
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.3), value: animatedPerPersonPrice)
+            }
+            
+            Text("/人")
+                .font(.system(size: 10))
+                .foregroundColor(Color(hex: "#BBB"))
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    // MARK: - 便利贴视图
+    private func stickyNoteView(
+        type: StickyNoteType,
+        title: String,
+        tags: Binding<[String]>,
+        inputText: Binding<String>,
+        placeholder: String
+    ) -> some View {
+        let bgColor = type == .red ? Color(hex: "#FFF5F7") : Color(hex: "#F5F5F5")
+        let glowColor: Color = type == .red ? Color(hex: "#FF2442").opacity(0.08) : Color.black.opacity(0.04)
+        
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 4) {
+                Text(title.split(separator: " ").first.map(String.init) ?? "")
+                    .font(.system(size: 14))
+                Text(title.split(separator: " ").count > 1 ? title.split(separator: " ").dropFirst().joined(separator: " ") : "")
+                    .font(.system(size: 12))
+            }
+            .font(.system(size: 11, weight: .medium).monospacedDigit())
+            .foregroundColor(type == .red ? Color(hex: "#FF2442") : Color(hex: "#666"))
+            .tracking(1)
+            
+            if !tags.wrappedValue.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(tags.wrappedValue.indices, id: \.self) { index in
+                            HStack(spacing: 4) {
+                                Text(tags.wrappedValue[index])
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(type == .red ? Color(hex: "#332E2B") : .white)
+                                
+                                Button {
+                                    triggerHaptic()
+                                    let currentTags = tags.wrappedValue
+                                    if index < currentTags.count {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            var mutableTags = currentTags
+                                            mutableTags.remove(at: index)
+                                            tags.wrappedValue = mutableTags
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(type == .red ? Color(hex: "#999") : .white.opacity(0.7))
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background((type == .red ? Color.white : Color(hex: "#666")) as Color)
+                            .cornerRadius(10)
+                        }
+                    }
+                }
+                .frame(height: 26)
+            }
+            
+            TextField(placeholder, text: inputText)
+                .font(.system(size: 14))
+                .autocorrectionDisabled()
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.white.opacity(0.6))
+                        .innerShadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
+                )
+                .onSubmit {
+                    triggerHaptic()
+                    addTag(from: inputText, to: tags)
+                }
+        }
+        .padding(12)
+        .background(bgColor)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
+        .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+        .frame(maxWidth: .infinity)
+    }
+    
+    // MARK: - 心情选择器
+    private var moodSelectorView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("这次用餐的感受")
+                .font(AppTheme.Fonts.caption)
+                .foregroundColor(Color(hex: "#777"))
+                .tracking(1.2)
+            
+            HStack(spacing: 0) {
+                ForEach(MoodType.allCases, id: \.self) { mood in
+                    moodButton(for: mood)
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
+                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+        )
+    }
+    
+    private func moodButton(for mood: MoodType) -> some View {
+        let isSelected = selectedMood == mood
+        
+        return Button {
+            triggerHaptic()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                if isSelected {
+                    selectedMood = nil
+                } else {
+                    selectedMood = mood
+                }
+            }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    if isSelected {
+                        Circle()
+                            .fill(mood.glowColor.opacity(0.4))
+                            .blur(radius: 8)
+                            .frame(width: 50, height: 50)
+                    }
+                    
+                    Text(mood.rawValue)
+                        .font(.system(size: 32))
+                        .scaleEffect(isSelected ? 1.15 : 0.85)
+                        .opacity(isSelected ? 1.0 : 0.4)
+                        .grayscale(isSelected ? 0.0 : 0.6)
+                        .offset(y: isSelected ? -5 : 0)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
+                }
+                
+                Text(mood.title)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(isSelected ? Color(hex: "#FF2442") : Color(hex: "#BBB"))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // MARK: - 评价编辑区
+    private var reviewEditorView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("分享你的用餐体验")
+                .font(AppTheme.Fonts.caption)
+                .foregroundColor(Color(hex: "#777"))
+                .tracking(1.2)
+            
+            TextEditor(text: $review)
+                .font(.system(size: 14, design: .rounded))
+                .foregroundColor(Color(hex: "#332E2B"))
+                .frame(minHeight: 120, maxHeight: 180)
+                .lineSpacing(6)
                 .padding(12)
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
-                .frame(minHeight: 80)
-        } header: {
-            Text("评价")
+                .scrollContentBackground(.hidden)
+                .background(
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(hex: "#FAF8F5"))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                            )
+                            .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
+                        
+                        Canvas { context, size in
+                            let lineSpacing: CGFloat = 26
+                            for y in stride(from: 32, through: size.height - 8, by: lineSpacing) {
+                                var path = Path()
+                                path.move(to: CGPoint(x: 12, y: y))
+                                path.addLine(to: CGPoint(x: size.width - 12, y: y))
+                                context.stroke(
+                                    path,
+                                    with: .color(Color.black.opacity(0.04)),
+                                    lineWidth: 0.5
+                                )
+                            }
+                        }
+                    }
+                )
+            
+            HStack {
+                Spacer()
+                Text("记录于 \(Date().formatted(date: .abbreviated, time: .shortened))")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(hex: "#BBB"))
+            }
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
+                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+        )
+    }
+    
+    // MARK: - 保存按钮
+    private var saveButton: some View {
+        Button {
+            triggerHaptic()
+            saveCheckIn()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20))
+                
+                Text("保存记录")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(expense > 0 ? Color(hex: "#FF2442") : Color(hex: "#E0E0E0"))
+                    .shadow(color: expense > 0 ? Color(hex: "#FF2442").opacity(0.3) : Color.clear, radius: 12, x: 0, y: 6)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+            )
+        }
+        .disabled(expense <= 0)
+        .padding(.horizontal, 16)
+    }
+    
+    // MARK: - 辅助方法
+    private func addTag(from input: Binding<String>, to tags: Binding<[String]>) {
+        let text = input.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            tags.wrappedValue.append(text)
+            input.wrappedValue = ""
         }
     }
     
-    // MARK: - 逻辑处理
+    private func triggerPerPersonBounce() {
+        perPersonBounce = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            perPersonBounce = false
+        }
+    }
+    
+    private func triggerHaptic() {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+    }
+    
+    private func loadEditingLog(_ log: VisitLog) {
+        date = log.date
+        expenseText = log.expense > 0 ? String(format: "%.0f", log.expense) : ""
+        peopleCount = log.peopleCount > 0 ? log.peopleCount : 2
+        goodTags = log.goodDishes.isEmpty ? [] : log.goodDishes.components(separatedBy: "，").map { $0.trimmingCharacters(in: .whitespaces) }
+        badTags = log.badDishes.isEmpty ? [] : log.badDishes.components(separatedBy: "，").map { $0.trimmingCharacters(in: .whitespaces) }
+        review = log.review
+        
+        if let moodValue = log.mood {
+            selectedMood = MoodType.allCases.first { $0.rawValue == moodValue }
+        }
+        
+        if !log.photoFilenames.isEmpty {
+            Task {
+                var images: [UIImage] = []
+                for filename in log.photoFilenames {
+                    if let image = ImageManager.shared.loadImage(filename: filename) {
+                        images.append(image)
+                    }
+                }
+                await MainActor.run {
+                    self.selectedImages = images
+                }
+            }
+        }
+    }
     
     private func saveCheckIn() {
-        // ⚠️ 删掉 perPersonPrice 的手动计算和赋值逻辑，因为模型会自动算
+        let goodDishesString = goodTags.joined(separator: "，")
+        let badDishesString = badTags.joined(separator: "，")
         
         if let editingLog = editingLog {
-            // 编辑现有记录
             editingLog.date = date
             editingLog.peopleCount = peopleCount
             editingLog.expense = expense
-            // ✅ 删掉下面这一行（因为 VisitLog 已经没有这个成员了）：
-            // editingLog.averagePrice = perPersonPrice
-            
-            editingLog.goodDishes = goodDishes
-            editingLog.badDishes = badDishes
+            editingLog.goodDishes = goodDishesString
+            editingLog.badDishes = badDishesString
             editingLog.review = review
+            editingLog.mood = selectedMood?.rawValue
             
-            // 更新照片
             updatePhotoForLog(log: editingLog)
         } else {
-            // 创建新记录
-            // ✅ 修正：删掉参数中的 averagePrice
             let newLog = VisitLog(
                 date: date,
-                expense: expense,      // ✅ 先写 expense
-                peopleCount: peopleCount,  // ✅ 再写 peopleCount
-                goodDishes: goodDishes,
-                badDishes: badDishes,
-                review: review
+                expense: expense,
+                peopleCount: peopleCount,
+                goodDishes: goodDishesString,
+                badDishes: badDishesString,
+                review: review,
+                mood: selectedMood?.rawValue
             )
             
-            // 更新照片
             updatePhotoForLog(log: newLog)
-            
-            // 添加到餐厅
             restaurant.logs.append(newLog)
         }
         
-        // 更新餐厅的平均消费
         updateRestaurantAveragePrice()
         
-        dismiss()
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            showConfetti = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            showConfetti = false
+            dismiss()
+        }
     }
-
     
-    // 更新打卡记录的照片
     private func updatePhotoForLog(log: VisitLog) {
-        // 保存旧照片文件名，用于后续删除
-        let oldFilename = log.photoFilename
+        let oldFilenames = log.photoFilenames
+        let newFilenames = selectedImages.compactMap { ImageManager.shared.saveImage($0) }
+        log.photoFilenames = newFilenames
         
-        // 如果有新照片，保存并更新文件名
-        if let newImage = selectedImage {
-            if let newFilename = ImageManager.shared.saveImage(newImage) {
-                log.photoFilename = newFilename
+        for oldFilename in oldFilenames {
+            if !newFilenames.contains(oldFilename) {
+                ImageManager.shared.deleteImage(filename: oldFilename)
             }
-        } else if log.photoFilename != nil {
-            // 如果没有新照片，但之前有照片，清除照片
-            log.photoFilename = nil
-        }
-        
-        // 如果有旧照片且与新照片不同，删除旧照片
-        if let oldFilename = oldFilename, log.photoFilename != oldFilename {
-            ImageManager.shared.deleteImage(filename: oldFilename)
         }
     }
     
-    // 更新餐厅的平均消费
     private func updateRestaurantAveragePrice() {
         if restaurant.logs.isEmpty {
             restaurant.averagePrice = 0.0
         } else {
-            // ✅ 修正：手动计算每一条记录的人均，然后求总平均
-            // 这样即使模型里没存这个数，我们也能算出来
             let totalPerPersonSum = restaurant.logs.reduce(0.0) { partialResult, log in
                 let perPerson = log.peopleCount > 0 ? log.expense / Double(log.peopleCount) : 0.0
                 return partialResult + perPerson
             }
-            
             restaurant.averagePrice = totalPerPersonSum / Double(restaurant.logs.count)
         }
+    }
+}
+
+// MARK: - 辅助类型
+enum StickyNoteType {
+    case red, gray
+}
+
+// MARK: - 内阴影修饰器
+extension View {
+    func innerShadow(color: Color, radius: CGFloat, x: CGFloat, y: CGFloat) -> some View {
+        overlay(
+            RoundedRectangle(cornerRadius: 0)
+                .stroke(color, lineWidth: radius * 2)
+                .blur(radius: radius)
+                .offset(x: x, y: y)
+                .mask(RoundedRectangle(cornerRadius: 0))
+        )
+        .mask(self)
+    }
+}
+
+// MARK: - Confetti 粒子动画
+struct ConfettiView: View {
+    @State private var particles: [ConfettiParticle] = []
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                ForEach(particles) { particle in
+                    Circle()
+                        .fill(particle.color)
+                        .frame(width: particle.size, height: particle.size)
+                        .position(particle.position)
+                        .opacity(particle.opacity)
+                }
+            }
+            .onAppear {
+                createParticles(in: geometry.size)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+    
+    private func createParticles(in size: CGSize) {
+        let colors: [Color] = [Color(hex: "#FF2442"), Color(hex: "#5796E6"), Color(hex: "#43C59E"), Color(hex: "#FFB347"), Color(hex: "#9966FF")]
+        
+        for _ in 0..<60 {
+            let particle = ConfettiParticle(
+                id: UUID(),
+                position: CGPoint(x: size.width / 2, y: size.height / 2),
+                velocity: CGVector(
+                    dx: CGFloat.random(in: -10...10),
+                    dy: CGFloat.random(in: -15...0)
+                ),
+                color: colors.randomElement()!,
+                size: CGFloat.random(in: 6...14),
+                opacity: 1.0
+            )
+            particles.append(particle)
+            
+            withAnimation(.easeOut(duration: 1.8).delay(Double.random(in: 0...0.15))) {
+                if let index = particles.firstIndex(where: { $0.id == particle.id }) {
+                    particles[index].position = CGPoint(
+                        x: particle.position.x + particle.velocity.dx * 25,
+                        y: particle.position.y + particle.velocity.dy * 25
+                    )
+                    particles[index].opacity = 0
+                }
+            }
+        }
+    }
+}
+
+struct ConfettiParticle: Identifiable {
+    let id: UUID
+    var position: CGPoint
+    let velocity: CGVector
+    let color: Color
+    let size: CGFloat
+    var opacity: Double
+}
+
+// MARK: - Array 安全下标扩展
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        return indices.contains(index) ? self[index] : nil
     }
 }

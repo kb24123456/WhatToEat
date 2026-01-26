@@ -7,10 +7,9 @@ import PhotosUI
 struct RestaurantDetailView: View {
     let restaurant: Restaurant
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     let locationManager: LocationManager
-    let animation: Namespace.ID
     @Binding var isPresented: Bool
-    let onDismiss: () -> Void
     
     @State private var drivingRoute: (distance: String, time: String)?
     @State private var isLoadingRoute = false
@@ -22,7 +21,15 @@ struct RestaurantDetailView: View {
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
-    @State private var selectedNewCover: UIImage?
+    @State private var newCoverImages: [UIImage] = []
+    
+    @State private var isEditingReview = false
+    @State private var editedReview = ""
+    @State private var isEditingTags = false
+    @State private var newTagInput = ""
+    @State private var isEditingInfo = false
+    @State private var editedDistrict = ""
+    @State private var editedCategory = ""
     
     var body: some View {
         GeometryReader { geometry in
@@ -35,12 +42,16 @@ struct RestaurantDetailView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         heroSection
                         
+                        checkInButtonSection
+                        
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
                             titleSection
                             
                             metaSection
                             
                             statsCardSection
+                            
+                            infoSection
                             
                             tagsSection
                             
@@ -73,10 +84,10 @@ struct RestaurantDetailView: View {
             }
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker(selectedImage: $selectedNewCover)
+            CameraPickerView(selectedImages: $newCoverImages)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
-        .onChange(of: selectedNewCover) { _, newValue in
+        .onChange(of: newCoverImages.first) { _, newValue in
             if let image = newValue { updateCover(image: image) }
         }
     }
@@ -96,7 +107,6 @@ struct RestaurantDetailView: View {
                         )
                 )
             )
-            .matchedGeometryEffect(id: "coverImage-\(restaurant.id)", in: animation)
             .frame(height: 280)
             .clipped()
             
@@ -109,12 +119,42 @@ struct RestaurantDetailView: View {
         }
     }
     
+    private var checkInButtonSection: some View {
+        HStack {
+            Spacer()
+            Button {
+                let generator = UIImpactFeedbackGenerator(style: .medium)
+                generator.impactOccurred()
+                showSheet = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                    Text("去打卡")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule()
+                        .fill(Color(hex: "#FF2442"))
+                        .shadow(color: Color(hex: "#FF2442").opacity(0.3), radius: 12, x: 0, y: 6)
+                )
+            }
+            .padding(.trailing, AppTheme.Spacing.lg)
+            .offset(y: -20)
+        }
+    }
+    
     private var closeButton: some View {
         Button {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 isPresented = false
             }
-            onDismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                dismiss()
+            }
         } label: {
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 28))
@@ -130,7 +170,6 @@ struct RestaurantDetailView: View {
             .font(AppTheme.Fonts.title)
             .fontWeight(.bold)
             .foregroundColor(AppTheme.Colors.textPrimary)
-            .matchedGeometryEffect(id: "title-\(restaurant.id)", in: animation)
             .padding(.horizontal, AppTheme.Spacing.lg)
     }
     
@@ -139,18 +178,15 @@ struct RestaurantDetailView: View {
             Text(priceText)
                 .font(AppTheme.Fonts.subheadline)
                 .foregroundColor(AppTheme.Colors.price)
-                .matchedGeometryEffect(id: "price-\(restaurant.id)", in: animation)
             
             Text(restaurant.district)
                 .font(AppTheme.Fonts.subheadline)
                 .foregroundColor(AppTheme.Colors.textSecondary)
-                .matchedGeometryEffect(id: "district-\(restaurant.id)", in: animation)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(AppTheme.Colors.lightGray.opacity(0.2))
         .cornerRadius(AppTheme.Radius.base)
-        .matchedGeometryEffect(id: "meta-\(restaurant.id)", in: animation)
         .padding(.horizontal, AppTheme.Spacing.lg)
     }
     
@@ -203,25 +239,258 @@ struct RestaurantDetailView: View {
         .padding(.vertical, AppTheme.Spacing.md)
     }
     
+    private var infoSection: some View {
+        HStack(spacing: 8) {
+            Text("信息")
+                .font(AppTheme.Fonts.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            
+            Menu {
+                ForEach(currentCityDistricts, id: \.self) { district in
+                    Button(district) {
+                        editedDistrict = district
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        saveInfo()
+                    }
+                }
+            } label: {
+                CapsuleButton(
+                    icon: "mappin.circle.fill",
+                    title: editedDistrict.isEmpty ? (restaurant.district.isEmpty ? "地区" : restaurant.district) : editedDistrict,
+                    isSelected: !editedDistrict.isEmpty || !restaurant.district.isEmpty
+                )
+            }
+            .buttonStyle(.plain)
+            
+            Menu {
+                ForEach(CategoryManager.shared.getPresetCategories(), id: \.self) { category in
+                    Button(category) {
+                        editedCategory = category
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        saveInfo()
+                    }
+                }
+            } label: {
+                CapsuleButton(
+                    icon: "tag.fill",
+                    title: editedCategory.isEmpty ? (restaurant.type.isEmpty ? "品类" : restaurant.type) : editedCategory,
+                    isSelected: !editedCategory.isEmpty || !restaurant.type.isEmpty
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, AppTheme.Spacing.lg)
+        .padding(.vertical, AppTheme.Spacing.md)
+        .background(Color.white)
+        .cornerRadius(AppTheme.Radius.base)
+        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
+        .padding(.horizontal, AppTheme.Spacing.lg)
+    }
+    
+    private var currentCity: String {
+        UserDefaults.standard.string(forKey: "UserSelectedCity") ?? "上海"
+    }
+    
+    private var currentCityDistricts: [String] {
+        RegionManager.shared.getDistricts(for: currentCity).sorted()
+    }
+    
+    private func saveInfo() {
+        restaurant.district = editedDistrict
+        restaurant.type = editedCategory
+    }
+    
+    private struct CapsuleButton: View {
+        let icon: String
+        let title: String
+        let isSelected: Bool
+        
+        var body: some View {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundColor(isSelected ? .white : Color(hex: "#666"))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(isSelected ? Color(hex: "#FF2442") : Color(hex: "#F5F5F5"))
+            )
+        }
+    }
+    
     private var tagsSection: some View {
-        Group {
-            if !restaurant.tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: AppTheme.Spacing.sm) {
-                        ForEach(restaurant.tags, id: \.self) { tag in
-                            Text("# \(tag)")
-                                .font(AppTheme.Fonts.callout)
-                                .foregroundColor(AppTheme.Colors.primary)
-                                .padding(.horizontal, AppTheme.Spacing.md)
-                                .padding(.vertical, AppTheme.Spacing.xs)
-                                .background(AppTheme.Colors.primary.opacity(0.1))
-                                .cornerRadius(AppTheme.Radius.circle)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("标签")
+                    .font(AppTheme.Fonts.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+                
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isEditingTags.toggle()
+                    }
+                } label: {
+                    Image(systemName: isEditingTags ? "checkmark.circle.fill" : "pencil.circle")
+                        .font(.system(size: 16))
+                        .foregroundColor(isEditingTags ? Color(hex: "#43C59E") : AppTheme.Colors.accent)
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            
+            if isEditingTags {
+                editingTagsView
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            } else {
+                readonlyTagsView
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .padding(.vertical, AppTheme.Spacing.md)
+        .background(Color.white)
+        .cornerRadius(AppTheme.Radius.base)
+        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
+        .padding(.horizontal, AppTheme.Spacing.lg)
+    }
+    
+    private var editingTagsView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("常用标签")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: "#888"))
+                
+                FlowLayout(spacing: 8) {
+                    ForEach(presetTags, id: \.self) { presetTag in
+                        let isAdded = restaurant.tags.contains(presetTag)
+                        Button {
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                if isAdded {
+                                    restaurant.tags.removeAll { $0 == presetTag }
+                                } else {
+                                    restaurant.tags.append(presetTag)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle")
+                                    .font(.system(size: 11))
+                                Text(presetTag)
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(isAdded ? .white : Color(hex: "#5B8DEF"))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(isAdded ? Color(hex: "#FF2442") : Color(hex: "#E8F4FF"))
+                            )
                         }
                     }
                 }
-                .matchedGeometryEffect(id: "tags-\(restaurant.id)", in: animation)
-                .padding(.horizontal, AppTheme.Spacing.lg)
             }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("我的标签")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: "#888"))
+                
+                FlowLayout(spacing: 8) {
+                    ForEach(restaurant.tags, id: \.self) { tag in
+                        HStack(spacing: 4) {
+                            Text("# \(tag)")
+                                .font(AppTheme.Fonts.callout)
+                                .foregroundColor(AppTheme.Colors.primary)
+                            
+                            Button {
+                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                generator.impactOccurred()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                    restaurant.tags.removeAll { $0 == tag }
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(AppTheme.Colors.textSecondary)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, AppTheme.Spacing.xs)
+                        .background(AppTheme.Colors.primary.opacity(0.1))
+                        .cornerRadius(AppTheme.Radius.circle)
+                    }
+                    
+                    HStack(spacing: 4) {
+                        TextField("新标签", text: $newTagInput)
+                            .font(AppTheme.Fonts.callout)
+                            .foregroundColor(AppTheme.Colors.primary)
+                            .frame(width: 70)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onSubmit {
+                                addNewTag()
+                            }
+                        
+                        Button {
+                            addNewTag()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(Color(hex: "#43C59E"))
+                        }
+                        .disabled(newTagInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, AppTheme.Spacing.xs)
+                    .background(Color(hex: "#F0F8F0"))
+                    .cornerRadius(AppTheme.Radius.circle)
+                }
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.lg)
+    }
+    
+    private var readonlyTagsView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: AppTheme.Spacing.sm) {
+                ForEach(restaurant.tags, id: \.self) { tag in
+                    Text("# \(tag)")
+                        .font(AppTheme.Fonts.callout)
+                        .foregroundColor(AppTheme.Colors.primary)
+                        .padding(.horizontal, AppTheme.Spacing.md)
+                        .padding(.vertical, AppTheme.Spacing.xs)
+                        .background(AppTheme.Colors.primary.opacity(0.1))
+                        .cornerRadius(AppTheme.Radius.circle)
+                }
+            }
+        }
+    }
+    
+    private let presetTags = ["网红店", "性价比高", "环境好", "服务好", "排队久", "味道一般", "性价比低", "踩雷", "回头客", "约会圣地", "商务宴请", "家庭聚餐", "朋友聚会", "一人食"]
+    
+    private func addNewTag() {
+        let tag = newTagInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !tag.isEmpty else { return }
+        
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+            if !restaurant.tags.contains(tag) {
+                restaurant.tags.append(tag)
+            }
+            newTagInput = ""
         }
     }
     
@@ -255,26 +524,60 @@ struct RestaurantDetailView: View {
     }
     
     private var restaurantReviewSection: some View {
-        Group {
-            if !restaurant.review.isEmpty {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                    Label("我的印象", systemImage: "quote.bubble.fill")
-                        .font(AppTheme.Fonts.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                    
-                    Text(restaurant.review)
-                        .font(AppTheme.Fonts.body)
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .lineSpacing(AppTheme.Spacing.xs)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("我的印象", systemImage: "quote.bubble.fill")
+                    .font(AppTheme.Fonts.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Spacer()
+                
+                Button {
+                    if !isEditingReview {
+                        editedReview = restaurant.review
+                    }
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isEditingReview.toggle()
+                    }
+                } label: {
+                    Image(systemName: isEditingReview ? "checkmark.circle.fill" : "pencil.circle")
+                        .font(.system(size: 16))
+                        .foregroundColor(isEditingReview ? Color(hex: "#43C59E") : AppTheme.Colors.accent)
                 }
-                .padding(AppTheme.Spacing.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white)
-                .cornerRadius(AppTheme.Radius.base)
-                .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-                .matchedGeometryEffect(id: "review-\(restaurant.id)", in: animation)
-                .padding(.horizontal, AppTheme.Spacing.lg)
+            }
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            
+            if isEditingReview {
+                TextEditor(text: $editedReview)
+                    .font(AppTheme.Fonts.body)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .lineSpacing(6)
+                    .frame(minHeight: 100)
+                    .padding(12)
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .padding(.horizontal, AppTheme.Spacing.lg)
+                    .transition(.scale.combined(with: .opacity))
+            } else {
+                Text(restaurant.review.isEmpty ? "添加你的用餐印象..." : restaurant.review)
+                    .font(AppTheme.Fonts.body)
+                    .foregroundColor(restaurant.review.isEmpty ? AppTheme.Colors.textSecondary.opacity(0.6) : AppTheme.Colors.textSecondary)
+                    .lineSpacing(AppTheme.Spacing.xs)
+                    .padding(.horizontal, AppTheme.Spacing.lg)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.vertical, AppTheme.Spacing.md)
+        .background(Color.white)
+        .cornerRadius(AppTheme.Radius.base)
+        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
+        .padding(.horizontal, AppTheme.Spacing.lg)
+        .onChange(of: isEditingReview) { _, newValue in
+            if !newValue && editedReview != restaurant.review {
+                restaurant.review = editedReview
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
             }
         }
     }
@@ -307,7 +610,31 @@ struct RestaurantDetailView: View {
                 }
                 .padding(.horizontal, AppTheme.Spacing.lg)
             }
+            
+            deleteRestaurantButton
         }
+    }
+    
+    private var deleteRestaurantButton: some View {
+        Button(role: .destructive) {
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            modelContext.delete(restaurant)
+            dismiss()
+        } label: {
+            HStack {
+                Image(systemName: "trash")
+                Text("删除餐厅")
+            }
+            .font(AppTheme.Fonts.subheadline)
+            .foregroundColor(.red)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppTheme.Spacing.md)
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(AppTheme.Radius.base)
+        }
+        .padding(.horizontal, AppTheme.Spacing.lg)
+        .padding(.top, AppTheme.Spacing.md)
     }
     
     private func checkInLogCard(log: VisitLog) -> some View {
@@ -326,9 +653,9 @@ struct RestaurantDetailView: View {
                     .foregroundColor(AppTheme.Colors.accent)
             }
             
-            if log.photoFilename != nil {
+            if let firstFilename = log.photoFilenames.first {
                 AsyncImageView(
-                    filename: log.photoFilename,
+                    filename: firstFilename,
                     placeholder: AnyView(EmptyView())
                 )
                 .frame(height: 160)
@@ -417,6 +744,58 @@ struct RestaurantDetailView: View {
     private func updateCover(image: UIImage) {
         if let filename = ImageManager.shared.saveImage(image) {
             restaurant.coverPhotoFilename = filename
+        }
+    }
+}
+
+// MARK: - FlowLayout 自动换行布局
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = FlowResult(
+            in: proposal.replacingUnspecifiedDimensions().width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        return result.size
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = FlowResult(
+            in: bounds.width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x, y: bounds.minY + result.positions[index].y), proposal: .unspecified)
+        }
+    }
+    
+    struct FlowResult {
+        var size: CGSize = .zero
+        var positions: [CGPoint] = []
+        
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var x: CGFloat = 0
+            var y: CGFloat = 0
+            var lineHeight: CGFloat = 0
+            
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+                
+                if x + size.width > maxWidth && x > 0 {
+                    x = 0
+                    y += lineHeight + spacing
+                    lineHeight = 0
+                }
+                
+                positions.append(CGPoint(x: x, y: y))
+                lineHeight = max(lineHeight, size.height)
+                x += size.width + spacing
+            }
+            
+            self.size = CGSize(width: maxWidth, height: y + lineHeight)
         }
     }
 }

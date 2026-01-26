@@ -22,7 +22,7 @@ struct CenteredDetailCardView: View {
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
-    @State private var selectedNewCover: UIImage?
+    @State private var newCoverImages: [UIImage] = []
     
     @State private var showEditReviewSheet = false
     @State private var editedReview: String = ""
@@ -81,10 +81,10 @@ struct CenteredDetailCardView: View {
             }
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker(selectedImage: $selectedNewCover)
+            CameraPickerView(selectedImages: $newCoverImages)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
-        .onChange(of: selectedNewCover) { _, newValue in
+        .onChange(of: newCoverImages.first) { _, newValue in
             if let image = newValue { updateCover(image: image) }
         }
         .onDisappear {
