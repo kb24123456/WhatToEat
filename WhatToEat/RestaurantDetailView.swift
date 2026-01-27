@@ -30,6 +30,7 @@ struct RestaurantDetailView: View {
     @State private var isEditingInfo = false
     @State private var editedDistrict = ""
     @State private var editedCategory = ""
+    @State private var editedRating: Double = 3.0
     
     var body: some View {
         GeometryReader { geometry in
@@ -209,69 +210,12 @@ struct RestaurantDetailView: View {
                 title: "人均消费",
                 value: restaurant.averagePrice > 0 ? "¥\(Int(restaurant.averagePrice))" : "暂无数据"
             )
-            
-            ratingItem
         }
         .padding(AppTheme.Spacing.sm)
         .background(Color.white)
         .cornerRadius(AppTheme.Radius.base)
         .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
         .padding(.horizontal, AppTheme.Spacing.lg)
-    }
-    
-    private var ratingItem: some View {
-        VStack(spacing: AppTheme.Spacing.xs) {
-            Menu {
-                ForEach(1...5, id: \.self) { star in
-                    Button {
-                        let generator = UIImpactFeedbackGenerator(style: .light)
-                        generator.impactOccurred()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                            restaurant.rating = Double(star)
-                        }
-                        let successGenerator = UINotificationFeedbackGenerator()
-                        successGenerator.notificationOccurred(.success)
-                    } label: {
-                        HStack {
-                            HStack(spacing: 2) {
-                                ForEach(1...5, id: \.self) { s in
-                                    Image(systemName: s <= star ? "star.fill" : "star")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(Color(hex: "#FFD700"))
-                                }
-                            }
-                            Spacer()
-                            Text("\(star) 星")
-                                .font(.system(size: 14, weight: .medium))
-                        }
-                    }
-                }
-            } label: {
-                VStack(spacing: 4) {
-                    HStack(spacing: 2) {
-                        ForEach(1...5, id: \.self) { star in
-                            Image(systemName: star <= Int(restaurant.rating) ? "star.fill" : "star")
-                                .font(.system(size: 14))
-                                .foregroundColor(Color(hex: "#FFD700"))
-                        }
-                    }
-                    Text("评分")
-                        .font(AppTheme.Fonts.caption)
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppTheme.Spacing.sm)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            
-            Text(String(format: "%.1f", restaurant.rating))
-                .font(AppTheme.Fonts.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(Color(hex: "#FFD700"))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppTheme.Spacing.md)
     }
     
     private func statsItem(icon: String, title: String, value: String) -> some View {
@@ -297,47 +241,69 @@ struct RestaurantDetailView: View {
     }
     
     private var infoSection: some View {
-        HStack(spacing: 8) {
-            Text("信息")
-                .font(AppTheme.Fonts.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(AppTheme.Colors.textPrimary)
-            
-            Menu {
-                ForEach(currentCityDistricts, id: \.self) { district in
-                    Button(district) {
-                        editedDistrict = district
-                        let generator = UIImpactFeedbackGenerator(style: .light)
-                        generator.impactOccurred()
-                        saveInfo()
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                Text("信息")
+                    .font(AppTheme.Fonts.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                
+                Menu {
+                    ForEach(currentCityDistricts, id: \.self) { district in
+                        Button(district) {
+                            editedDistrict = district
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
+                            saveInfo()
+                        }
                     }
+                } label: {
+                    CapsuleButton(
+                        icon: "mappin.circle.fill",
+                        title: editedDistrict.isEmpty ? (restaurant.district.isEmpty ? "地区" : restaurant.district) : editedDistrict,
+                        isSelected: !editedDistrict.isEmpty || !restaurant.district.isEmpty
+                    )
                 }
-            } label: {
-                CapsuleButton(
-                    icon: "mappin.circle.fill",
-                    title: editedDistrict.isEmpty ? (restaurant.district.isEmpty ? "地区" : restaurant.district) : editedDistrict,
-                    isSelected: !editedDistrict.isEmpty || !restaurant.district.isEmpty
-                )
-            }
-            .buttonStyle(.plain)
-            
-            Menu {
-                ForEach(CategoryManager.shared.getPresetCategories(), id: \.self) { category in
-                    Button(category) {
-                        editedCategory = category
-                        let generator = UIImpactFeedbackGenerator(style: .light)
-                        generator.impactOccurred()
-                        saveInfo()
+                .buttonStyle(.plain)
+                
+                Menu {
+                    ForEach(CategoryManager.shared.getPresetCategories(), id: \.self) { category in
+                        Button(category) {
+                            editedCategory = category
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
+                            saveInfo()
+                        }
                     }
+                } label: {
+                    CapsuleButton(
+                        icon: "tag.fill",
+                        title: editedCategory.isEmpty ? (restaurant.type.isEmpty ? "品类" : restaurant.type) : editedCategory,
+                        isSelected: !editedCategory.isEmpty || !restaurant.type.isEmpty
+                    )
                 }
-            } label: {
-                CapsuleButton(
-                    icon: "tag.fill",
-                    title: editedCategory.isEmpty ? (restaurant.type.isEmpty ? "品类" : restaurant.type) : editedCategory,
-                    isSelected: !editedCategory.isEmpty || !restaurant.type.isEmpty
-                )
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Button {
+                    if !isEditingInfo {
+                        editedDistrict = restaurant.district
+                        editedCategory = restaurant.type
+                        editedRating = restaurant.rating
+                    }
+                    withAnimation(AppTheme.Animations.editingSpring) {
+                        isEditingInfo.toggle()
+                    }
+                } label: {
+                    Image(systemName: isEditingInfo ? "checkmark.circle.fill" : "pencil.circle")
+                        .font(.system(size: 18))
+                        .foregroundColor(isEditingInfo ? Color(hex: "#43C59E") : AppTheme.Colors.accent)
+                        .frame(height: 36)
+                }
             }
-            .buttonStyle(.plain)
+            
+            ratingStarsView
         }
         .padding(.horizontal, AppTheme.Spacing.lg)
         .padding(.vertical, AppTheme.Spacing.md)
@@ -345,8 +311,50 @@ struct RestaurantDetailView: View {
         .cornerRadius(AppTheme.Radius.base)
         .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
         .padding(.horizontal, AppTheme.Spacing.lg)
+        .onChange(of: isEditingInfo) { _, newValue in
+            if !newValue {
+                saveInfo()
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+            }
+        }
     }
     
+    private var ratingStarsView: some View {
+        HStack(spacing: 6) {
+            Text("评分")
+                .font(AppTheme.Fonts.subheadline)
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .frame(width: 40, alignment: .leading)
+            
+            ForEach(1...5, id: \.self) { index in
+                Image(systemName: index <= Int(editedRating) ? "star.fill" : "star")
+                    .font(.system(size: 22))
+                    .foregroundColor(index <= Int(editedRating) ? Color(hex: "#FFD700") : Color(hex: "#E0E0E0"))
+                    .shadow(color: index <= Int(editedRating) ? Color(hex: "#FFD700").opacity(0.5) : .clear, radius: 4, x: 0, y: 2)
+                    .symbolRenderingMode(.hierarchical)
+                    .onTapGesture {
+                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        generator.impactOccurred()
+                        withAnimation(AppTheme.Animations.tagSpring) {
+                            editedRating = Double(index)
+                        }
+                    }
+            }
+            
+            Text(String(format: "%.0f", editedRating))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .padding(.leading, 4)
+        }
+    }
+    
+    private func saveInfo() {
+        restaurant.district = editedDistrict
+        restaurant.type = editedCategory
+        restaurant.rating = editedRating
+    }
+
     private var currentCity: String {
         UserDefaults.standard.string(forKey: "UserSelectedCity") ?? "上海"
     }
@@ -355,10 +363,6 @@ struct RestaurantDetailView: View {
         RegionManager.shared.getDistricts(for: currentCity).sorted()
     }
     
-    private func saveInfo() {
-        restaurant.district = editedDistrict
-        restaurant.type = editedCategory
-    }
     
     private struct CapsuleButton: View {
         let icon: String
@@ -397,8 +401,8 @@ struct RestaurantDetailView: View {
                         isEditingTags.toggle()
                     }
                 } label: {
-                    Image(systemName: isEditingTags ? "checkmark.circle.fill" : "square.and.pencil.circle.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                    Image(systemName: isEditingTags ? "checkmark.circle.fill" : "pencil.circle")
+                        .font(.system(size: 16))
                         .foregroundColor(isEditingTags ? Color(hex: "#43C59E") : AppTheme.Colors.accent)
                 }
             }
@@ -598,8 +602,8 @@ struct RestaurantDetailView: View {
                         isEditingReview.toggle()
                     }
                 } label: {
-                    Image(systemName: isEditingReview ? "checkmark.circle.fill" : "square.and.pencil.circle.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                    Image(systemName: isEditingReview ? "checkmark.circle.fill" : "pencil.circle")
+                        .font(.system(size: 16))
                         .foregroundColor(isEditingReview ? Color(hex: "#43C59E") : AppTheme.Colors.accent)
                 }
             }

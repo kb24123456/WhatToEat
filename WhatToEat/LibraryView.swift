@@ -110,8 +110,13 @@ struct LibraryView: View {
             isTabBarHidden = false
         }
         .onReceive(NotificationCenter.default.publisher(for: .restaurantListShouldRefresh)) { _ in
-            // 收到刷新通知时，强制刷新 @Query
-            // SwiftData 的 @Query 会自动响应上下文变化，此处仅作日志
+            // 收到刷新通知时，检查城市是否需要同步
+            if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity"),
+               savedCity != selectedCity {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedCity = savedCity
+                }
+            }
             print("RestaurantListRefresh: 收到刷新通知")
         }
         .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)

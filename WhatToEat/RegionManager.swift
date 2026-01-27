@@ -17,37 +17,66 @@ class RegionManager {
     
     // 私有初始化方法，防止外部创建实例
     private init() {
-        // 首先尝试从应用 bundle 目录直接加载文件路径
-        if let bundlePath = Bundle.main.path(forResource: "regions", ofType: "json"),
-           let data = try? Data(contentsOf: URL(fileURLWithPath: bundlePath)),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String]] {
-            cityDistricts = json
-            print("RegionManager: Successfully loaded regions.json from bundle path, \(json.count) cities")
-            return
+        var loadedData: [String: [String]] = [:]
+        var loadSuccess = false
+        var lastError: String = ""
+        
+        // 方式1: 使用 Bundle.main.url 加载（适用于已添加到 Copy Bundle Resources 的文件）
+        if let url = Bundle.main.url(forResource: "regions", withExtension: "json") {
+            do {
+                let data = try Data(contentsOf: url)
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String]] {
+                    loadedData = json
+                    loadSuccess = true
+                    print("RegionManager: Loaded \(json.count) cities from main bundle")
+                }
+            } catch {
+                lastError = "Bundle URL error: \(error.localizedDescription)"
+            }
+        } else {
+            lastError = "regions.json not found in bundle resources"
         }
         
-        // 如果 bundle 中没有，尝试从 Application Support 目录加载
-        do {
-            if let appSupportDir = FileManager.default.urls(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask
-            ).first {
-                let appDirectory = appSupportDir.appendingPathComponent("WhatToEat")
-                let fileURL = appDirectory.appendingPathComponent("regions.json")
-                if FileManager.default.fileExists(atPath: fileURL.path) {
-                    let data = try Data(contentsOf: fileURL)
-                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String]] {
-                        cityDistricts = json
-                        print("RegionManager: Successfully loaded \(json.count) cities from AppSupport")
-                        return
+        // 方式2: 备用 - 从应用项目目录直接读取
+        if !loadSuccess {
+            let projectPath = Bundle.main.path(forResource: "regions", ofType: "json", inDirectory: nil)
+            if let path = projectPath,
+               let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String]] {
+                loadedData = json
+                loadSuccess = true
+                print("RegionManager: Loaded \(json.count) cities from project directory")
+            }
+        }
+        
+        // 方式3: 备用 - 从 AppSupport 目录加载
+        if !loadSuccess {
+            do {
+                if let appSupportDir = FileManager.default.urls(
+                    for: .applicationSupportDirectory,
+                    in: .userDomainMask
+                ).first {
+                    let appDirectory = appSupportDir.appendingPathComponent("WhatToEat")
+                    let fileURL = appDirectory.appendingPathComponent("regions.json")
+                    if FileManager.default.fileExists(atPath: fileURL.path) {
+                        let data = try Data(contentsOf: fileURL)
+                        if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String]] {
+                            loadedData = json
+                            loadSuccess = true
+                            print("RegionManager: Loaded \(json.count) cities from AppSupport")
+                        }
                     }
                 }
+            } catch {
+                lastError = "AppSupport error: \(error.localizedDescription)"
             }
-            cityDistricts = [:]
-        } catch {
-            print("Error loading regions.json: \(error)")
-            cityDistricts = [:]
         }
+        
+        if !loadSuccess {
+            print("RegionManager: Failed to load regions.json - \(lastError)")
+        }
+        
+        cityDistricts = loadedData
     }
     
     /// 获取所有城市列表

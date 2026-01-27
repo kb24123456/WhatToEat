@@ -431,13 +431,20 @@ struct AddRestaurantView: View {
             var finalLatitude = latitude
             var finalLongitude = longitude
             if finalLatitude == 0.0 && finalLongitude == 0.0 && !address.isEmpty {
-                // 使用地址进行逆地理编码（异步）
                 let geocoder = CLGeocoder()
                 do {
                     let placemarks = try await geocoder.geocodeAddressString(address)
-                    if let placemark = placemarks.first, let location = placemark.location {
-                        finalLatitude = location.coordinate.latitude
-                        finalLongitude = location.coordinate.longitude
+                    if let placemark = placemarks.first {
+                        if let location = placemark.location {
+                            finalLatitude = location.coordinate.latitude
+                            finalLongitude = location.coordinate.longitude
+                        }
+                        if let districtName = placemark.subLocality, !districtName.isEmpty {
+                            self.district = districtName
+                        }
+                        if let cityName = placemark.locality, !cityName.isEmpty {
+                            self.city = cityName
+                        }
                     }
                 } catch {
                     print("逆地理编码失败: \(error.localizedDescription)")
