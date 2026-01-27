@@ -209,12 +209,69 @@ struct RestaurantDetailView: View {
                 title: "人均消费",
                 value: restaurant.averagePrice > 0 ? "¥\(Int(restaurant.averagePrice))" : "暂无数据"
             )
+            
+            ratingItem
         }
         .padding(AppTheme.Spacing.sm)
         .background(Color.white)
         .cornerRadius(AppTheme.Radius.base)
         .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
         .padding(.horizontal, AppTheme.Spacing.lg)
+    }
+    
+    private var ratingItem: some View {
+        VStack(spacing: AppTheme.Spacing.xs) {
+            Menu {
+                ForEach(1...5, id: \.self) { star in
+                    Button {
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                            restaurant.rating = Double(star)
+                        }
+                        let successGenerator = UINotificationFeedbackGenerator()
+                        successGenerator.notificationOccurred(.success)
+                    } label: {
+                        HStack {
+                            HStack(spacing: 2) {
+                                ForEach(1...5, id: \.self) { s in
+                                    Image(systemName: s <= star ? "star.fill" : "star")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(Color(hex: "#FFD700"))
+                                }
+                            }
+                            Spacer()
+                            Text("\(star) 星")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                    }
+                }
+            } label: {
+                VStack(spacing: 4) {
+                    HStack(spacing: 2) {
+                        ForEach(1...5, id: \.self) { star in
+                            Image(systemName: star <= Int(restaurant.rating) ? "star.fill" : "star")
+                                .font(.system(size: 14))
+                                .foregroundColor(Color(hex: "#FFD700"))
+                        }
+                    }
+                    Text("评分")
+                        .font(AppTheme.Fonts.caption)
+                        .foregroundColor(AppTheme.Colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            
+            Text(String(format: "%.1f", restaurant.rating))
+                .font(AppTheme.Fonts.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(Color(hex: "#FFD700"))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppTheme.Spacing.md)
     }
     
     private func statsItem(icon: String, title: String, value: String) -> some View {
@@ -340,8 +397,8 @@ struct RestaurantDetailView: View {
                         isEditingTags.toggle()
                     }
                 } label: {
-                    Image(systemName: isEditingTags ? "checkmark.circle.fill" : "pencil.circle")
-                        .font(.system(size: 16))
+                    Image(systemName: isEditingTags ? "checkmark.circle.fill" : "square.and.pencil.circle.fill")
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(isEditingTags ? Color(hex: "#43C59E") : AppTheme.Colors.accent)
                 }
             }
@@ -541,8 +598,8 @@ struct RestaurantDetailView: View {
                         isEditingReview.toggle()
                     }
                 } label: {
-                    Image(systemName: isEditingReview ? "checkmark.circle.fill" : "pencil.circle")
-                        .font(.system(size: 16))
+                    Image(systemName: isEditingReview ? "checkmark.circle.fill" : "square.and.pencil.circle.fill")
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(isEditingReview ? Color(hex: "#43C59E") : AppTheme.Colors.accent)
                 }
             }
