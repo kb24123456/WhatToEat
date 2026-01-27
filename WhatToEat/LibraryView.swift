@@ -47,12 +47,15 @@ struct LibraryView: View {
         if let savedCity = UserDefaults.standard.string(forKey: kSavedCityKey) {
             _selectedCity = State(initialValue: savedCity)
         } else {
-            _selectedCity = State(initialValue: "上海")
+            _selectedCity = State(initialValue: "重庆")
         }
     }
     
     private var currentDistricts: [String] {
-        RegionManager.shared.getDistricts(for: selectedCity)
+        let districts = RegionManager.shared.getDistricts(for: selectedCity)
+        print("currentDistricts: city=\(selectedCity), count=\(districts.count), districts=\(districts.prefix(5))...")
+        print("RegionManager allCities: \(RegionManager.shared.allCities.prefix(5))... (total: \(RegionManager.shared.allCities.count))")
+        return districts
     }
     
     // MARK: - 生命周期
@@ -110,14 +113,10 @@ struct LibraryView: View {
             isTabBarHidden = false
         }
         .onReceive(NotificationCenter.default.publisher(for: .restaurantListShouldRefresh)) { _ in
-            // 收到刷新通知时，检查城市是否需要同步
-            if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity"),
-               savedCity != selectedCity {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedCity = savedCity
-                }
+            if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity") {
+                selectedCity = savedCity
             }
-            print("RestaurantListRefresh: 收到刷新通知")
+            print("RestaurantListRefresh: 收到刷新通知, selectedCity=\(selectedCity)")
         }
         .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
         .sheet(isPresented: $showImportSheet) { ImportDataView() }

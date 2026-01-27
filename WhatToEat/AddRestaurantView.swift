@@ -424,6 +424,11 @@ struct AddRestaurantView: View {
                 }
             }
             
+            // 标准化城市名（去掉"市"后缀）
+            if finalCity.hasSuffix("市") {
+                finalCity = String(finalCity.dropLast())
+            }
+            
             // 保存城市到 UserDefaults，确保列表筛选能够正确匹配
             UserDefaults.standard.set(finalCity, forKey: "UserSelectedCity")
             
@@ -441,9 +446,6 @@ struct AddRestaurantView: View {
                         }
                         if let districtName = placemark.subLocality, !districtName.isEmpty {
                             self.district = districtName
-                        }
-                        if let cityName = placemark.locality, !cityName.isEmpty {
-                            self.city = cityName
                         }
                     }
                 } catch {
@@ -467,6 +469,8 @@ struct AddRestaurantView: View {
                 tags: finalTags,
                 averagePrice: 0.0
             )
+            
+            print("AddRestaurant: 保存餐厅 city=\(finalCity), district=\(district)")
             
             modelContext.insert(newRestaurant)
             do {

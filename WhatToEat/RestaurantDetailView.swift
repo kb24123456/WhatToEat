@@ -48,8 +48,6 @@ struct RestaurantDetailView: View {
                         VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
                             titleSection
                             
-                            metaSection
-                            
                             statsCardSection
                             
                             infoSection
@@ -174,23 +172,6 @@ struct RestaurantDetailView: View {
             .padding(.horizontal, AppTheme.Spacing.lg)
     }
     
-    private var metaSection: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            Text(priceText)
-                .font(AppTheme.Fonts.subheadline)
-                .foregroundColor(AppTheme.Colors.price)
-            
-            Text(restaurant.district)
-                .font(AppTheme.Fonts.subheadline)
-                .foregroundColor(AppTheme.Colors.textSecondary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(AppTheme.Colors.lightGray.opacity(0.2))
-        .cornerRadius(AppTheme.Radius.base)
-        .padding(.horizontal, AppTheme.Spacing.lg)
-    }
-    
     private var statsCardSection: some View {
         HStack(spacing: 1) {
             statsItem(
@@ -209,6 +190,12 @@ struct RestaurantDetailView: View {
                 icon: "yensign.circle.fill",
                 title: "人均消费",
                 value: restaurant.averagePrice > 0 ? "¥\(Int(restaurant.averagePrice))" : "暂无数据"
+            )
+            
+            statsItem(
+                icon: "creditcard.fill",
+                title: "总消费",
+                value: restaurant.totalExpense > 0 ? "¥\(Int(restaurant.totalExpense))" : "暂无数据"
             )
         }
         .padding(AppTheme.Spacing.sm)
@@ -265,6 +252,8 @@ struct RestaurantDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .disabled(!isEditingInfo)
+                .opacity(isEditingInfo ? 1.0 : 0.6)
                 
                 Menu {
                     ForEach(CategoryManager.shared.getPresetCategories(), id: \.self) { category in
@@ -283,6 +272,8 @@ struct RestaurantDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .disabled(!isEditingInfo)
+                .opacity(isEditingInfo ? 1.0 : 0.6)
                 
                 Spacer()
                 
@@ -333,7 +324,9 @@ struct RestaurantDetailView: View {
                     .foregroundColor(index <= Int(editedRating) ? Color(hex: "#FFD700") : Color(hex: "#E0E0E0"))
                     .shadow(color: index <= Int(editedRating) ? Color(hex: "#FFD700").opacity(0.5) : .clear, radius: 4, x: 0, y: 2)
                     .symbolRenderingMode(.hierarchical)
+                    .opacity(isEditingInfo ? 1.0 : 0.5)
                     .onTapGesture {
+                        guard isEditingInfo else { return }
                         let generator = UIImpactFeedbackGenerator(style: .medium)
                         generator.impactOccurred()
                         withAnimation(AppTheme.Animations.tagSpring) {

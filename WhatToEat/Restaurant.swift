@@ -53,6 +53,11 @@ final class Restaurant {
         return logs.count
     }
     
+    /// 总消费
+    var totalExpense: Double {
+        logs.reduce(0.0) { $0 + $1.expense }
+    }
+    
     /// 收录天数文本
     var recordTimeDisplay: String {
         let calendar = Calendar.current
