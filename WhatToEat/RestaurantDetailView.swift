@@ -30,7 +30,7 @@ struct RestaurantDetailView: View {
     @State private var isEditingInfo = false
     @State private var editedDistrict = ""
     @State private var editedCategory = ""
-    @State private var editedRating: Double = 3.0
+    @State private var editedRating: Double
     
     var body: some View {
         GeometryReader { geometry in
@@ -68,6 +68,9 @@ struct RestaurantDetailView: View {
                 
                 closeButton
             }
+        }
+        .onAppear {
+            editedRating = restaurant.rating
         }
         .task { await fetchDrivingRoute() }
         .sheet(isPresented: $showSheet) {
@@ -318,27 +321,33 @@ struct RestaurantDetailView: View {
                 .foregroundColor(AppTheme.Colors.textSecondary)
                 .frame(width: 40, alignment: .leading)
             
-            ForEach(1...5, id: \.self) { index in
-                Image(systemName: index <= Int(editedRating) ? "star.fill" : "star")
-                    .font(.system(size: 22))
-                    .foregroundColor(index <= Int(editedRating) ? Color(hex: "#FFD700") : Color(hex: "#E0E0E0"))
-                    .shadow(color: index <= Int(editedRating) ? Color(hex: "#FFD700").opacity(0.5) : .clear, radius: 4, x: 0, y: 2)
-                    .symbolRenderingMode(.hierarchical)
-                    .opacity(isEditingInfo ? 1.0 : 0.5)
-                    .onTapGesture {
-                        guard isEditingInfo else { return }
-                        let generator = UIImpactFeedbackGenerator(style: .medium)
-                        generator.impactOccurred()
-                        withAnimation(AppTheme.Animations.tagSpring) {
-                            editedRating = Double(index)
-                        }
-                    }
-            }
+            Image(systemName: "star.fill")
+                .font(.system(size: 16))
+                .foregroundColor(isEditingInfo ? Color(hex: "#FFD700") : AppTheme.Colors.secondary)
+                .symbolRenderingMode(.hierarchical)
             
-            Text(String(format: "%.0f", editedRating))
+            Text("\(Int(editedRating))")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .padding(.leading, 4)
+                .foregroundColor(isEditingInfo ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary)
+                .bold()
+            
+            if isEditingInfo {
+                HStack(spacing: 2) {
+                    ForEach(1...5, id: \.self) { index in
+                        Image(systemName: index <= Int(editedRating) ? "star.fill" : "star")
+                            .font(.system(size: 12))
+                            .foregroundColor(index <= Int(editedRating) ? Color(hex: "#FFD700") : Color(hex: "#E0E0E0"))
+                            .onTapGesture {
+                                let generator = UIImpactFeedbackGenerator(style: .medium)
+                                generator.impactOccurred()
+                                withAnimation(AppTheme.Animations.tagSpring) {
+                                    editedRating = Double(index)
+                                }
+                            }
+                    }
+                }
+                .padding(.leading, 8)
+            }
         }
     }
     
