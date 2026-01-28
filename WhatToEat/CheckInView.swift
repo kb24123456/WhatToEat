@@ -37,10 +37,11 @@ enum MoodType: String, CaseIterable {
 
 struct CheckInView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
     
     let restaurant: Restaurant
     var editingLog: VisitLog? = nil
+    
+    let onClose: () -> Void
     
     @State private var date = Date()
     @State private var peopleCount = 2
@@ -59,7 +60,6 @@ struct CheckInView: View {
     @State private var photoPickerItem: PhotosPickerItem?
     
     @State private var showConfetti = false
-    @State private var perPersonBounce = false
     @State private var deletingImageIndex: Int?
     
     @State private var animatedPerPersonPrice: Double = 0
@@ -74,94 +74,141 @@ struct CheckInView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    multiPhotoSection
-                    
-                    receiptCardView
-                    
-                    HStack(spacing: 12) {
-                        stickyNoteView(
-                            type: .red,
-                            title: "👍 必点推荐",
-                            tags: $goodTags,
-                            inputText: $inputGoodTag,
-                            placeholder: "输入菜名..."
+        ZStack {
+            backgroundOverlay
+            closeButton
+            scrollContent
+            if showConfetti {
+                ConfettiView()
+                    .allowsHitTesting(false)
+            }
+        }
+        .onAppear {
+            if let log = editingLog {
+                loadEditingLog(log)
+            }
+            animatedPerPersonPrice = currentPerPersonPrice
+        }
+        .onChange(of: currentPerPersonPrice) { _, newValue in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                animatedPerPersonPrice = newValue
+            }
+        }
+        .confirmationDialog("选择照片", isPresented: $showActionSheet) {
+            Button("📸 拍照") { showCamera = true }
+            Button("�️ 从相册选择") { showPhotoPicker = true }
+            if !selectedImages.isEmpty {
+                Button("🗑️ 清空所有照片", role: .destructive) {
+                    for filename in (editingLog?.photoFilenames ?? []) {
+                        ImageManager.shared.deleteImage(filename: filename)
+                    }
+                    selectedImages = []
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPickerView(selectedImages: $selectedImages).ignoresSafeArea()
+        }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
+        .onChange(of: photoPickerItem) { (_, newItem: PhotosPickerItem?) in
+            Task {
+                if let data = try? await newItem?.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selectedImages.append(image)
+                    }
+                }
+                photoPickerItem = nil
+            }
+        }
+    }
+    
+    private var backgroundOverlay: some View {
+        LinearGradient(
+            colors: [
+                Color(hex: "#F5F3F0"),
+                Color(hex: "#FBF9F7"),
+                Color(hex: "#FBF9F7")
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+    
+    private var closeButton: some View {
+        VStack {
+            HStack {
+                Button {
+                    onClose()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
                         )
-                        
-                        stickyNoteView(
-                            type: .gray,
-                            title: "💣 避雷提醒",
-                            tags: $badTags,
-                            inputText: $inputBadTag,
-                            placeholder: "输入菜名..."
-                        )
-                    }
+                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                }
+                .padding(.top, 12)
+                .padding(.leading, 20)
+                
+                Spacer()
+                
+                Text(editingLog != nil ? "编辑打卡" : "记录美食")
+                    .font(.headline)
+                    .foregroundColor(Color(hex: "#1A1A1A"))
+                    .padding(.top, 12)
+                
+                Spacer()
+                
+                Color.clear.frame(width: 36, height: 36)
+                    .padding(.trailing, 20)
+            }
+            Spacer()
+        }
+    }
+    
+    private var scrollContent: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 20) {
+                Spacer().frame(height: 60)
+                
+                multiPhotoSection
+                
+                receiptCardView
+                
+                HStack(spacing: 12) {
+                    stickyNoteView(
+                        type: .red,
+                        title: "👍 必点推荐",
+                        tags: $goodTags,
+                        inputText: $inputGoodTag,
+                        placeholder: "输入菜名..."
+                    )
                     
-                    moodSelectorView
-                    
-                    reviewEditorView
-                    
-                    saveButton
+                    stickyNoteView(
+                        type: .gray,
+                        title: "💣 避雷提醒",
+                        tags: $badTags,
+                        inputText: $inputBadTag,
+                        placeholder: "输入菜名..."
+                    )
                 }
-                .padding(.vertical, 20)
-                .frame(maxWidth: 400)
-                .frame(maxWidth: .infinity)
+                
+                moodSelectorView
+                
+                reviewEditorView
+                
+                saveButton
+                
+                Spacer().frame(height: 40)
             }
-            .background(AppTheme.Colors.background)
-            .navigationTitle(editingLog != nil ? "编辑打卡" : "记录美食")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden()
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") { dismiss() }
-                }
-            }
-            .onAppear {
-                if let log = editingLog {
-                    loadEditingLog(log)
-                }
-                animatedPerPersonPrice = currentPerPersonPrice
-            }
-            .onChange(of: currentPerPersonPrice) { _, newValue in
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    animatedPerPersonPrice = newValue
-                }
-            }
-            .confirmationDialog("选择照片", isPresented: $showActionSheet) {
-                Button("📸 拍照") { showCamera = true }
-                Button("🖼️ 从相册选择") { showPhotoPicker = true }
-                if !selectedImages.isEmpty {
-                    Button("🗑️ 清空所有照片", role: .destructive) {
-                        for filename in (editingLog?.photoFilenames ?? []) {
-                            ImageManager.shared.deleteImage(filename: filename)
-                        }
-                        selectedImages = []
-                    }
-                }
-            }
-            .fullScreenCover(isPresented: $showCamera) {
-                CameraPickerView(selectedImages: $selectedImages).ignoresSafeArea()
-            }
-            .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
-            .onChange(of: photoPickerItem) { (_, newItem: PhotosPickerItem?) in
-                Task {
-                    if let data = try? await newItem?.loadTransferable(type: Data.self),
-                       let image = UIImage(data: data) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            selectedImages.append(image)
-                        }
-                    }
-                    photoPickerItem = nil
-                }
-            }
-            .overlay {
-                if showConfetti {
-                    ConfettiView()
-                        .allowsHitTesting(false)
-                }
-            }
+            .frame(maxWidth: 400)
+            .frame(maxWidth: .infinity)
         }
     }
     
@@ -169,14 +216,14 @@ struct CheckInView: View {
     private var multiPhotoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("上传照片")
-                .font(.system(size: 11, weight: .medium).monospacedDigit())
-                .foregroundColor(Color(hex: "#999"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(hex: "#666666"))
                 .tracking(1)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     addPhotoButton
-                    
+
                     ForEach(selectedImages.indices, id: \.self) { index in
                         photoThumbnail(at: index)
                     }
@@ -187,14 +234,13 @@ struct CheckInView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 24)
-                .fill(Color.white)
+                .foregroundStyle(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.8), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
-                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
         )
+        .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 10)
     }
     
     // MARK: - 添加照片按钮
@@ -205,21 +251,20 @@ struct CheckInView: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(hex: "#F5F5F5"))
+                    .foregroundStyle(.ultraThinMaterial)
                     .frame(width: 80, height: 80)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
                     )
-                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
-                
+
                 VStack(spacing: 2) {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(Color(hex: "#999"))
+                        .foregroundColor(Color(hex: "#666666"))
                     Text("添加")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color(hex: "#999"))
+                        .foregroundColor(Color(hex: "#666666"))
                 }
             }
         }
@@ -273,27 +318,26 @@ struct CheckInView: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 peopleSection
-                
+
                 verticalDivider
-                
+
                 expenseSection
-                
+
                 verticalDivider
-                
+
                 perPersonSection
             }
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 24)
-                .fill(Color.white)
+                .foregroundStyle(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.8), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
-                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
         )
+        .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 10)
     }
     
     private var verticalDivider: some View {
@@ -306,36 +350,34 @@ struct CheckInView: View {
         VStack(spacing: 6) {
             Text("用餐人数")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color(hex: "#999"))
+                .foregroundColor(Color(hex: "#666666"))
                 .tracking(1)
-            
+
             HStack(spacing: 12) {
                 Button {
                     if peopleCount > 1 {
                         peopleCount -= 1
                         triggerHaptic()
-                        triggerPerPersonBounce()
                     }
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 22))
-                        .foregroundColor(peopleCount > 1 ? Color(hex: "#FF2442") : Color(hex: "#E0E0E0"))
+                        .foregroundColor(peopleCount > 1 ? Color(hex: "#1A1A1A") : Color(hex: "#CCCCCC"))
                 }
                 .disabled(peopleCount <= 1)
-                
+
                 Text("\(peopleCount)")
                     .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: "#332E2B"))
+                    .foregroundColor(Color(hex: "#1A1A1A"))
                     .frame(minWidth: 24)
-                
+
                 Button {
                     peopleCount += 1
                     triggerHaptic()
-                    triggerPerPersonBounce()
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 22))
-                        .foregroundColor(Color(hex: "#FF2442"))
+                        .foregroundColor(Color(hex: "#1A1A1A"))
                 }
             }
         }
@@ -346,29 +388,26 @@ struct CheckInView: View {
         VStack(spacing: 6) {
             Text("消费总额")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color(hex: "#999"))
+                .foregroundColor(Color(hex: "#666666"))
                 .tracking(1)
-            
+
             HStack(spacing: 2) {
                 Text("¥")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(Color(hex: "#FF2442"))
-                
+                    .foregroundColor(Color(hex: "#1A1A1A"))
+
                 TextField("0", text: $expenseText)
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(hex: "#332E2B"))
+                    .foregroundColor(Color(hex: "#1A1A1A"))
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.center)
                     .frame(width: 70)
-                    .onChange(of: expenseText) { _, _ in
-                        triggerPerPersonBounce()
-                    }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(hex: "#F8F8F8"))
+                    .foregroundStyle(.ultraThinMaterial)
             )
         }
         .frame(maxWidth: .infinity)
@@ -378,24 +417,24 @@ struct CheckInView: View {
         VStack(spacing: 6) {
             Text("人均")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color(hex: "#999"))
+                .foregroundColor(Color(hex: "#666666"))
                 .tracking(1)
-            
+
             HStack(spacing: 2) {
                 Text("¥")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(Color(hex: "#FF2442"))
-                
+                    .foregroundColor(Color(hex: "#1A1A1A"))
+
                 Text("\(Int(animatedPerPersonPrice))")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: "#FF2442"))
+                    .foregroundColor(Color(hex: "#1A1A1A"))
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.3), value: animatedPerPersonPrice)
             }
-            
+
             Text("/人")
                 .font(.system(size: 10))
-                .foregroundColor(Color(hex: "#BBB"))
+                .foregroundColor(Color(hex: "#999999"))
         }
         .frame(maxWidth: .infinity)
     }
@@ -408,20 +447,12 @@ struct CheckInView: View {
         inputText: Binding<String>,
         placeholder: String
     ) -> some View {
-        let bgColor = type == .red ? Color(hex: "#FFF5F7") : Color(hex: "#F5F5F5")
-        let glowColor: Color = type == .red ? Color(hex: "#FF2442").opacity(0.08) : Color.black.opacity(0.04)
-        
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 4) {
-                Text(title.split(separator: " ").first.map(String.init) ?? "")
-                    .font(.system(size: 14))
-                Text(title.split(separator: " ").count > 1 ? title.split(separator: " ").dropFirst().joined(separator: " ") : "")
-                    .font(.system(size: 12))
-            }
-            .font(.system(size: 11, weight: .medium).monospacedDigit())
-            .foregroundColor(type == .red ? Color(hex: "#FF2442") : Color(hex: "#666"))
-            .tracking(1)
-            
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(hex: "#666666"))
+                .tracking(1)
+
             if !tags.wrappedValue.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -429,8 +460,8 @@ struct CheckInView: View {
                             HStack(spacing: 4) {
                                 Text(tags.wrappedValue[index])
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(type == .red ? Color(hex: "#332E2B") : .white)
-                                
+                                    .foregroundColor(Color(hex: "#1A1A1A"))
+
                                 Button {
                                     triggerHaptic()
                                     let currentTags = tags.wrappedValue
@@ -444,19 +475,25 @@ struct CheckInView: View {
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.system(size: 10))
-                                        .foregroundColor(type == .red ? Color(hex: "#999") : .white.opacity(0.7))
+                                        .foregroundColor(Color(hex: "#999999"))
                                 }
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background((type == .red ? Color.white : Color(hex: "#666")) as Color)
-                            .cornerRadius(10)
+                            .background(
+                                Capsule()
+                                    .foregroundStyle(.ultraThinMaterial)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                                    )
+                            )
                         }
                     }
                 }
                 .frame(height: 26)
             }
-            
+
             TextField(placeholder, text: inputText)
                 .font(.system(size: 14))
                 .autocorrectionDisabled()
@@ -464,8 +501,11 @@ struct CheckInView: View {
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.6))
-                        .innerShadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
+                        .foregroundStyle(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                        )
                 )
                 .onSubmit {
                     triggerHaptic()
@@ -473,14 +513,15 @@ struct CheckInView: View {
                 }
         }
         .padding(12)
-        .background(bgColor)
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .foregroundStyle(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.white.opacity(0.8), lineWidth: 1)
+                )
         )
-        .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
-        .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 10)
         .frame(maxWidth: .infinity)
     }
     
@@ -488,10 +529,10 @@ struct CheckInView: View {
     private var moodSelectorView: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("这次用餐的感受")
-                .font(AppTheme.Fonts.caption)
-                .foregroundColor(Color(hex: "#777"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(hex: "#666666"))
                 .tracking(1.2)
-            
+
             HStack(spacing: 0) {
                 ForEach(MoodType.allCases, id: \.self) { mood in
                     moodButton(for: mood)
@@ -501,14 +542,13 @@ struct CheckInView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 24)
-                .fill(Color.white)
+                .foregroundStyle(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.8), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
-                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
         )
+        .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 10)
     }
     
     private func moodButton(for mood: MoodType) -> some View {
@@ -544,7 +584,7 @@ struct CheckInView: View {
                 
                 Text(mood.title)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(isSelected ? Color(hex: "#FF2442") : Color(hex: "#BBB"))
+                    .foregroundColor(isSelected ? Color(hex: "#1A1A1A") : Color(hex: "#999999"))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
@@ -556,13 +596,13 @@ struct CheckInView: View {
     private var reviewEditorView: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("分享你的用餐体验")
-                .font(AppTheme.Fonts.caption)
-                .foregroundColor(Color(hex: "#777"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(hex: "#666666"))
                 .tracking(1.2)
-            
+
             TextEditor(text: $review)
                 .font(.system(size: 14, design: .rounded))
-                .foregroundColor(Color(hex: "#332E2B"))
+                .foregroundColor(Color(hex: "#1A1A1A"))
                 .frame(minHeight: 120, maxHeight: 180)
                 .lineSpacing(6)
                 .padding(12)
@@ -570,13 +610,12 @@ struct CheckInView: View {
                 .background(
                     ZStack {
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(hex: "#FAF8F5"))
+                            .foregroundStyle(.ultraThinMaterial)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16)
                                     .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
                             )
-                            .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 4)
-                        
+
                         Canvas { context, size in
                             let lineSpacing: CGFloat = 26
                             for y in stride(from: 32, through: size.height - 8, by: lineSpacing) {
@@ -592,28 +631,27 @@ struct CheckInView: View {
                         }
                     }
                 )
-            
+
             HStack {
                 Spacer()
                 Text("记录于 \(Date().formatted(date: .abbreviated, time: .shortened))")
                     .font(.system(size: 10))
-                    .foregroundColor(Color(hex: "#BBB"))
+                    .foregroundColor(Color(hex: "#999999"))
             }
             .padding(.top, 4)
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 24)
-                .fill(Color.white)
+                .foregroundStyle(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.8), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 8)
-                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
         )
+        .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 10)
     }
-    
+
     // MARK: - 保存按钮
     private var saveButton: some View {
         Button {
@@ -623,7 +661,7 @@ struct CheckInView: View {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 20))
-                
+
                 Text("保存记录")
                     .font(.system(size: 16, weight: .semibold))
             }
@@ -631,12 +669,11 @@ struct CheckInView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(expense > 0 ? Color(hex: "#FF2442") : Color(hex: "#E0E0E0"))
-                    .shadow(color: expense > 0 ? Color(hex: "#FF2442").opacity(0.3) : Color.clear, radius: 12, x: 0, y: 6)
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(expense > 0 ? Color(hex: "#1A1A1A") : Color(hex: "#CCCCCC"))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 24)
                     .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
             )
         }
@@ -652,13 +689,6 @@ struct CheckInView: View {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             tags.wrappedValue.append(text)
             input.wrappedValue = ""
-        }
-    }
-    
-    private func triggerPerPersonBounce() {
-        perPersonBounce = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            perPersonBounce = false
         }
     }
     
@@ -731,7 +761,7 @@ struct CheckInView: View {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             showConfetti = false
-            dismiss()
+            onClose()
         }
     }
     

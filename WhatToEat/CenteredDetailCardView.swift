@@ -63,7 +63,9 @@ struct CenteredDetailCardView: View {
             hideTabBar()
         }
         .sheet(isPresented: $showSheet) {
-            CheckInView(restaurant: restaurant, editingLog: logToEdit)
+            CheckInView(restaurant: restaurant, editingLog: logToEdit, onClose: {
+                showSheet = false
+            })
         }
         .sheet(isPresented: $showEditReviewSheet) {
             editReviewSheet

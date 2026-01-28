@@ -30,9 +30,7 @@ enum TabItem: String, CaseIterable {
 // MARK: - 主视图
 struct ContentView: View {
     @State private var selectedTab: TabItem = .library
-    @Namespace private var tabAnimation
     @Namespace private var animationNamespace
-    @State private var showAddRestaurant = false
     @State private var isAdding: Bool = false
     @State private var isTabBarHidden: Bool = false
     
@@ -91,9 +89,6 @@ struct ContentView: View {
             }
         }
         .ignoresSafeArea(.keyboard)
-        .sheet(isPresented: $showAddRestaurant) {
-            AddRestaurantView()
-        }
         .onReceive(NotificationCenter.default.publisher(for: .hideTabBar)) { _ in
             withAnimation {
                 isTabBarHidden = true

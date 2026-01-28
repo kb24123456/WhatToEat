@@ -30,9 +30,7 @@ extension View {
 
 struct AddRestaurantView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
     
-    // 回调闭包，用于关闭页面
     var onClose: (() -> Void)? = nil
     
     // 获取所有餐厅数据，用于动态生成品类选项
@@ -74,81 +72,28 @@ struct AddRestaurantView: View {
     
     // --- 6. UI状态 ---
     @State private var isAutoFilled = false
-    // 标签系统：已选标签数组
     @State private var selectedTags: [String] = []
     
-    // 预设灵感标签池
     let presetTags = ["氛围感", "老字号", "二刷", "排队王", "性价比"]
     
-    // 从CategoryManager获取预设品类列表
     var categoryOptions: [String] {
         CategoryManager.shared.getPresetCategories()
     }
     
-    // 根据当前城市获取对应的预设地区列表
     var districtOptions: [String] {
         RegionManager.shared.getDistricts(for: city)
     }
     
-    // MARK: - 主表单内容
-    private var formContent: some View {
-        VStack(spacing: 0) {
-            CoverImageView(coverImages: $coverImages, showActionSheet: $showActionSheet)
-            
-            Color.clear.frame(height: 12)
-            
-            SearchBar(poiQuery: $poiQuery, searchResults: $searchResults, isSearching: $isSearching, searchPOI: searchPOI, fillInfoFromMapItem: fillInfoFromMapItem)
-            
-            Color.clear.frame(height: 8)
-            
-            NameTextField(name: $name, isAutoFilled: isAutoFilled)
-            
-            Color.clear.frame(height: 8)
-            
-            DistrictCategoryRow(district: $district, category: $category, districtOptions: districtOptions, categoryOptions: categoryOptions)
-            
-            Color.clear.frame(height: 8)
-            
-            RatingRow(rating: $rating)
-            
-            Color.clear.frame(height: 8)
-            
-            ReviewSection(review: $review)
-            
-            Color.clear.frame(height: 8)
-            
-            TagSystemSection(
-                tagsInput: $tagsInput,
-                selectedTags: $selectedTags,
-                presetTags: presetTags
-            )
-            
-            Color.clear.frame(height: 24)
-            
-            ActionButtonsRow(
-                onClose: onClose,
-                dismissAction: { dismiss() },
-                saveAction: saveRestaurant,
-                isValid: !name.isEmpty && !address.isEmpty && !district.isEmpty
-            )
-        }
-        .padding(.horizontal, AppTheme.Spacing.md)
-        .padding(.bottom, 40)
-    }
-    
-    // MARK: - 表单背景
-    private var formBackground: some View {
-        Color.white
+    private var closeAction: () -> Void {
+        return onClose ?? { }
     }
     
     var body: some View {
-        NavigationStack {
+        ZStack {
+            backgroundOverlay
             formContent
                 .background(formBackground)
-                .ignoresSafeArea()
         }
-        .navigationBarHidden(true)
-        .toolbar(.hidden, for: .tabBar)
         .confirmationDialog("选择封面图来源", isPresented: $showActionSheet) {
             Button("拍照") { showCamera = true }
             Button("从相册选择") { showPhotoPicker = true }
@@ -175,6 +120,105 @@ struct AddRestaurantView: View {
         .onChange(of: locationManager.currentCity) { _, newValue in
             handleCityChange(newValue)
         }
+    }
+    
+    private var backgroundOverlay: some View {
+        Color.black.opacity(0.3)
+            .edgesIgnoringSafeArea(.all)
+            .onTapGesture {
+                closeAction()
+            }
+    }
+    
+    // MARK: - 主表单内容
+    private var formContent: some View {
+        VStack(spacing: 0) {
+            closeButton
+            
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    CoverImageView(coverImages: $coverImages, showActionSheet: $showActionSheet)
+                    
+                    Color.clear.frame(height: 12)
+                    
+                    SearchBar(poiQuery: $poiQuery, searchResults: $searchResults, isSearching: $isSearching, searchPOI: searchPOI, fillInfoFromMapItem: fillInfoFromMapItem)
+                    
+                    Color.clear.frame(height: 8)
+                    
+                    NameTextField(name: $name, isAutoFilled: isAutoFilled)
+                    
+                    Color.clear.frame(height: 8)
+                    
+                    DistrictCategoryRow(district: $district, category: $category, districtOptions: districtOptions, categoryOptions: categoryOptions)
+                    
+                    Color.clear.frame(height: 8)
+                    
+                    RatingRow(rating: $rating)
+                    
+                    Color.clear.frame(height: 8)
+                    
+                    ReviewSection(review: $review)
+                    
+                    Color.clear.frame(height: 8)
+                    
+                    TagSystemSection(
+                        tagsInput: $tagsInput,
+                        selectedTags: $selectedTags,
+                        presetTags: presetTags
+                    )
+                    
+                    Color.clear.frame(height: 24)
+                    
+                    ActionButtonsRow(
+                        onClose: onClose,
+                        dismissAction: closeAction,
+                        saveAction: saveRestaurant,
+                        isValid: !name.isEmpty && !address.isEmpty && !district.isEmpty
+                    )
+                    
+                    Color.clear.frame(height: 40)
+                }
+            }
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.bottom, 40)
+        }
+    }
+    
+    private var closeButton: some View {
+        HStack {
+            Button {
+                closeAction()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.primary.opacity(0.7))
+                    .frame(width: 36, height: 36)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
+                    )
+                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+            }
+            .padding(.top, 12)
+            .padding(.leading, 20)
+            
+            Spacer()
+            
+            Text("添加餐厅")
+                .font(.headline)
+                .padding(.top, 12)
+            
+            Spacer()
+            
+            Color.clear.frame(width: 36, height: 36)
+                .padding(.trailing, 20)
+        }
+    }
+    
+    // MARK: - 表单背景
+    private var formBackground: some View {
+        Color.white
     }
     
     // MARK: - 事件处理方法
@@ -481,7 +525,7 @@ struct AddRestaurantView: View {
                 if let onClose = onClose {
                     onClose()
                 } else {
-                    dismiss()
+                    closeAction()
                 }
             } catch {
                 print("保存餐厅失败: \(error.localizedDescription)")

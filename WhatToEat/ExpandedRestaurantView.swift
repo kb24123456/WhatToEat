@@ -40,7 +40,9 @@ struct ExpandedRestaurantView: View {
         .padding(.bottom, AppTheme.Spacing.lg)
         .task { await fetchDrivingRoute() }
         .sheet(isPresented: $showSheet) {
-            CheckInView(restaurant: restaurant, editingLog: logToEdit)
+            CheckInView(restaurant: restaurant, editingLog: logToEdit, onClose: {
+                showSheet = false
+            })
         }
         .confirmationDialog("更换封面图", isPresented: $showActionSheet) {
             Button("📸 拍照") { showCamera = true }
