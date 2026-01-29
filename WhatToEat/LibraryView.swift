@@ -161,17 +161,17 @@ private struct HeaderView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
                         )
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
             }
             .buttonStyle(.plain)
-            
+
             // 3. 搜索框（占据剩余空间）
             HStack {
                 Image(systemName: "magnifyingglass").foregroundColor(.gray)
@@ -182,14 +182,14 @@ private struct HeaderView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
                     )
             )
-            .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
             // 使用统一的输入框焦点效果修饰符
             .withFocusedInputEffects(isFocused: $isSearchFocused)
         }
@@ -445,13 +445,7 @@ private struct RestaurantListView: View {
         ScrollView {
             LazyVStack(spacing: AppTheme.Spacing.lg) {
                 ForEach(filteredRestaurants) { restaurant in
-                    RestaurantCard(
-                        restaurant: restaurant,
-                        locationManager: locationManager,
-                        animation: animation,
-                        isExpanded: selectedRestaurant?.id == restaurant.id
-                    )
-                    .onTapGesture {
+                    Button {
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                             if selectedRestaurant?.id == restaurant.id {
                                 selectedRestaurant = nil
@@ -461,7 +455,16 @@ private struct RestaurantListView: View {
                                 isDetailPresented = true
                             }
                         }
+                    } label: {
+                        RestaurantCard(
+                            restaurant: restaurant,
+                            locationManager: locationManager,
+                            animation: animation,
+                            isExpanded: selectedRestaurant?.id == restaurant.id
+                        )
                     }
+                    .buttonStyle(ScaleButtonStyle())
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.lg)

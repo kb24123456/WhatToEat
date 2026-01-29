@@ -1,7 +1,19 @@
 import SwiftUI
 
+// MARK: - WhatToEat Design System v2.0
+// 设计文档：https://github.com/kb24123456/WhatToEat/wiki/Design-System
+//
+// 设计原则：
+// 1. 奶脂实色卡片风格 (Milky Solid Card Style)
+// 2. 纯白实色背景 + 物理深度阴影 + 边缘高光
+// 3. 冷灰背景 (#F8F9FB) + 纯白卡片 (Color.white)
+//
+// 历史版本：
+// v1.0: Glassmorphism 毛玻璃风格 (已废弃)
+// v2.0: Milky Solid 奶脂实色风格 (当前)
+
 struct AppTheme {
-    // MARK: - 1. 配色方案 (Premium Soft UI - 柔和中性色)
+    // MARK: - 1. 配色方案 (Design System v2.0 - 奶脂实色风格)
     struct Colors {
         // 背景色系统
         static let background = Color(hex: "#F8F9FB") // 柔和的浅灰背景
@@ -13,10 +25,10 @@ struct AppTheme {
         static let textSecondary = Color(hex: "#7F8C8D").opacity(0.9) // 柔和 secondary
         static let textTertiary = Color(hex: "#95A5A6").opacity(0.7) // 更淡的辅助文字
         
-        // 🔴 核心强调色（带渐变的柔和红）
-        static let accent = Color(hex: "#FF6B6B")
+        // 🔴 核心强调色（小红书红）
+        static let accent = Color(hex: "#FF2442")
         static let accentGradient = LinearGradient(
-            colors: [Color(hex: "#FF6B6B"), Color(hex: "#FF5252")],
+            colors: [Color(hex: "#FF2442"), Color(hex: "#E61238")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -25,7 +37,7 @@ struct AppTheme {
         static let primary = Color(hex: "#5796E6")
         static let secondary = Color(hex: "#FFB347")
         static let success = Color(hex: "#43C59E")
-        static let price = Color(hex: "#FF9AA2") // 更柔和的人均消费色
+        static let price = Color(hex: "#FF2442") // 小红书红
         
         // 柔和背景色
         static let lightRed = Color(hex: "#FFE8EE").opacity(0.8)
@@ -35,11 +47,7 @@ struct AppTheme {
         static let softBackground = Color(hex: "#F8F9FB")
         static let divider = Color.black.opacity(0.04) // 更淡的分隔线
         
-        // Glassmorphism 专用
-        static let glassWhite = Color.white.opacity(0.3)
-        static let glassBorder = Color.white.opacity(0.5)
-        
-        // Premium Soft UI 专用
+        // MARK: - 奶脂实色风格专用 (v2.0)
         static let softSecondary = Color(hex: "#A2AAB1")
         static let milkyWhite = Color.white.opacity(0.95)
         static let shadowColor = Color.black.opacity(0.04)
@@ -49,10 +57,16 @@ struct AppTheme {
         static let destructive = Color(hex: "#FF3B30")
         /// 警告颜色，用于智能识别不确定时的提示
         static let warning = Color(hex: "#FF9500")
+        /// 婴儿蓝，用于特殊强调或装饰
+        static let babyBlue = Color(hex: "#89CFF0")
         
         // MARK: - 极致细节专用
         /// 极致边缘高光色 (Rim Light)，用于 overlay 描边，提升物理厚度感
         static let rimLight = Color.white.opacity(0.6)
+        /// 玻璃边框色，用于玻璃态效果
+        static let glassBorder = Color.white.opacity(0.5)
+        /// 玻璃白色，用于玻璃态背景
+        static let glassWhite = Color.white.opacity(0.3)
         
         /// 奶脂玻璃蒙层渐变：用于图片底部的文字承载区
         static let milkyOverlayGradient = LinearGradient(
@@ -106,14 +120,54 @@ struct AppTheme {
         static let confettiOrange = Color(hex: "#FFB347")
         static let confettiPurple = Color(hex: "#9966FF")
     }
-    
-    // MARK: - 6. 设计规则
+        
+    // MARK: - 6. 设计规则 (Design System v2.0)
     struct Rules {
         // 导航栏规则
         static let navigationBarUseShadow = false // 导航栏不允许有阴影
         
         // 卡片规则
         static let restaurantCardUseShadow = false // 餐厅信息卡片不允许有阴影
+    }
+    
+    // MARK: - 7. 奶脂实色卡片规范 (Design System v2.0)
+    struct Card {
+        /// 卡片背景色：纯白实色
+        static let background = Color.white
+        
+        /// 卡片圆角：28pt (continuous 风格)
+        static let cornerRadius: CGFloat = 28
+        
+        /// 卡片内边距：16pt
+        static let padding: CGFloat = 16
+        
+        /// 卡片间距：12pt
+        static let spacing: CGFloat = 12
+        
+        /// 边缘高光：白色描边，增强物理厚度感
+        static let rimLight = Color.white.opacity(0.8)
+        static let rimLightWidth: CGFloat = 0.5
+        
+        /// 双层阴影系统
+        struct Shadow {
+            /// 底层环境光：大范围柔和阴影
+            static let ambient = (
+                color: Color.black.opacity(0.04),
+                radius: CGFloat(20),
+                x: CGFloat(0),
+                y: CGFloat(10)
+            )
+            /// 边缘定义光：小范围清晰阴影
+            static let defining = (
+                color: Color.black.opacity(0.06),
+                radius: CGFloat(5),
+                x: CGFloat(0),
+                y: CGFloat(2)
+            )
+        }
+        
+        /// 内部输入框背景：极浅色，产生下陷感
+        static let insetBackground = Color(hex: "#F0F2F5")
     }
     
     // MARK: - 2. 字体预设

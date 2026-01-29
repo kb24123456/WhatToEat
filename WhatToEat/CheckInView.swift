@@ -50,17 +50,9 @@ struct CheckInView: View {
     @State private var badTags: [String] = []
     @State private var inputGoodTag = ""
     @State private var inputBadTag = ""
-    @State private var review = ""
     @State private var selectedMood: MoodType?
     
-    @State private var selectedImages: [UIImage] = []
-    @State private var showActionSheet = false
-    @State private var showCamera = false
-    @State private var showPhotoPicker = false
-    @State private var photoPickerItem: PhotosPickerItem?
-    
     @State private var showConfetti = false
-    @State private var deletingImageIndex: Int?
     
     @State private var animatedPerPersonPrice: Double = 0
     
@@ -79,7 +71,6 @@ struct CheckInView: View {
     var body: some View {
         ZStack {
             backgroundOverlay
-            closeButton
             scrollContent
             if showConfetti {
                 ConfettiView()
@@ -101,33 +92,14 @@ struct CheckInView: View {
                 animatedPerPersonPrice = newValue
             }
         }
-        .confirmationDialog("选择照片", isPresented: $showActionSheet) {
-            Button("📸 拍照") { showCamera = true }
-            Button("�️ 从相册选择") { showPhotoPicker = true }
-            if !selectedImages.isEmpty {
-                Button("🗑️ 清空所有照片", role: .destructive) {
-                    for filename in (editingLog?.photoFilenames ?? []) {
-                        ImageManager.shared.deleteImage(filename: filename)
-                    }
-                    selectedImages = []
-                }
-            }
-        }
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraPickerView(selectedImages: $selectedImages).ignoresSafeArea()
-        }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
-        .onChange(of: photoPickerItem) { (_, newItem: PhotosPickerItem?) in
-            Task {
-                if let data = try? await newItem?.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selectedImages.append(image)
+        .gesture(
+            DragGesture()
+                .onEnded { value in
+                    if value.translation.height > 100 {
+                        onClose()
                     }
                 }
-                photoPickerItem = nil
-            }
-        }
+        )
     }
     
     // MARK: - Premium Soft UI Background
@@ -136,247 +108,189 @@ struct CheckInView: View {
             .ignoresSafeArea()
     }
     
-    private var closeButton: some View {
-        VStack {
-            HStack {
-                Button {
-                    onClose()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            Circle()
-                                .foregroundStyle(.ultraThinMaterial)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                                )
-                        )
-                        .shadow(color: AppTheme.Colors.shadowColor, radius: 8, x: 0, y: 2)
-                        .shadow(color: AppTheme.Shadows.light.color, radius: 4, x: 0, y: 1)
-                }
-                .padding(.top, 24)
-                .padding(.leading, 24)
-                
-                Spacer()
-                
-                Text(editingLog != nil ? "编辑打卡" : "记录美食")
-                    .font(.headline)
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .padding(.top, 12)
-                
-                Spacer()
-                
-                Color.clear.frame(width: 36, height: 36)
-                    .padding(.trailing, 20)
-            }
-            Spacer()
-        }
-    }
-    
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 16) {
-                Spacer().frame(height: 60)
-
-                multiPhotoSection
-                    .staggeredEntrance(index: 0, isVisible: isVisible)
-
-                receiptCardView
-                    .staggeredEntrance(index: 1, isVisible: isVisible)
-
-                HStack(spacing: 16) {
-                    stickyNoteView(
-                        type: .red,
-                        title: "👍 必点推荐",
-                        tags: $goodTags,
-                        inputText: $inputGoodTag,
-                        placeholder: "输入菜名..."
-                    )
-                    .staggeredEntrance(index: 2, isVisible: isVisible)
-
-                    stickyNoteView(
-                        type: .gray,
-                        title: "💣 避雷提醒",
-                        tags: $badTags,
-                        inputText: $inputBadTag,
-                        placeholder: "输入菜名..."
-                    )
-                    .staggeredEntrance(index: 3, isVisible: isVisible)
-                }
-
-                moodSelectorView
-                    .staggeredEntrance(index: 4, isVisible: isVisible)
-
-                reviewEditorView
-                    .staggeredEntrance(index: 5, isVisible: isVisible)
-
-                saveButton
-                    .staggeredEntrance(index: 6, isVisible: isVisible)
+            VStack(spacing: 0) {
+                // 顶部标题
+                Text(editingLog != nil ? "编辑打卡" : "此食此刻")
+                    .font(.headline)
+                    .foregroundColor(AppTheme.Colors.darkText)
+                    .padding(.top, 60)
+                    .padding(.bottom, 20)
+                
+                globalContainer
+                    .padding(.horizontal, 16)
 
                 Spacer().frame(height: 40)
             }
-            .padding(.horizontal, 20)
             .frame(maxWidth: .infinity)
         }
     }
     
-    // MARK: - 多图上传卡片
-    private var multiPhotoSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("上传照片")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .tracking(1)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    addPhotoButton
-
-                    ForEach(selectedImages.indices, id: \.self) { index in
-                        photoThumbnail(at: index)
-                    }
-                }
-            }
-            .frame(height: 88)
+    // MARK: - 一体化容器
+    private var globalContainer: some View {
+        VStack(spacing: 0) {
+            timeHeaderView
+                .padding(.bottom, 20)
+            
+            moduleDivider
+            
+            moodSelectorSection
+                .padding(.vertical, 16)
+            
+            moduleDivider
+            
+            receiptSection
+                .padding(.vertical, 16)
+            
+            moduleDivider
+            
+            tagsSection
+                .padding(.top, 16)
+            
+            saveButton
+                .padding(.top, 24)
         }
-        .padding(16)
+        .padding(24)
         .background(
-            RoundedRectangle(cornerRadius: 24)
-                .foregroundStyle(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(Color.white)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .stroke(Color.black.opacity(0.03), lineWidth: 1)
                 )
         )
-        .shadow(color: AppTheme.Shadows.base.color, radius: 15, x: 0, y: 10)
-        .shadow(color: AppTheme.Colors.shadowColor, radius: 6, x: 0, y: 2)
     }
     
-    // MARK: - 添加照片按钮
-    private var addPhotoButton: some View {
-        Button {
-            showActionSheet = true
-            triggerHaptic()
-        } label: {
-            ZStack {
-                RoundedRectangle(cornerRadius: 20)
-                    .foregroundStyle(.ultraThinMaterial)
-                    .frame(width: 80, height: 80)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                    )
-
-                VStack(spacing: 2) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                    Text("添加")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                }
-            }
-        }
-        .buttonStyle(ScaleButtonStyle())
-    }
-
-    // MARK: - 照片缩略图
-    private func photoThumbnail(at index: Int) -> some View {
-        let image = selectedImages[index]
-        let isSelected = deletingImageIndex == index
-        
-        return ZStack(alignment: .topTrailing) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 80, height: 80)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                )
-                .shadow(color: AppTheme.Colors.shadowColor, radius: 10, x: 0, y: 6)
-                .scaleEffect(isSelected ? 0.92 : 1.0)
-                .animation(AppTheme.Animations.quickSpring, value: isSelected)
-            
-            Button {
-                deletingImageIndex = index
-                triggerHaptic()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        let filename = editingLog?.photoFilenames[safe: index]
-                        if let filename = filename {
-                            ImageManager.shared.deleteImage(filename: filename)
-                        }
-                        selectedImages.remove(at: index)
-                    }
-                    deletingImageIndex = nil
-                }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.white, AppTheme.Colors.textSecondary)
-            }
-            .scaleEffect(isSelected ? 1.15 : 1.0)
-            .animation(AppTheme.Animations.quickSpring, value: isSelected)
-        }
-    }
-    
-    // MARK: - 账单卡片（票据化风格）
-    // MARK: - Receipt Card (Premium Soft UI)
-    private var receiptCardView: some View {
+    // MARK: - 日历式日期头部（对称布局）
+    private var timeHeaderView: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                peopleSection
-
-                verticalDivider
-
-                expenseSection
-
-                verticalDivider
-
-                perPersonDashboard
+            HStack(spacing: 16) {
+                VStack(spacing: 4) {
+                    Text("\(String(format: "%d", Calendar.current.component(.year, from: date)))年\(Calendar.current.component(.month, from: date))月")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
+                        .tracking(1)
+                    
+                    Text("\(Calendar.current.component(.day, from: date))")
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                        .contentTransition(.numericText())
+                        .animation(AppTheme.Animations.standardSpring, value: date)
+                    
+                    Text(weekdayInChinese)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
+                        .tracking(0.5)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                
+                Rectangle()
+                    .fill(Color.black.opacity(0.05))
+                    .frame(width: 1, height: 40)
+                    .cornerRadius(0.5)
+                
+                VStack(spacing: 4) {
+                    Text("现在")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
+                        .tracking(1)
+                    
+                    Text(date.chineseShortTime)
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                        .contentTransition(.numericText())
+                        .animation(AppTheme.Animations.standardSpring, value: date)
+                    
+                    Text(" ")
+                        .font(.system(size: 13))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(16)
-        .premiumCard()
+        .frame(maxWidth: .infinity, alignment: .center)
     }
-
-    // 纸张纹理线条
-    private var paperTextureLines: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 4) {
-                ForEach(0..<20) { i in
-                    HStack {
-                        Rectangle()
-                            .fill(AppTheme.Colors.ghostText)
-                            .frame(width: CGFloat.random(in: 20...geometry.size.width * 0.8), height: 0.5)
-                        Spacer()
-                    }
-                    .padding(.leading, CGFloat.random(in: 0...20))
+    
+    private var weekdayInChinese: String {
+        let weekdays = ["", "星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
+        let weekday = Calendar.current.component(.weekday, from: date)
+        return weekdays[weekday]
+    }
+    
+    // MARK: - 模块分隔线
+    private var moduleDivider: some View {
+        Divider()
+            .background(Color.black.opacity(0.03))
+            .padding(.vertical, 8)
+    }
+    
+    // MARK: - 心情模块（无背景）
+    private var moodSelectorSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("这次用餐的感受")
+            
+            HStack(spacing: 0) {
+                ForEach(MoodType.allCases, id: \.self) { mood in
+                    moodButton(for: mood)
                 }
             }
-            .padding(.vertical, 8)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
     
-    private var verticalDivider: some View {
-        Rectangle()
-            .fill(AppTheme.Shadows.defining.color)
-            .frame(width: 1, height: 50)
+    // MARK: - 账单模块（极致简化）
+    private var receiptSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("消费信息")
+            
+            HStack(spacing: 16) {
+                peopleInputSection
+                
+                expenseInputSection
+                
+                perPersonDisplaySection
+            }
+        }
     }
     
-    private var peopleSection: some View {
-        VStack(spacing: 6) {
-            Text("用餐人数")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .tracking(1)
-
+    // MARK: - 推荐模块（并排无边界）
+    private var tagsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("菜品标签")
+            
+            HStack(spacing: 24) {
+                stickyNoteView(
+                    type: .red,
+                    title: "必点推荐",
+                    tags: $goodTags,
+                    inputText: $inputGoodTag,
+                    placeholder: "输入推荐菜名..."
+                )
+                
+                stickyNoteView(
+                    type: .gray,
+                    title: "避雷提醒",
+                    tags: $badTags,
+                    inputText: $inputBadTag,
+                    placeholder: "输入避雷菜名..."
+                )
+            }
+        }
+    }
+    
+    // MARK: - 统一标题样式
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundColor(AppTheme.Colors.darkText)
+    }
+    
+    // MARK: - 人数录入
+    private var peopleInputSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("人数")
+                .font(.system(size: 12))
+                .foregroundColor(AppTheme.Colors.mediumGray)
+            
             HStack(spacing: 12) {
                 Button {
                     if peopleCount > 1 {
@@ -385,116 +299,89 @@ struct CheckInView: View {
                     }
                 } label: {
                     Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(peopleCount > 1 ? AppTheme.Colors.textPrimary : AppTheme.Colors.textTertiary)
+                        .font(.system(size: 18))
+                        .foregroundColor(peopleCount > 1 ? AppTheme.Colors.darkText : AppTheme.Colors.lightText)
                 }
                 .disabled(peopleCount <= 1)
 
                 Text("\(peopleCount)")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .frame(minWidth: 24)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                    .frame(minWidth: 16)
 
                 Button {
                     peopleCount += 1
                     triggerHaptic()
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .font(.system(size: 18))
+                        .foregroundColor(AppTheme.Colors.darkText)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Rectangle()
+                .fill(AppTheme.Colors.softBackground)
+                .frame(height: 1)
         }
         .frame(maxWidth: .infinity)
     }
     
-    private var expenseSection: some View {
-        VStack(spacing: 6) {
-            Text("消费总额")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .tracking(1)
-
+    // MARK: - 消费总额输入（底部横线）
+    private var expenseInputSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("消费")
+                .font(.system(size: 12))
+                .foregroundColor(AppTheme.Colors.mediumGray)
+            
+            HStack(spacing: 4) {
+                Text("¥")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                
+                TextField("0", text: $expenseText)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Rectangle()
+                .fill(AppTheme.Colors.softBackground)
+                .frame(height: 1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    // MARK: - 人均消费显示
+    private var perPersonDisplaySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("人均")
+                .font(.system(size: 12))
+                .foregroundColor(AppTheme.Colors.mediumGray)
+            
             HStack(spacing: 2) {
                 Text("¥")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-
-                TextField("0", text: $expenseText)
-                    .font(.system(size: 20, weight: .bold, design: .monospaced))
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 70)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .foregroundStyle(.ultraThinMaterial)
-            )
-        }
-        .frame(maxWidth: .infinity)
-    }
-    
-    // MARK: - 人均消费仪表盘
-    private var perPersonDashboard: some View {
-        VStack(spacing: 4) {
-            Text("人均消费")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .tracking(1)
-
-            // 仪表盘容器
-            ZStack {
-                // 外圈背景
-                Circle()
-                    .fill(AppTheme.Colors.card)
-                    .frame(width: 70, height: 70)
-                    .shadow(color: AppTheme.Colors.shadowColor, radius: 6, x: 0, y: 2)
-
-                // 内圈
-                Circle()
-                    .fill(AppTheme.Colors.softBackground)
-                    .frame(width: 58, height: 58)
-
-                // 数字显示
-                VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        Text("¥")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(AppTheme.Colors.darkBrown)
-
-                        Text("\(Int(animatedPerPersonPrice))")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                            .contentTransition(.numericText())
-                            .animation(AppTheme.Animations.standardSpring, value: animatedPerPersonPrice)
-                    }
-
-                    Text("/人")
-                        .font(.system(size: 8))
-                        .foregroundColor(AppTheme.Colors.textTertiary)
-                }
-
-                // 动态指示器环
-                Circle()
-                    .trim(from: 0, to: min(CGFloat(animatedPerPersonPrice) / 500, 1.0))
-                    .stroke(
-                        AppTheme.Colors.accent,
-                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                    )
-                    .frame(width: 64, height: 64)
-                    .rotationEffect(.degrees(-90))
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+                
+                Text("\(Int(animatedPerPersonPrice))")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                    .contentTransition(.numericText())
                     .animation(AppTheme.Animations.standardSpring, value: animatedPerPersonPrice)
             }
-            .frame(height: 75)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Rectangle()
+                .fill(Color.clear)
+                .frame(height: 1)
         }
         .frame(maxWidth: .infinity)
     }
     
-    // MARK: - 便利贴视图
-    // MARK: - Sticky Note View (Premium Soft UI with Inset Input)
+    // MARK: - 便利贴视图（无背景简化版）
     private func stickyNoteView(
         type: StickyNoteType,
         title: String,
@@ -503,10 +390,14 @@ struct CheckInView: View {
         placeholder: String
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .tracking(1)
+            HStack(spacing: 6) {
+                Image(systemName: type.icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(type.color)
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(type == .red ? AppTheme.Colors.darkText : AppTheme.Colors.mediumGray)
+            }
 
             if !tags.wrappedValue.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -515,7 +406,7 @@ struct CheckInView: View {
                             HStack(spacing: 4) {
                                 Text(tags.wrappedValue[index])
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                    .foregroundColor(AppTheme.Colors.darkText)
 
                                 Button {
                                     triggerHaptic()
@@ -530,18 +421,14 @@ struct CheckInView: View {
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.system(size: 10))
-                                        .foregroundColor(AppTheme.Colors.textTertiary)
+                                        .foregroundColor(AppTheme.Colors.lightText)
                                 }
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(
                                 Capsule()
-                                    .glassmorphism(tint: .white)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(AppTheme.Colors.glassBorder, lineWidth: 0.5)
-                                    )
+                                    .fill(type.color.opacity(0.1))
                             )
                         }
                     }
@@ -549,51 +436,24 @@ struct CheckInView: View {
                 .frame(height: 26)
             }
 
-            // Inset style input
             TextField(placeholder, text: inputText)
                 .font(.system(size: 14))
                 .autocorrectionDisabled()
-                .insetInput()
+                .padding(.vertical, 8)
+                .background(
+                    Rectangle()
+                        .fill(AppTheme.Colors.softBackground)
+                        .frame(height: 1)
+                )
                 .onSubmit {
                     triggerHaptic()
                     addTag(from: inputText, to: tags)
                 }
         }
-        .padding(16)
-        .glassmorphism(tint: .white)
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(AppTheme.Colors.glassBorder, lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 10)
-        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
         .frame(maxWidth: .infinity)
     }
-    
-    // MARK: - Mood Selector (Premium Soft UI)
-    private var moodSelectorView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("这次用餐的感受")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(AppTheme.Colors.softSecondary)
-                .tracking(1.2)
 
-            HStack(spacing: 0) {
-                ForEach(MoodType.allCases, id: \.self) { mood in
-                    moodButton(for: mood)
-                }
-            }
-        }
-        .padding(16)
-        .glassmorphism(tint: .white)
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(AppTheme.Colors.glassBorder, lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 10)
-        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
-    }
-    
+    // MARK: - 心情按钮
     private func moodButton(for mood: MoodType) -> some View {
         let isSelected = selectedMood == mood
 
@@ -609,9 +469,7 @@ struct CheckInView: View {
         } label: {
             VStack(spacing: 6) {
                 ZStack {
-                    // 多层发光晕影效果
                     if isSelected {
-                        // 外层大光晕
                         Circle()
                             .fill(mood.glowColor.opacity(0.25))
                             .blur(radius: 20)
@@ -619,7 +477,6 @@ struct CheckInView: View {
                             .scaleEffect(isSelected ? 1.0 : 0.8)
                         .animation(AppTheme.Animations.standardSpring, value: isSelected)
 
-                        // 中层光晕
                         Circle()
                             .fill(mood.glowColor.opacity(0.4))
                             .blur(radius: 12)
@@ -627,14 +484,12 @@ struct CheckInView: View {
                             .scaleEffect(isSelected ? 1.0 : 0.85)
                             .animation(AppTheme.Animations.standardSpring, value: isSelected)
 
-                        // 内层高亮
                         Circle()
                             .fill(mood.glowColor.opacity(0.6))
                             .blur(radius: 6)
                             .frame(width: 45, height: 45)
                     }
 
-                    // Emoji 主体 - 增强 Spring 弹跳动画
                     Text(mood.rawValue)
                         .font(.system(size: 32))
                         .scaleEffect(isSelected ? 1.25 : 0.9)
@@ -648,7 +503,7 @@ struct CheckInView: View {
 
                 Text(mood.title)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(isSelected ? AppTheme.Colors.textPrimary : AppTheme.Colors.textTertiary)
+                    .foregroundColor(isSelected ? AppTheme.Colors.darkText : AppTheme.Colors.lightText)
                     .scaleEffect(isSelected ? 1.05 : 1.0)
                     .animation(AppTheme.Animations.standardSpring, value: isSelected)
             }
@@ -658,105 +513,30 @@ struct CheckInView: View {
         .buttonStyle(ScaleButtonStyle())
     }
 
-    // MARK: - 评价编辑区
-    private var reviewEditorView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("分享你的用餐体验")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-                .tracking(1.2)
-
-            TextEditor(text: $review)
-                .font(.system(size: 14, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .frame(minHeight: 120, maxHeight: 180)
-                .lineSpacing(6)
-                .padding(16)
-                .scrollContentBackground(.hidden)
-                .background(
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 20)
-                            .foregroundStyle(.ultraThinMaterial)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                            )
-
-                        Canvas { context, size in
-                            let lineSpacing: CGFloat = 26
-                            for y in stride(from: 32, through: size.height - 8, by: lineSpacing) {
-                                var path = Path()
-                                path.move(to: CGPoint(x: 12, y: y))
-                                path.addLine(to: CGPoint(x: size.width - 12, y: y))
-                                context.stroke(
-                                    path,
-                                    with: .color(AppTheme.Colors.shadowColor),
-                                    lineWidth: 0.5
-                                )
-                            }
-                        }
-                    }
-                )
-
-            HStack {
-                Spacer()
-                Text("记录于 \(Date().formatted(date: .abbreviated, time: .shortened))")
-                    .font(.system(size: 10))
-                    .foregroundColor(AppTheme.Colors.textTertiary)
-            }
-            .padding(.top, 4)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 24)
-                .foregroundStyle(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                )
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 10)
-        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
-    }
-
-    // MARK: - 保存按钮
-    // MARK: - Save Button (Premium Floating Action with Double Shadow)
+    // MARK: - 保存按钮（黑色背景红色打钩）
     private var saveButton: some View {
         Button {
             triggerHaptic()
             saveCheckIn()
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 20))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.accent)
 
-                Text("保存记录")
+                Text("完成记录")
                     .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
             }
-            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, 18)
             .background(
                 Capsule()
-                    .fill(expense > 0 ? AppTheme.Colors.accentGradient : LinearGradient(colors: [AppTheme.Colors.textTertiary], startPoint: .leading, endPoint: .trailing))
-            )
-            // Double shadow system (presses on bottom edge)
-            .shadow(
-                color: expense > 0 ? AppTheme.Colors.accent.opacity(0.3) : Color.clear,
-                radius: 12,
-                x: 0,
-                y: 8
-            )
-            .shadow(
-                color: expense > 0 ? AppTheme.Colors.accent.opacity(0.15) : Color.clear,
-                radius: 20,
-                x: 0,
-                y: 12
+                    .fill(Color.black)
             )
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(expense <= 0)
-        .padding(.horizontal, 16)
     }
     
     // MARK: - 辅助方法
@@ -781,24 +561,9 @@ struct CheckInView: View {
         peopleCount = log.peopleCount > 0 ? log.peopleCount : 2
         goodTags = log.goodDishes.isEmpty ? [] : log.goodDishes.components(separatedBy: "，").map { $0.trimmingCharacters(in: .whitespaces) }
         badTags = log.badDishes.isEmpty ? [] : log.badDishes.components(separatedBy: "，").map { $0.trimmingCharacters(in: .whitespaces) }
-        review = log.review
         
         if let moodValue = log.mood {
             selectedMood = MoodType.allCases.first { $0.rawValue == moodValue }
-        }
-        
-        if !log.photoFilenames.isEmpty {
-            Task {
-                var images: [UIImage] = []
-                for filename in log.photoFilenames {
-                    if let image = ImageManager.shared.loadImage(filename: filename) {
-                        images.append(image)
-                    }
-                }
-                await MainActor.run {
-                    self.selectedImages = images
-                }
-            }
         }
     }
     
@@ -812,10 +577,8 @@ struct CheckInView: View {
             editingLog.expense = expense
             editingLog.goodDishes = goodDishesString
             editingLog.badDishes = badDishesString
-            editingLog.review = review
+            editingLog.review = ""
             editingLog.mood = selectedMood?.rawValue
-            
-            updatePhotoForLog(log: editingLog)
         } else {
             let newLog = VisitLog(
                 date: date,
@@ -823,11 +586,9 @@ struct CheckInView: View {
                 peopleCount: peopleCount,
                 goodDishes: goodDishesString,
                 badDishes: badDishesString,
-                review: review,
+                review: "",
                 mood: selectedMood?.rawValue
             )
-            
-            updatePhotoForLog(log: newLog)
             restaurant.logs.append(newLog)
         }
         
@@ -840,18 +601,6 @@ struct CheckInView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             showConfetti = false
             onClose()
-        }
-    }
-    
-    private func updatePhotoForLog(log: VisitLog) {
-        let oldFilenames = log.photoFilenames
-        let newFilenames = selectedImages.compactMap { ImageManager.shared.saveImage($0) }
-        log.photoFilenames = newFilenames
-        
-        for oldFilename in oldFilenames {
-            if !newFilenames.contains(oldFilename) {
-                ImageManager.shared.deleteImage(filename: oldFilename)
-            }
         }
     }
     
@@ -871,6 +620,20 @@ struct CheckInView: View {
 // MARK: - 辅助类型
 enum StickyNoteType {
     case red, gray
+    
+    var icon: String {
+        switch self {
+        case .red: return "hand.thumbsup.fill"
+        case .gray: return "hand.thumbsdown.fill"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .red: return AppTheme.Colors.accent
+        case .gray: return AppTheme.Colors.darkText
+        }
+    }
 }
 
 // MARK: - 内阴影修饰器

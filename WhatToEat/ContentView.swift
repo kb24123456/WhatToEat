@@ -76,173 +76,136 @@ struct ContentView: View {
         }
     }
     
-    // 自定义导航栏组件 - 沉底设计
+    // 自定义导航栏组件 - 悬浮胶囊设计
     private var customTabBar: some View {
         ZStack {
-            // 1. 底座背景：悬浮玻璃效果
+            // 1. 底座背景：悬浮胶囊 - 毛玻璃效果
             HStack(spacing: 0) {
                 // 1. 食库按钮
-                Button {
-                    withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
-                        selectedTab = .library
-                    }
-                } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: TabItem.library.iconName)
-                            .font(.system(size: 24))
-                            .frame(height: 24)
-                            .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
-                        Text(TabItem.library.rawValue)
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .frame(height: 12)
-                    }
-                    .foregroundColor(selectedTab == .library ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.6))
-                    .scaleEffect(selectedTab == .library ? 1.15 : 1.0)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, maxHeight: 60)
-                .scaleEffect(0.96) // 轻微的缩放反馈
-                .withHapticFeedback() // 触感反馈
+                tabButton(
+                    tab: .library,
+                    icon: TabItem.library.iconName,
+                    title: TabItem.library.rawValue
+                )
                 
                 // 2. 吃啥按钮
-                Button {
-                    withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
-                        selectedTab = .home
-                    }
-                } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: TabItem.home.iconName)
-                            .font(.system(size: 24))
-                            .frame(height: 24)
-                            .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
-                        Text(TabItem.home.rawValue)
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .frame(height: 12)
-                    }
-                    .foregroundColor(selectedTab == .home ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.6))
-                    .scaleEffect(selectedTab == .home ? 1.15 : 1.0)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, maxHeight: 60)
-                .scaleEffect(0.96) // 轻微的缩放反馈
-                .withHapticFeedback() // 触感反馈
+                tabButton(
+                    tab: .home,
+                    icon: TabItem.home.iconName,
+                    title: TabItem.home.rawValue
+                )
                 
                 // 3. 中间圆形突出按钮占位
-                Button {}
-                    label: {
-                        Color.clear
-                            .frame(maxWidth: .infinity, maxHeight: 60)
-                    }
-                    .buttonStyle(.plain)
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: 60)
                 
                 // 4. 食记按钮
-                Button {
-                    withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
-                        selectedTab = .friends
-                    }
-                } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: TabItem.friends.iconName)
-                            .font(.system(size: 24))
-                            .frame(height: 24)
-                            .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
-                        Text(TabItem.friends.rawValue)
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .frame(height: 12)
-                    }
-                    .foregroundColor(selectedTab == .friends ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.6))
-                    .scaleEffect(selectedTab == .friends ? 1.15 : 1.0)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, maxHeight: 60)
-                .scaleEffect(0.96) // 轻微的缩放反馈
-                .withHapticFeedback() // 触感反馈
+                tabButton(
+                    tab: .friends,
+                    icon: TabItem.friends.iconName,
+                    title: TabItem.friends.rawValue
+                )
                 
                 // 5. 我的按钮
-                Button {
-                    withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.6, blendDuration: 0.1)) {
-                        selectedTab = .profile
-                    }
-                } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: TabItem.profile.iconName)
-                            .font(.system(size: 24))
-                            .frame(height: 24)
-                            .symbolRenderingMode(.hierarchical) // 图标渲染模式：分层
-                        Text(TabItem.profile.rawValue)
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .frame(height: 12)
-                    }
-                    .foregroundColor(selectedTab == .profile ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.6))
-                    .scaleEffect(selectedTab == .profile ? 1.15 : 1.0)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, maxHeight: 60)
-                .scaleEffect(0.96) // 轻微的缩放反馈
-                .withHapticFeedback() // 触感反馈
+                tabButton(
+                    tab: .profile,
+                    icon: TabItem.profile.iconName,
+                    title: TabItem.profile.rawValue
+                )
             }
-            .padding(.horizontal, AppTheme.Spacing.md) // 内部水平间距
-            .frame(height: 60)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .frame(height: 64)
             .background(
-                // 玻璃材质背景 - 悬浮岛样式
-                RoundedRectangle(cornerRadius: AppTheme.Radius.circle)
-                    .fill(.ultraThinMaterial) // 使用超薄材质，实现玻璃效果
+                // 毛玻璃悬浮胶囊
+                RoundedRectangle(cornerRadius: 32, style: .continuous)
+                    .fill(.ultraThinMaterial)
                     .overlay(
-                        // 白色半透明描边
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.circle)
-                            .stroke(.white.opacity(0.4), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 32, style: .continuous)
+                            .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                     )
-                    .shadow(color: .black.opacity(0.04), radius: 10, y: -5) // 整体悬浮阴影
+                    .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 8)
             )
-            .padding(.horizontal, AppTheme.Spacing.lg) // 左右各留出16pt外边距
-            .padding(.bottom, 10) // 底部留出10pt外边距
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.bottom, 12)
             
             // 2. 中间圆形突出按钮 - 宝石按钮
             Button {
-                // 打开添加餐厅表单（原位展开）
                 withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
                     isAdding = true
                 }
             } label: {
                 ZStack {
-                    // 纯色背景 - 哑光材质
                     Circle()
-                        .fill(AppTheme.Colors.accent) // 使用纯色强调色
-                        .frame(width: 56, height: 56)
-                        .shadow(color: Color(hex: "#FF2442").opacity(0.3), radius: 8, x: 0, y: 4) // 底层投影
+                        .fill(AppTheme.Colors.accent)
+                        .frame(width: 60, height: 60)
+                        // 红色弥散投影
+                        .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 12, x: 0, y: 8)
+                        .shadow(color: AppTheme.Colors.accent.opacity(0.15), radius: 20, x: 0, y: 12)
                         .overlay(
-                            // 微弱内发光：在按钮内部顶端模拟极细的浅色内边缘
                             Circle()
                                 .fill(
                                     LinearGradient(
                                         gradient: Gradient(colors: [
-                                            Color.white.opacity(0.2), // 微弱的白色
-                                            Color.clear // 到透明
+                                            Color.white.opacity(0.25),
+                                            Color.clear
                                         ]),
                                         startPoint: .top,
                                         endPoint: .bottom
                                     )
                                 )
-                                .frame(width: 52, height: 52) // 比按钮略小
+                                .frame(width: 56, height: 56)
                         )
                     
-                    // 加号图标 - 白色加粗
                     Image(systemName: TabItem.add.iconName)
-                        .font(.system(size: 26, weight: .bold)) // 略微加粗
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
                         .matchedGeometryEffect(id: "ADD_BUTTON", in: animationNamespace)
                 }
-                .offset(y: -20) // 向上偏移，突出在导航栏上方
+                .offset(y: -22)
             }
             .buttonStyle(.plain)
-            .scaleEffect(0.96) // 轻微的缩放反馈
-            .withHapticFeedback() // 触感反馈
+            .scaleEffect(0.96)
+            .withHapticFeedback()
         }
         .zIndex(100)
+    }
+    
+    // MARK: - Tab Button with Milky Bubble
+    private func tabButton(tab: TabItem, icon: String, title: String) -> some View {
+        let isSelected = selectedTab == tab
+        
+        return Button {
+            withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.65, blendDuration: 0.1)) {
+                selectedTab = tab
+            }
+        } label: {
+            ZStack {
+                // Milky Bubble 背板（选中时显示）
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white)
+                        .frame(width: 56, height: 44)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                        .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
+                        .transition(.scale.combined(with: .opacity))
+                }
+                
+                VStack(spacing: 3) {
+                    Image(systemName: icon)
+                        .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
+                        .frame(height: 22)
+                        .symbolRenderingMode(.hierarchical)
+                    
+                    Text(title)
+                        .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .rounded))
+                        .frame(height: 10)
+                }
+                .foregroundColor(isSelected ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.7))
+            }
+            .frame(maxWidth: .infinity, maxHeight: 60)
+        }
+        .buttonStyle(.plain)
+        .withHapticFeedback()
     }
 }
 
