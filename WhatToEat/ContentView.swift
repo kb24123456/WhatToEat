@@ -51,41 +51,16 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
+            .fullScreenCover(isPresented: $isAdding) {
+                AddRestaurantView(onClose: {
+                    withAnimation {
+                        isAdding = false
+                    }
+                })
+            }
+
             if !isTabBarHidden {
                 customTabBar
-            }
-            
-            if isAdding {
-                ZStack {
-                    Color.black.opacity(0.3)
-                        .edgesIgnoringSafeArea(.all)
-                        .onTapGesture {
-                            withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
-                                isAdding = false
-                            }
-                        }
-                    
-                    AddRestaurantView(onClose: { 
-                        withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
-                            isAdding = false
-                        }
-                    })
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                                .fill(AppTheme.Colors.background)
-                                .shadow(
-                                    color: AppTheme.Shadows.base.color,
-                                    radius: AppTheme.Shadows.base.radius,
-                                    x: AppTheme.Shadows.base.x,
-                                    y: AppTheme.Shadows.base.y
-                                )
-                        )
-                        .matchedGeometryEffect(id: "ADD_BUTTON", in: animationNamespace)
-                        .padding(AppTheme.Spacing.lg)
-                }
-                .zIndex(1000)
             }
         }
         .ignoresSafeArea(.keyboard)

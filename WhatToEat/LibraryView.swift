@@ -61,7 +61,7 @@ struct LibraryView: View {
     // MARK: - 生命周期
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Color(hex: "#FBF9F7")
+            AppTheme.Colors.softBackground
                 .ignoresSafeArea()
             
             VStack(alignment: .leading, spacing: 0) {
@@ -141,7 +141,7 @@ private struct HeaderView: View {
             Text("吃啥呢")
                 .font(AppTheme.Fonts.largeTitle)
                 .fontWeight(.bold)
-                .foregroundColor(Color(hex: "#443F3B")) // 比textPrimary稍浅的磨砂黑，增加呼吸感
+                .foregroundColor(AppTheme.Colors.textPrimary) // 使用统一的文本主色
                 .tracking(2) // 增加字体间距
             
             // 2. 城市选择器
@@ -168,7 +168,7 @@ private struct HeaderView: View {
                                 .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
                         )
                 )
-                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+                .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
             }
             .buttonStyle(.plain)
             
@@ -189,13 +189,13 @@ private struct HeaderView: View {
                             .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
                     )
             )
-            .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+            .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
             // 使用统一的输入框焦点效果修饰符
             .withFocusedInputEffects(isFocused: $isSearchFocused)
         }
         .padding(.horizontal, AppTheme.Spacing.lg)
         .padding(.vertical, AppTheme.Spacing.sm)
-        .background(Color(hex: "#FBF9F7")) // 与全局背景色保持一致
+        .background(AppTheme.Colors.softBackground) // 与全局背景色保持一致
     }
 }
     

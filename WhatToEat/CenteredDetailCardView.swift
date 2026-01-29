@@ -50,7 +50,7 @@ struct CenteredDetailCardView: View {
                     detailCard
                         .frame(width: screenWidth, height: cardHeight)
                         .cornerRadius(AppTheme.Radius.base)
-                        .shadow(color: Color.black.opacity(0.4), radius: 25, x: 0, y: 15)
+                        .shadow(color: Color.black.opacity(0.03), radius: 10, x: 0, y: 15)
                     
                     Spacer()
                 }

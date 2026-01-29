@@ -81,7 +81,7 @@ struct RestaurantCard: View {
                     }
                     .scaleEffect(1.02)
                     .rotationEffect(.degrees(-1.5))
-                    .shadow(color: Color.black.opacity(0.2), radius: 10, x: 4, y: 6)
+                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 4, y: 6)
                     
                     ZStack(alignment: .topTrailing) {
                         VStack(alignment: .leading, spacing: 0) {
@@ -216,8 +216,8 @@ struct RestaurantCard: View {
                             .stroke(Color.black.opacity(0.015), lineWidth: 1)
                     }
                 )
-                .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 10)
-                .shadow(color: Color.black.opacity(0.02), radius: 2, x: 0, y: 2)
+                .shadow(color: Color.black.opacity(0.04), radius: 10, x: 0, y: 10)
+                .shadow(color: Color.black.opacity(0.01), radius: 2, x: 0, y: 2)
                 .cornerRadius(AppTheme.Radius.base)
             } else {
                 EmptyView()

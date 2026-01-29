@@ -1,28 +1,110 @@
 import SwiftUI
 
 struct AppTheme {
-    // MARK: - 1. 配色方案 (小红书红 + 奶油系)
+    // MARK: - 1. 配色方案 (Premium Soft UI - 柔和中性色)
     struct Colors {
-        static let background = Color.white
-        static let navigationBar = Colors.background // 导航栏颜色 = 背景颜色，自动跟随背景色变化
+        // 背景色系统
+        static let background = Color(hex: "#F8F9FB") // 柔和的浅灰背景
+        static let navigationBar = Colors.background
         static let card = Color.white
-        static let textPrimary = Color(hex: "#332E2B")
-        static let textSecondary = Color(hex: "#7D7770") // 加深5%，增加纸质书写感
         
-        // 🔴 核心强调色（小红书红）
-        static let accent = Color(hex: "#FF2442")
+        // 文字色系统 (柔和半透明)
+        static let textPrimary = Color(hex: "#2C3E50") // 深蓝灰，柔和不刺眼
+        static let textSecondary = Color(hex: "#7F8C8D").opacity(0.9) // 柔和 secondary
+        static let textTertiary = Color(hex: "#95A5A6").opacity(0.7) // 更淡的辅助文字
         
-        // ✅ 补齐 primary 颜色（报错的关键）
-        static let primary = Color(hex: "#5796E6") // 湖蓝色
-        static let secondary = Color(hex: "#FFB347") // 蛋黄橙
-        static let success = Color(hex: "#43C59E") // 碧绿色
-        static let price = Color(hex: "#ff96a4") // 人均消费颜色
+        // 🔴 核心强调色（带渐变的柔和红）
+        static let accent = Color(hex: "#FF6B6B")
+        static let accentGradient = LinearGradient(
+            colors: [Color(hex: "#FF6B6B"), Color(hex: "#FF5252")],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
         
-        static let lightRed = Color(hex: "#FFE8EE")
-        static let lightBlue = Color(hex: "#EBF3FF")
-        static let lightGreen = Color(hex: "#E8F7F2")
-        static let lightGray = Color(hex: "#F5F5F5") // 浅灰色，用于评价信息背景
-        static let divider = Color.black.opacity(0.05)
+        // ✅ 辅助色系
+        static let primary = Color(hex: "#5796E6")
+        static let secondary = Color(hex: "#FFB347")
+        static let success = Color(hex: "#43C59E")
+        static let price = Color(hex: "#FF9AA2") // 更柔和的人均消费色
+        
+        // 柔和背景色
+        static let lightRed = Color(hex: "#FFE8EE").opacity(0.8)
+        static let lightBlue = Color(hex: "#EBF3FF").opacity(0.8)
+        static let lightGreen = Color(hex: "#E8F7F2").opacity(0.8)
+        static let lightGray = Color(hex: "#F0F2F5") // 收据风格输入框背景
+        static let softBackground = Color(hex: "#F8F9FB")
+        static let divider = Color.black.opacity(0.04) // 更淡的分隔线
+        
+        // Glassmorphism 专用
+        static let glassWhite = Color.white.opacity(0.3)
+        static let glassBorder = Color.white.opacity(0.5)
+        
+        // Premium Soft UI 专用
+        static let softSecondary = Color(hex: "#A2AAB1")
+        static let milkyWhite = Color.white.opacity(0.95)
+        static let shadowColor = Color.black.opacity(0.04)
+        
+        // MARK: - 语义化补齐
+        /// 破坏性颜色，用于删除、取消等警示操作
+        static let destructive = Color(hex: "#FF3B30")
+        /// 警告颜色，用于智能识别不确定时的提示
+        static let warning = Color(hex: "#FF9500")
+        
+        // MARK: - 极致细节专用
+        /// 极致边缘高光色 (Rim Light)，用于 overlay 描边，提升物理厚度感
+        static let rimLight = Color.white.opacity(0.6)
+        
+        /// 奶脂玻璃蒙层渐变：用于图片底部的文字承载区
+        static let milkyOverlayGradient = LinearGradient(
+            colors: [
+                Color.white.opacity(0),
+                Color.white.opacity(0.4),
+                Colors.milkyWhite // 使用你已有的 milkyWhite
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        
+        /// 幽灵文字颜色：用于卡片背景的大数字水印（参考图中的 6% 透明度）
+        static let ghostText = Color.black.opacity(0.06)
+        
+        // MARK: - 常用硬编码颜色统一
+        static let darkText = Color(hex: "#1A1A1A")
+        static let mediumGray = Color(hex: "#525252")
+        static let lightText = Color(hex: "#999999")
+        static let lighterGray = Color(hex: "#BBBBBB")
+        static let ultraLightGray = Color(hex: "#CCCCCC")
+        static let warmBackground = Color(hex: "#FBF9F7")
+        static let warmGray = Color(hex: "#F5F3F0")
+        static let cardBackground = Color(hex: "#F8F8F8")
+        static let separatorGray = Color(hex: "#E0E0E0")
+        static let darkBackground = Color(hex: "#2C2C2C")
+        static let brownText = Color(hex: "#332E2B")
+        static let darkBrown = Color(hex: "#8B7355")
+        
+        // MARK: - 情绪颜色
+        static let moodSatisfied = Color(hex: "#FFB3BA")
+        static let moodNeutral = Color(hex: "#E8E8E8")
+        static let moodTerrible = Color(hex: "#666666")
+        static let moodAmazing = Color(hex: "#FFE566")
+        
+        // MARK: - 图标颜色
+        static let iconOrange = Color(hex: "#FF8C42")
+        static let iconPurple = Color(hex: "#6B5B95")
+        static let iconBlue = Color(hex: "#007AFF")
+        static let iconAmber = Color(hex: "#FF9F43")
+        
+        // MARK: - 状态颜色
+        static let successLight = Color(hex: "#E8F5E9")
+        static let warningLight = Color(hex: "#FFF3E0")
+        static let warningBorder = Color(hex: "#FF9F43").opacity(0.5)
+        
+        // MARK: - 五彩纸屑颜色
+        static let confettiRed = Color(hex: "#FF2442")
+        static let confettiBlue = Color(hex: "#5796E6")
+        static let confettiGreen = Color(hex: "#43C59E")
+        static let confettiOrange = Color(hex: "#FFB347")
+        static let confettiPurple = Color(hex: "#9966FF")
     }
     
     // MARK: - 6. 设计规则
@@ -69,14 +151,24 @@ struct AppTheme {
         static let circle: CGFloat = 100
     }
     
-    // MARK: - 5. 阴影系统 (✅ 解决 Shadows 报错)
+    // MARK: - 5. 阴影系统 (Premium Soft UI)
     struct Shadows {
         struct ShadowItem {
             let color: Color; let radius: CGFloat; let x: CGFloat; let y: CGFloat
         }
+        // Ambient: 大范围柔和阴影
+        static let ambient = ShadowItem(color: Color.black.opacity(0.04), radius: 20, x: 0, y: 10)
+        // Defining: 小范围定义阴影
+        static let defining = ShadowItem(color: Color.black.opacity(0.06), radius: 5, x: 0, y: 2)
+        // Premium Card: 双层阴影组合
+        static let premium = (ambient: ambient, defining: defining)
+        // Light: 轻微阴影
         static let light = ShadowItem(color: Color.black.opacity(0.03), radius: 10, x: 0, y: 4)
+        // Base: 基础阴影
         static let base = ShadowItem(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 8)
-        static let elevated = ShadowItem(color: Color(hex: "#FF2442").opacity(0.15), radius: 12, x: 0, y: 6)
+        // Elevated: 弥散阴影（用于浮动按钮）
+        static let elevated = ShadowItem(color: Color(hex: "#FF6B6B").opacity(0.3), radius: 12, x: 0, y: 8)
+        static let elevatedSecondary = ShadowItem(color: Color(hex: "#FF6B6B").opacity(0.15), radius: 20, x: 0, y: 12)
     }
     
     // 兼容别名
@@ -89,19 +181,33 @@ struct AppTheme {
         static let restaurantCoverRatio: CGFloat = 3/4
     }
     
-    // MARK: - 7. 二次编辑动效规范
+    // MARK: - 7. Premium Soft UI 动效规范
     struct Animations {
-        // 编辑状态切换弹簧动画（用于信息、印象等）
+        // 标准弹簧动画 (response: 0.55, dampingFraction: 0.82)
+        static let standardSpring = Animation.spring(response: 0.55, dampingFraction: 0.82)
+        
+        // 快速弹簧动画
+        static let quickSpring = Animation.spring(response: 0.35, dampingFraction: 0.8)
+        
+        // 编辑状态切换弹簧动画
         static let editingSpring = Animation.spring(response: 0.35, dampingFraction: 0.8)
         
         // 标签操作弹簧动画
         static let tagSpring = Animation.spring(response: 0.3, dampingFraction: 0.75)
+        
+        // 交错入场延迟
+        static let staggerDelay: Double = 0.05
         
         // 缩放淡入过渡
         static let transitionScaleOpacity: AnyTransition = .scale.combined(with: .opacity)
         
         // 从顶部滑入过渡
         static let transitionMoveTop: AnyTransition = .move(edge: .top).combined(with: .opacity)
+        
+        // 交错入场动画
+        static func staggeredEntrance(index: Int) -> Animation {
+            standardSpring.delay(Double(index) * staggerDelay)
+        }
         
         // 触感反馈生成器
         static let lightImpact = UIImpactFeedbackGenerator(style: .light)

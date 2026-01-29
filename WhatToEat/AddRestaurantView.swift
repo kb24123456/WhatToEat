@@ -3,76 +3,72 @@ import SwiftData
 import MapKit
 import PhotosUI
 
-// MARK: - TextField占位符扩展
-struct PlaceholderModifier: ViewModifier {
-    var text: String
-    var color: Color
-    var isEmpty: Bool
-    
-    func body(content: Content) -> some View {
-        ZStack(alignment: .leading) {
-            if isEmpty {
-                Text(text)
-                    .foregroundColor(color)
-                    .font(AppTheme.Fonts.body)
-                    .padding(.leading, AppTheme.Spacing.md)
-            }
-            content
-        }
-    }
-}
-
-extension View {
-    func placeholder(_ text: String, color: Color = .gray, isEmpty: Bool) -> some View {
-        modifier(PlaceholderModifier(text: text, color: color, isEmpty: isEmpty))
-    }
-}
-
+// MARK: - 添加餐厅页面（全新重构版）
 struct AddRestaurantView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     
-    var onClose: (() -> Void)? = nil
+    var onClose: (() -> Void)?
     
-    // 获取所有餐厅数据，用于动态生成品类选项
     @Query private var allRestaurants: [Restaurant]
-    
-    // 定位管理器
     @ObservedObject private var locationManager = LocationManager.shared
     
-    // --- 1. 表单基础数据 ---
+    // MARK: - Form Data
     @State private var name = ""
     @State private var category = ""
     @State private var district = ""
     @State private var city = ""
     @State private var rating = 0.0
     @State private var review = ""
-    @State private var tagsInput = ""
-    
-    // --- 2. 位置相关 ---
     @State private var address = ""
     @State private var latitude = 0.0
     @State private var longitude = 0.0
-    @State private var showLocationPicker = false
-    
-    // --- 3. 封面图相关 ---
     @State private var coverImages: [UIImage] = []
+    @State private var selectedTags: [String] = []
+    
+    // MARK: - UI States
+    @State private var showSmartSearch = false
     @State private var showActionSheet = false
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
+    @State private var showLocationPicker = false
+    @State private var showConfetti = false
     
-    // --- 4. 地图智能搜索相关 ---
-    @State private var poiQuery = ""
-    @State private var searchResults: [MKMapItem] = []
-    @State private var isSearching = false
+    // MARK: - Editing States
+    @State private var isEditingReview = false
+    @State private var editedReview = ""
+    @State private var isEditingTags = false
+    @State private var newTagInput = ""
     
-    // --- 5. 键盘高度监听 ---
-    @State private var keyboardHeight: CGFloat = 0
-    @State private var keyboardVisible = false
+    // MARK: - Animation States
+    @State private var isAppeared = false
+    @State private var highlightName = false
+    @State private var highlightDistrict = false
+    @State private var highlightCategory = false
+    @State private var highlightAddress = false
     
-    // --- 6. UI状态 ---
-    @State private var isAutoFilled = false
-    @State private var selectedTags: [String] = []
+    // 自动填充级联动画状态
+    @State private var nameFieldOffset: CGFloat = 20
+    @State private var districtFieldOffset: CGFloat = 20
+    @State private var categoryFieldOffset: CGFloat = 20
+    @State private var nameFieldOpacity: Double = 0
+    @State private var districtFieldOpacity: Double = 0
+    @State private var categoryFieldOpacity: Double = 0
+    
+    // MARK: - Focus States
+    @FocusState private var reviewIsFocused: Bool
+    @FocusState private var tagInputIsFocused: Bool
+    
+    // MARK: - Category Match Status
+    enum MatchStatus: Equatable {
+        case none
+        case autoMatched(matchedCategory: String)
+        case manuallyRequired
+    }
+    
+    @State private var categoryMatchStatus: MatchStatus = .none
+    @State private var categoryMatchMessage: String = ""
     
     let presetTags = ["氛围感", "老字号", "二刷", "排队王", "性价比"]
     
@@ -85,14 +81,48 @@ struct AddRestaurantView: View {
     }
     
     private var closeAction: () -> Void {
-        return onClose ?? { }
+        return onClose ?? { dismiss() }
     }
     
+    // MARK: - Body
     var body: some View {
-        ZStack {
-            backgroundOverlay
-            formContent
-                .background(formBackground)
+        GeometryReader { geometry in
+            ZStack {
+                backgroundGradient
+                
+                scrollContent(geometry: geometry)
+                    .safeAreaInset(edge: .bottom) {
+                        // 保存按钮放入 safeAreaInset，ScrollView 会自动避开
+                        saveButton
+                            .padding(.horizontal, 40)
+                            .padding(.bottom, 20)
+                            .background(
+                                LinearGradient(
+                                    colors: [
+                                        AppTheme.Colors.softBackground.opacity(0),
+                                        AppTheme.Colors.softBackground,
+                                        AppTheme.Colors.softBackground
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .ignoresSafeArea()
+                                .frame(height: 100)
+                            )
+                    }
+                
+                // Confetti 特效
+                if showConfetti {
+                    ConfettiView()
+                        .allowsHitTesting(false)
+                }
+                
+                // 关闭按钮（放在最上层确保可点击）
+                closeButton
+                    .padding(.top, 20)
+                    .padding(.leading, 20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         }
         .confirmationDialog("选择封面图来源", isPresented: $showActionSheet) {
             Button("拍照") { showCamera = true }
@@ -103,903 +133,854 @@ struct AddRestaurantView: View {
             CameraPickerView(selectedImages: $coverImages)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
-        .onChange(of: photoPickerItem) { _, newValue in
-            handlePhotoPickerChange(newValue)
-        }
         .sheet(isPresented: $showLocationPicker) {
             LocationPicker { item in
                 handleLocationSelect(item)
             }
         }
+        .sheet(isPresented: $showSmartSearch) {
+            SmartSearchSheet(
+                selectedName: $name,
+                selectedAddress: $address,
+                selectedDistrict: $district,
+                selectedCategory: $category,
+                selectedLatitude: $latitude,
+                selectedLongitude: $longitude,
+                onAutoFill: handleAutoFill
+            )
+            .presentationDetents([.fraction(0.66), .large])
+            .presentationDragIndicator(.visible)
+        }
         .onAppear {
             handleViewAppear()
-        }
-        .onDisappear {
-            removeKeyboardObservers()
-        }
-        .onChange(of: locationManager.currentCity) { _, newValue in
-            handleCityChange(newValue)
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                isAppeared = true
+            }
         }
     }
     
-    private var backgroundOverlay: some View {
-        Color.black.opacity(0.3)
-            .edgesIgnoringSafeArea(.all)
-            .onTapGesture {
+    // MARK: - Background
+    private var backgroundGradient: some View {
+        AppTheme.Colors.softBackground
+            .ignoresSafeArea()
+    }
+    
+    // MARK: - Close Button
+    private var closeButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 closeAction()
             }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .foregroundStyle(.ultraThinMaterial)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 1)
+        }
     }
     
-    // MARK: - 主表单内容
-    private var formContent: some View {
-        VStack(spacing: 0) {
-            closeButton
+    // MARK: - Scroll Content
+    private func scrollContent(geometry: GeometryProxy) -> some View {
+        ScrollView(showsIndicators: false) {
+            ScrollViewReader { proxy in
+                VStack(spacing: 24) {
+                    Spacer().frame(height: 70)
+                    
+                    // 餐厅名片模块（封面图+基础信息并排）
+                    restaurantCardSection
+                    
+                    // 地址信息行（一行式展示，未填时隐藏）
+                    if !address.isEmpty {
+                        addressSubline
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    
+                    // 智能搜索入口（移动到评分组件上方）
+                    smartSearchButton
+                    
+                    // 评分模块（更饱满的白色卡片）
+                    ratingSection
+                    
+                    // 评价卡片
+                    reviewSection
+                    
+                    // 标签卡片
+                    tagsSection
+                        .id("TagModule")
+                        .onChange(of: isEditingTags) { _, newValue in
+                            if newValue {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                        proxy.scrollTo("TagModule", anchor: .bottom)
+                                    }
+                                }
+                            }
+                        }
+                    
+                    Spacer().frame(height: 120)
+                }
+                .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .offset(y: isAppeared ? 0 : 50)
+        .opacity(isAppeared ? 1 : 0)
+    }
+    
+    // MARK: - 餐厅名片模块（Premium Soft UI）
+    private var restaurantCardSection: some View {
+        HStack(spacing: 12) {
+            // 左侧：缩略封面图（1:1正方形）
+            thumbnailImageView
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fit)
             
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    CoverImageView(coverImages: $coverImages, showActionSheet: $showActionSheet)
-                    
-                    Color.clear.frame(height: 12)
-                    
-                    SearchBar(poiQuery: $poiQuery, searchResults: $searchResults, isSearching: $isSearching, searchPOI: searchPOI, fillInfoFromMapItem: fillInfoFromMapItem)
-                    
-                    Color.clear.frame(height: 8)
-                    
-                    NameTextField(name: $name, isAutoFilled: isAutoFilled)
-                    
-                    Color.clear.frame(height: 8)
-                    
-                    DistrictCategoryRow(district: $district, category: $category, districtOptions: districtOptions, categoryOptions: categoryOptions)
-                    
-                    Color.clear.frame(height: 8)
-                    
-                    RatingRow(rating: $rating)
-                    
-                    Color.clear.frame(height: 8)
-                    
-                    ReviewSection(review: $review)
-                    
-                    Color.clear.frame(height: 8)
-                    
-                    TagSystemSection(
-                        tagsInput: $tagsInput,
-                        selectedTags: $selectedTags,
-                        presetTags: presetTags
-                    )
-                    
-                    Color.clear.frame(height: 24)
-                    
-                    ActionButtonsRow(
-                        onClose: onClose,
-                        dismissAction: closeAction,
-                        saveAction: saveRestaurant,
-                        isValid: !name.isEmpty && !address.isEmpty && !district.isEmpty
-                    )
-                    
-                    Color.clear.frame(height: 40)
+            // 右侧：基础信息容器
+            infoPodContainer
+                .frame(maxWidth: .infinity)
+        }
+        .frame(height: 160)
+        .padding(16)
+        .premiumCard()
+        .overlay(
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .stroke(highlightName ? AppTheme.Colors.success.opacity(0.3) : Color.clear, lineWidth: 2)
+        )
+        .animation(AppTheme.Animations.quickSpring, value: highlightName)
+    }
+    
+    // MARK: - 左侧缩略封面图
+    private var thumbnailImageView: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(AppTheme.Colors.lightGray)
+            
+            Group {
+                if let firstImage = coverImages.first {
+                    Image(uiImage: firstImage)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(AppTheme.Colors.lighterGray)
+                        Text("添加照片")
+                            .font(.system(size: 11))
+                            .foregroundColor(AppTheme.Colors.lightText)
+                    }
                 }
             }
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.bottom, 40)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            
+            // 微弱边框
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+        }
+        .onTapGesture {
+            showActionSheet = true
         }
     }
     
-    private var closeButton: some View {
-        HStack {
-            Button {
-                closeAction()
+    // MARK: - 右侧基础信息容器
+    private var infoPodContainer: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // 餐厅名称（带级联动画）
+            nameTextField
+                .offset(x: nameFieldOffset)
+                .opacity(nameFieldOpacity)
+            
+            // 区域选择器（极简胶囊，带级联动画）
+            districtCapsule
+                .offset(x: districtFieldOffset)
+                .opacity(districtFieldOpacity)
+            
+            // 品类选择器（极简胶囊，带级联动画）
+            categoryCapsule
+                .offset(x: categoryFieldOffset)
+                .opacity(categoryFieldOpacity)
+        }
+    }
+    
+    private var nameTextField: some View {
+        TextField("餐厅名称", text: $name)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundColor(AppTheme.Colors.darkText)
+            .lineLimit(2)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppTheme.Colors.cardBackground)
+            )
+    }
+    
+    private var districtCapsule: some View {
+        Menu {
+            ForEach(districtOptions, id: \.self) { option in
+                Button(option) { district = option }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "mappin")
+                    .font(.system(size: 10))
+                Text(district.isEmpty ? "选择区域" : district)
+                    .font(.system(size: 13))
+            }
+            .foregroundColor(district.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.darkText)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(district.isEmpty ? AppTheme.Colors.lightGray : AppTheme.Colors.successLight)
+            )
+        }
+    }
+    
+    private var categoryCapsule: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Menu {
+                ForEach(categoryOptions, id: \.self) { option in
+                    Button(option) { 
+                        category = option
+                        categoryMatchStatus = .none
+                    }
+                }
             } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.primary.opacity(0.7))
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
-                    )
-                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                HStack(spacing: 4) {
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 10))
+                    Text(category.isEmpty ? "选择品类" : category)
+                        .font(.system(size: 13))
+                }
+                .foregroundColor(category.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.darkText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(category.isEmpty ? AppTheme.Colors.lightGray : AppTheme.Colors.warningLight)
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(categoryMatchStatus == .manuallyRequired ? AppTheme.Colors.warningBorder : Color.clear, lineWidth: 1)
+                )
             }
-            .padding(.top, 12)
-            .padding(.leading, 20)
             
-            Spacer()
-            
-            Text("添加餐厅")
-                .font(.headline)
-                .padding(.top, 12)
-            
-            Spacer()
-            
-            Color.clear.frame(width: 36, height: 36)
-                .padding(.trailing, 20)
+            // 品类匹配提示
+            if categoryMatchStatus == .manuallyRequired {
+                Text("💡 未能识别，请手动选择")
+                    .font(.system(size: 10))
+                    .foregroundColor(AppTheme.Colors.iconAmber)
+                    .padding(.leading, 4)
+                    .transition(.opacity)
+            }
         }
     }
     
-    // MARK: - 表单背景
-    private var formBackground: some View {
-        Color.white
+    // MARK: - 地址信息行（一行式展示）
+    private var addressSubline: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "mappin.and.ellipse")
+                .font(.system(size: 12))
+                .foregroundColor(Color(hex: "#999999"))
+            
+            Text(address)
+                .font(.caption)
+                .foregroundColor(Color.secondary)
+                .lineLimit(1)
+            
+            Spacer()
+            
+            Button {
+                showLocationPicker = true
+            } label: {
+                HStack(spacing: 2) {
+                    Image(systemName: "map")
+                        .font(.system(size: 10))
+                    Text("地图")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundColor(AppTheme.Colors.iconBlue)
+            }
+        }
+        .padding(.horizontal, 4)
     }
     
-    // MARK: - 事件处理方法
-    private func handlePhotoPickerChange(_ newValue: PhotosPickerItem?) {
-        Task {
-            if let data = try? await newValue?.loadTransferable(type: Data.self),
-               let uiImage = UIImage(data: data) {
-                await MainActor.run { self.coverImages = [uiImage] }
+    private var photoPickerButton: some View {
+        Button {
+            showActionSheet = true
+        } label: {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 14))
+                .foregroundColor(Color(hex: "#1A1A1A"))
+                .frame(width: 40, height: 40)
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 3)
+        }
+    }
+    
+    // MARK: - Smart Search Button（智能搜索入口）
+    private var smartSearchButton: some View {
+        Button {
+            showSmartSearch = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.accent)
+                
+                Text("智能搜索：输入店名，一键填充所有信息")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.moodTerrible)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.ultraLightGray)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(
+                Capsule()
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
+                    .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.8), Color.white.opacity(0.4)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+    
+    // MARK: - Rating Section（Premium Soft UI）
+    private var ratingSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("评分")
+                .font(AppTheme.Fonts.headline)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+            
+            // 星星
+            HStack(spacing: 12) {
+                ForEach(0..<5) { index in
+                    Button {
+                        withAnimation(AppTheme.Animations.quickSpring) {
+                            rating = Double(index + 1)
+                        }
+                    } label: {
+                        Image(systemName: index < Int(rating) ? "star.fill" : "star")
+                            .font(.system(size: 36, weight: .medium))
+                            .foregroundColor(Color(hex: index < Int(rating) ? "#FFB800" : "#E8E8E8"))
+                            .scaleEffect(index < Int(rating) ? 1.0 : 0.9)
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 8)
+        }
+        .padding(20)
+        .premiumCard()
+    }
+    
+    // MARK: - Review Section（Premium Soft UI）
+    private var reviewSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("评价")
+                .font(AppTheme.Fonts.headline)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
+            
+            reviewCardContent
+                .overlay(alignment: .bottomTrailing) {
+                    if isEditingReview {
+                        reviewBubbleButtons
+                    }
+                }
+        }
+        .onTapGesture {
+            if !isEditingReview {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    isEditingReview = true
+                    editedReview = review
+                }
+            }
+        }
+        .animation(AppTheme.Animations.standardSpring, value: isEditingReview)
+    }
+
+    private var reviewCardContent: some View {
+        VStack(spacing: 0) {
+            reviewContent
+                .frame(minHeight: isEditingReview ? 150 : 80)
+                .id(isEditingReview)
+        }
+        .glassmorphism(tint: .white)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(AppTheme.Colors.glassBorder, lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 10)
+        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+        .animation(AppTheme.Animations.standardSpring, value: isEditingReview)
+    }
+
+    private var reviewBubbleButtons: some View {
+        HStack(spacing: 12) {
+            cancelBubble {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    isEditingReview = false
+                    editedReview = review
+                }
+            }
+
+            saveBubble {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    review = editedReview
+                    isEditingReview = false
+                }
+            }
+        }
+        .padding(.trailing, 16)
+        .offset(y: 18)
+        .transition(.scale.combined(with: .opacity))
+        .animation(AppTheme.Animations.standardSpring, value: isEditingReview)
+    }
+    
+    @ViewBuilder
+    private var reviewContent: some View {
+        if isEditingReview {
+            ZStack(alignment: .center) {
+                TextField(review.isEmpty ? "添加你的点评..." : review, text: $editedReview, axis: .vertical)
+                    .font(.body)
+                    .foregroundColor(AppTheme.Colors.brownText)
+                    .lineSpacing(4)
+                    .multilineTextAlignment(.center)
+                    .focused($reviewIsFocused)
+                    .scrollContentBackground(.hidden)
+                    .padding(20)
+                    .padding(.bottom, 10)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .onAppear {
+                        reviewIsFocused = true
+                    }
+                    .onDisappear {
+                        reviewIsFocused = false
+                    }
+            }
+            .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
+        } else {
+            Text(review.isEmpty ? "添加你的点评..." : review)
+                .font(.body)
+                .foregroundColor(review.isEmpty ? AppTheme.Colors.lighterGray : AppTheme.Colors.mediumGray)
+                .lineSpacing(4)
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+        }
+    }
+    
+    // MARK: - Tags Section（详情页同款）
+    // MARK: - Tags Section（Premium Soft UI）
+    private var tagsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("标签")
+                .font(AppTheme.Fonts.headline)
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
+
+            tagsCardContent
+                .overlay(alignment: .bottomTrailing) {
+                    if isEditingTags {
+                        tagsBubbleButtons
+                    }
+                }
+        }
+        .onTapGesture {
+            if !isEditingTags {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    isEditingTags = true
+                }
+            }
+        }
+        .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
+    }
+
+    private var tagsBubbleButtons: some View {
+        HStack(spacing: 12) {
+            cancelBubble {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    isEditingTags = false
+                    newTagInput = ""
+                }
+            }
+
+            saveBubble {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    isEditingTags = false
+                    newTagInput = ""
+                }
+            }
+        }
+        .padding(.trailing, 16)
+        .offset(y: 18)
+        .transition(.scale.combined(with: .opacity))
+        .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
+    }
+
+    private var tagsCardContent: some View {
+        VStack(spacing: 0) {
+            tagsFlowContent
+                .padding(20)
+
+            if isEditingTags {
+                Divider()
+                    .background(AppTheme.Colors.glassBorder)
+                    .padding(.horizontal, 20)
+
+                presetTagsSection
+                    .padding(20)
+            }
+        }
+        .glassmorphism(tint: .white)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(AppTheme.Colors.glassBorder, lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 10)
+        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+    }
+    
+    private var tagsFlowContent: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(selectedTags, id: \.self) { tag in
+                tagSticker(tag)
+            }
+            
+            if isEditingTags {
+                TextField("新标签...", text: $newTagInput)
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(hex: "#1A1A1A"))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.5))
+                    )
+                    .focused($tagInputIsFocused)
+                    .frame(minWidth: 80)
+                    .onSubmit {
+                        addNewTag()
+                    }
+                    .onAppear {
+                        tagInputIsFocused = true
+                    }
+            } else if selectedTags.isEmpty {
+                Text("点击添加标签...")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(hex: "#BBBBBB"))
+                    .padding(.vertical, 8)
+            }
+        }
+    }
+    
+    private var presetTagsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("推荐标签")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTheme.Colors.lightText)
+            
+            FlowLayout(spacing: 8) {
+                ForEach(presetTags.filter { !selectedTags.contains($0) }, id: \.self) { tag in
+                    presetTagButton(tag)
+                }
+            }
+        }
+    }
+    
+    private func tagSticker(_ tag: String) -> some View {
+        HStack(spacing: 4) {
+            Text(tag)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(Color(hex: "#1A1A1A"))
+            
+            if isEditingTags {
+                Button {
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                        selectedTags.removeAll { $0 == tag }
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.lightText)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(AppTheme.Colors.warmGray)
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                )
+        )
+    }
+    
+    private func presetTagButton(_ tag: String) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                selectedTags.append(tag)
+            }
+        } label: {
+            Text(tag)
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.Colors.moodTerrible)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(0.5))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(AppTheme.Colors.separatorGray, lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    // MARK: - Save Button（超大胶囊按钮+红色弥散阴影）
+    // MARK: - Save Button（Premium Floating Action）
+    private var saveButton: some View {
+        Button {
+            saveRestaurant()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 16, weight: .bold))
+                Text("保存餐厅")
+                    .font(.system(size: 17, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(
+                Capsule()
+                    .fill(AppTheme.Colors.accentGradient)
+            )
+            // Premium diffused shadow system
+            .shadow(
+                color: AppTheme.Colors.accent.opacity(0.3),
+                radius: 12,
+                x: 0,
+                y: 8
+            )
+            .shadow(
+                color: AppTheme.Colors.accent.opacity(0.15),
+                radius: 20,
+                x: 0,
+                y: 12
+            )
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .disabled(name.isEmpty)
+        .opacity(name.isEmpty ? 0.6 : 1.0)
+    }
+    
+    // MARK: - Bubble Buttons
+    private func cancelBubble(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(AppTheme.Colors.darkBackground)
+                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+                )
+        }
+    }
+    
+    private func saveBubble(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(AppTheme.Colors.accent)
+                        .shadow(color: AppTheme.Shadows.elevated.color, radius: 8, x: 0, y: 4)
+                )
+        }
+    }
+    
+    // MARK: - Helper Methods
+    private func addNewTag() {
+        let trimmed = newTagInput.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty && !selectedTags.contains(trimmed) else { return }
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+            selectedTags.append(trimmed)
+            newTagInput = ""
         }
     }
     
     private func handleLocationSelect(_ item: MKMapItem) {
-        self.name = item.name ?? self.name
-        self.address = item.placemark.title ?? ""
-        self.latitude = item.placemark.coordinate.latitude
-        self.longitude = item.placemark.coordinate.longitude
+        address = "\(item.placemark.subLocality ?? "")\(item.placemark.thoroughfare ?? "")\(item.placemark.subThoroughfare ?? "")"
+        latitude = item.placemark.coordinate.latitude
+        longitude = item.placemark.coordinate.longitude
+    }
+    
+    private func handlePhotoPickerChange(_ newValue: PhotosPickerItem?) {
+        guard let item = newValue else { return }
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let image = UIImage(data: data) {
+                await MainActor.run {
+                    coverImages = [image]
+                }
+            }
+        }
     }
     
     private func handleViewAppear() {
-        if let currentCity = locationManager.currentCity {
-            self.city = currentCity
-        }
-        setupKeyboardObservers()
-    }
-    
-    private func handleCityChange(_ newCity: String?) {
-        if let currentCity = newCity {
-            self.city = currentCity
+        if let firstRestaurant = allRestaurants.first {
+            city = firstRestaurant.city
         }
     }
     
-    // MARK: - 键盘事件监听
-    private func setupKeyboardObservers() {
-        NotificationCenter.default.addObserver(
-            forName: UIResponder.keyboardWillShowNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            self.keyboardVisible = true
+    // MARK: - Auto Fill Handler（呼吸灯高亮效果）
+    private func handleAutoFill() {
+        // 重置动画状态
+        nameFieldOffset = 20
+        districtFieldOffset = 20
+        categoryFieldOffset = 20
+        nameFieldOpacity = 0
+        districtFieldOpacity = 0
+        categoryFieldOpacity = 0
+        
+        // 级联进入动画：名称字段先跳入
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+            nameFieldOffset = 0
+            nameFieldOpacity = 1
+            highlightName = true
         }
         
-        NotificationCenter.default.addObserver(
-            forName: UIResponder.keyboardWillHideNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            self.keyboardVisible = false
-        }
-    }
-    
-    private func removeKeyboardObservers() {
-        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillHideNotification, object: nil)
-    }
-    
-    // MARK: - POI 搜索
-    private func searchPOI() {
-        isSearching = true
-        
-        let request = MKLocalSearch.Request()
-        
-        if !poiQuery.isEmpty {
-            request.naturalLanguageQuery = poiQuery
-        } else {
-            request.naturalLanguageQuery = "餐厅"
+        // 区域字段第二个跳入（延迟 0.15s）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                districtFieldOffset = 0
+                districtFieldOpacity = 1
+                highlightName = false
+                highlightDistrict = true
+            }
         }
         
-        request.resultTypes = .pointOfInterest
-        
-        if let userLocation = locationManager.userLocation {
-            let region = MKCoordinateRegion(center: userLocation.coordinate, latitudinalMeters: 5000, longitudinalMeters: 5000)
-            request.region = region
-        }
-        
-        let search = MKLocalSearch(request: request)
-        search.start { response, error in
-            DispatchQueue.main.async {
-                self.isSearching = false
+        // 品类字段第三个跳入（延迟 0.3s）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                categoryFieldOffset = 0
+                categoryFieldOpacity = 1
+                highlightDistrict = false
+                highlightCategory = true
                 
-                if let error = error {
-                    print("搜索失败: \(error.localizedDescription)")
-                    self.searchResults = []
-                    return
-                }
-                
-                if let response = response {
-                    var filteredResults = response.mapItems.filter { mapItem in
-                        guard let categories = mapItem.pointOfInterestCategory else { return false }
-                        let isRestaurant = categories == .restaurant || categories == .cafe || categories == .foodMarket
-                        
-                        if self.poiQuery.isEmpty {
-                            return isRestaurant
-                        } else {
-                            let name = mapItem.name?.lowercased() ?? ""
-                            let query = self.poiQuery.lowercased()
-                            return isRestaurant && name.contains(query)
-                        }
-                    }
-                    
-                    if let userLocation = self.locationManager.userLocation {
-                        filteredResults.sort { mapItem1, mapItem2 in
-                            let location1 = CLLocation(latitude: mapItem1.placemark.coordinate.latitude, longitude: mapItem1.placemark.coordinate.longitude)
-                            let location2 = CLLocation(latitude: mapItem2.placemark.coordinate.latitude, longitude: mapItem2.placemark.coordinate.longitude)
-                            let distance1 = location1.distance(from: userLocation)
-                            let distance2 = location2.distance(from: userLocation)
-                            return distance1 < distance2
-                        }
-                    }
-                    
-                    self.searchResults = Array(filteredResults.prefix(5))
+                // 设置品类匹配状态
+                if category == "其他" {
+                    categoryMatchStatus = .manuallyRequired
                 } else {
-                    self.searchResults = []
+                    categoryMatchStatus = .autoMatched(matchedCategory: category)
+                    
+                    // 2秒后自动消失
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        withAnimation {
+                            categoryMatchStatus = .none
+                        }
+                    }
                 }
             }
         }
-    }
-    
-    // MARK: - 品类自动映射 (已修复：未匹配到预设品类时返回空字符串)
-    private func mapPOICategoryToOurCategory(_ poiCategory: MKPointOfInterestCategory?) -> String {
-        guard let poiCategory = poiCategory else { return "" }
         
-        switch poiCategory {
-        case .restaurant, .cafe:
-            return "美食"
-        case .hotel:
-            return "酒店"
-        case .museum, .movieTheater:
-            return "娱乐"
-        default:
-            return ""
-        }
-    }
-    
-    // MARK: - 一键填充信息
-    private func fillInfoFromMapItem(_ mapItem: MKMapItem) {
-        name = mapItem.name ?? ""
-        
-        let placemark = mapItem.placemark
-        address = placemark.title ?? ""
-        latitude = placemark.coordinate.latitude
-        longitude = placemark.coordinate.longitude
-        
-        if let cityName = placemark.locality {
-            self.city = cityName
-        }
-        if let districtName = placemark.subLocality {
-            self.district = districtName
-        } else if let administrativeArea = placemark.administrativeArea {
-            self.district = administrativeArea
-        }
-        
-        category = determineCategory(from: mapItem)
-        
-        searchResults = []
-        isAutoFilled = true
-    }
-    
-    // MARK: - 通过多种方式确定品类 (已修复：禁止自动填入"美食")
-    private func determineCategory(from mapItem: MKMapItem) -> String {
-        let presetCategories = CategoryManager.shared.getPresetCategories()
-        let nameToCheck = mapItem.name ?? ""
-        let titleToCheck = mapItem.placemark.title ?? ""
-        let textToCheck = (nameToCheck + titleToCheck).lowercased()
-        
-        let keywordMap: [String: String] = [
-            "火锅": "火锅",
-            "面": "面馆",
-            "粉": "面馆",
-            "咖啡": "咖啡",
-            "奶茶": "饮品",
-            "茶": "饮品",
-            "汉堡": "快餐",
-            "披萨": "西餐",
-            "日料": "日本料理",
-            "寿司": "日本料理",
-            "韩料": "韩国料理",
-            "烧烤": "烧烤",
-            "烤肉": "烧烤",
-            "川菜": "川菜",
-            "粤菜": "粤菜",
-            "湘菜": "湘菜",
-            "鲁菜": "鲁菜",
-            "淮扬菜": "淮扬菜",
-            "东北菜": "东北菜",
-            "西餐": "西餐",
-            "东南亚": "东南亚菜",
-            "泰餐": "东南亚菜",
-            "越南菜": "东南亚菜",
-            "印度菜": "东南亚菜",
-            "甜品": "甜品",
-            "蛋糕": "甜品",
-            "冰淇淋": "甜品",
-            "酒吧": "酒吧",
-            "酒馆": "酒吧",
-            "清吧": "酒吧"
-        ]
-        
-        for (keyword, categoryName) in keywordMap {
-            if textToCheck.contains(keyword.lowercased()) {
-                if presetCategories.contains(categoryName) {
-                    return categoryName
-                }
-                return categoryName
+        // 地址高亮（延迟 0.45s）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                highlightCategory = false
+                highlightAddress = true
             }
         }
         
-        if let poiCategory = mapItem.pointOfInterestCategory {
-            let mappedCategory = mapPOICategoryToOurCategory(poiCategory)
-            if !mappedCategory.isEmpty && presetCategories.contains(mappedCategory) {
-                return mappedCategory
+        // 完成动画（延迟 0.75s）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                highlightAddress = false
             }
+            
+            // 触感反馈：告知用户自动填充已完成
+            UISelectionFeedbackGenerator().selectionChanged()
         }
-        
-        // 修复：未匹配到预设品类时，返回空字符串，禁止自动填入"美食"
-        return ""
     }
     
-    // MARK: - 保存餐厅
     private func saveRestaurant() {
-        Task { @MainActor in
-            // 合并已选标签和输入的标签
-            var allTags = selectedTags
-            let inputTags = tagsInput.components(
-                separatedBy: CharacterSet(charactersIn: ",， ")
-            )
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            allTags.append(contentsOf: inputTags)
-            let finalTags = Array(Set(allTags))
-            
-            let finalCategory = !category.isEmpty ? category : "未分类"
-            let finalRating = rating > 0 ? rating : 3
-            
-            // 城市兜底逻辑：确保城市信息被记录后再创建 Restaurant 对象
-            var finalCity = city
-            if finalCity.isEmpty {
-                // 优先使用 UserDefaults 中保存的城市
-                if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity") {
-                    finalCity = savedCity
-                } else if let currentCity = locationManager.currentCity {
-                    // 其次使用定位获取的当前城市
-                    finalCity = currentCity
-                } else {
-                    // 默认使用重庆
-                    finalCity = "重庆"
-                }
-            }
-            
-            // 标准化城市名（去掉"市"后缀）
-            if finalCity.hasSuffix("市") {
-                finalCity = String(finalCity.dropLast())
-            }
-            
-            // 保存城市到 UserDefaults，确保列表筛选能够正确匹配
-            UserDefaults.standard.set(finalCity, forKey: "UserSelectedCity")
-            
-            // 地理坐标处理：如果经纬度为 0，从地址进行逆地理编码获取
-            var finalLatitude = latitude
-            var finalLongitude = longitude
-            if finalLatitude == 0.0 && finalLongitude == 0.0 && !address.isEmpty {
-                let geocoder = CLGeocoder()
-                do {
-                    let placemarks = try await geocoder.geocodeAddressString(address)
-                    if let placemark = placemarks.first {
-                        if let location = placemark.location {
-                            finalLatitude = location.coordinate.latitude
-                            finalLongitude = location.coordinate.longitude
-                        }
-                        if let districtName = placemark.subLocality, !districtName.isEmpty {
-                            self.district = districtName
-                        }
-                    }
-                } catch {
-                    print("逆地理编码失败: \(error.localizedDescription)")
-                }
-            }
-            
-            let filename = coverImages.first.flatMap { ImageManager.shared.saveImage($0) }
-            
-            let newRestaurant = Restaurant(
-                name: name,
-                type: finalCategory,
-                district: district,
-                city: finalCity,
-                rating: finalRating,
-                address: address,
-                latitude: finalLatitude,
-                longitude: finalLongitude,
-                coverPhotoFilename: filename,
-                review: review,
-                tags: finalTags,
-                averagePrice: 0.0
-            )
-            
-            print("AddRestaurant: 保存餐厅 city=\(finalCity), district=\(district)")
-            
-            modelContext.insert(newRestaurant)
-            do {
-                try modelContext.save()
-                NotificationCenter.default.post(name: .restaurantListShouldRefresh, object: nil)
-                // 延迟确保 SwiftData 刷新
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
-                if let onClose = onClose {
-                    onClose()
-                } else {
-                    closeAction()
-                }
-            } catch {
-                print("保存餐厅失败: \(error.localizedDescription)")
-            }
+        // 触发 Confetti 特效
+        withAnimation {
+            showConfetti = true
         }
-    }
-}
-
-// MARK: - 子视图：封面图 (160pt)
-struct CoverImageView: View {
-    @Binding var coverImages: [UIImage]
-    @Binding var showActionSheet: Bool
-    
-    var body: some View {
-        ZStack {
-            if let firstImage = coverImages.first {
-                Image(uiImage: firstImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 160)
-                    .clipped()
-                    .cornerRadius(AppTheme.Radius.base)
-                    .shadow(color: .black.opacity(0.12), radius: 10, x: 2, y: 6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                            .stroke(Color.white, lineWidth: 2.0)
-                    )
-            } else {
-                Button(action: { showActionSheet = true }) {
-                    VStack(spacing: AppTheme.Spacing.xs) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        Text("添加封面图")
-                            .font(AppTheme.Fonts.footnote)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 160)
-                    .background(AppTheme.Colors.lightGray.opacity(0.8))
-                    .cornerRadius(AppTheme.Radius.base)
-                    .shadow(color: .black.opacity(0.12), radius: 10, x: 2, y: 6)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-// MARK: - 子视图：POI 智能搜索条 (高亮发光效果)
-struct SearchBar: View {
-    @Binding var poiQuery: String
-    @Binding var searchResults: [MKMapItem]
-    @Binding var isSearching: Bool
-    var searchPOI: () -> Void
-    var fillInfoFromMapItem: (MKMapItem) -> Void
-    
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(AppTheme.Colors.accent)
-                    .font(.system(size: 16))
-                    .symbolRenderingMode(.hierarchical)
-                
-                TextField("", text: $poiQuery, onCommit: { 
-                    searchPOI()
-                    isFocused = true
-                })
-                    .font(AppTheme.Fonts.body)
-                    .autocorrectionDisabled()
-                    .foregroundColor(AppTheme.Colors.textPrimary)
-                    .placeholder("输入店名智能填充信息...", 
-                               color: AppTheme.Colors.textSecondary.opacity(0.8), 
-                               isEmpty: poiQuery.isEmpty)
-                    .focused($isFocused)
-                    .keyboardType(.default)
-                    .submitLabel(.search)
-                    .onChange(of: isFocused) { _, newValue in
-                        if newValue && poiQuery.isEmpty {
-                            searchPOI()
-                        } else if !newValue {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                searchResults = []
-                            }
-                        }
-                    }
-                    .onChange(of: poiQuery) { _, _ in
-                        searchPOI()
-                    }
-                
-                if !poiQuery.isEmpty {
-                    Button(action: { 
-                        poiQuery = ""
-                        searchPOI()
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                            .font(.system(size: 16))
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Spacer()
-                }
-            }
-            .frame(height: 44)
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .background(Color.white)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(AppTheme.Colors.accent.opacity(0.6), lineWidth: 1.5)
-            )
-            .cornerRadius(AppTheme.Radius.base)
-            // 高亮发光效果
-            .shadow(color: AppTheme.Colors.accent.opacity(0.15), radius: 12, x: 0, y: 0)
-            
-            // 搜索结果列表
-            if !isSearching && !searchResults.isEmpty {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(searchResults, id: \.self) { mapItem in
-                            Button(action: { 
-                                fillInfoFromMapItem(mapItem)
-                                searchResults = []
-                            }) {
-                                HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
-                                    Image(systemName: "mappin.circle.fill")
-                                        .foregroundColor(AppTheme.Colors.primary)
-                                        .font(.system(size: 20))
-                                        .padding(.top, 2)
-                                    
-                                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                                        Text(mapItem.name ?? "未知")
-                                            .font(AppTheme.Fonts.headline)
-                                            .foregroundColor(AppTheme.Colors.textPrimary)
-                                        
-                                        HStack(spacing: 8) {
-                                            if let userLocation = LocationManager.shared.userLocation {
-                                                let mapItemLocation = CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)
-                                                let distance = userLocation.distance(from: mapItemLocation)
-                                                Text(String(format: "%.1fkm", distance / 1000))
-                                                    .font(AppTheme.Fonts.caption)
-                                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                                
-                                                Text("|")
-                                                    .font(AppTheme.Fonts.caption)
-                                                    .foregroundColor(AppTheme.Colors.divider)
-                                            }
-                                            
-                                            if let address = mapItem.placemark.title {
-                                                Text(address)
-                                                    .font(AppTheme.Fonts.caption)
-                                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-                                    }
-                                    Spacer()
-                                }
-                                .padding(AppTheme.Spacing.md)
-                            }
-                            .buttonStyle(.plain)
-                            
-                            Divider()
-                        }
-                    }
-                }
-                .frame(height: min(CGFloat(searchResults.count) * 60, 300))
-                .background(AppTheme.Colors.card)
-                .cornerRadius(AppTheme.Radius.base)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
-                )
-                .shadow(color: AppTheme.Colors.accent.opacity(0.1), radius: 8, x: 0, y: 2)
-                .offset(y: 4)
-            }
-            
-            // 搜索中状态
-            if isSearching {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding(AppTheme.Spacing.md)
-                    Spacer()
-                }
-                .frame(height: 60)
-                .background(AppTheme.Colors.card)
-                .cornerRadius(AppTheme.Radius.base)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
-                )
-                .offset(y: 4)
-            }
-        }
-    }
-}
-
-// MARK: - 子视图：餐厅名称 (title3, 加粗)
-struct NameTextField: View {
-    @Binding var name: String
-    var isAutoFilled: Bool
-    
-    var body: some View {
-        TextField("餐厅名称", text: $name)
-            .font(.title3)
-            .fontWeight(.bold)
-            .autocorrectionDisabled()
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.vertical, 12)
-            .foregroundColor(isAutoFilled ? AppTheme.Colors.primary : .primary)
-            .background(Color.white)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
-            )
-            .cornerRadius(AppTheme.Radius.base)
-            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-    }
-}
-
-// MARK: - 子视图：合并行 HStack (左侧地区，右侧品类，0.5pt细线分割)
-struct DistrictCategoryRow: View {
-    @Binding var district: String
-    @Binding var category: String
-    var districtOptions: [String]
-    var categoryOptions: [String]
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            // 左侧地区选择
-            Menu {
-                ForEach(districtOptions, id: \.self) { option in
-                    Button { 
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            district = option
-                        }
-                    } label: {
-                        Label(option, systemImage: district == option ? "checkmark" : "")
-                    }
-                }
-            } label: {
-                HStack {
-                    Text(district.isEmpty ? "请选择地区" : district)
-                        .font(AppTheme.Fonts.body)
-                        .foregroundColor(district.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
-                        .lineLimit(1)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .font(.system(size: 12))
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
-            }
-            .frame(maxWidth: .infinity)
-            
-            // 中间细线分割 (0.5pt)
-            Rectangle()
-                .fill(AppTheme.Colors.divider)
-                .frame(width: 0.5)
-            
-            // 右侧品类选择
-            Menu {
-                ForEach(categoryOptions, id: \.self) { option in
-                    Button { 
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            category = option
-                        }
-                    } label: {
-                        Label(option, systemImage: category == option ? "checkmark" : "")
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                }
-            } label: {
-                HStack {
-                    Text(category.isEmpty ? "请选择品类" : category)
-                        .font(AppTheme.Fonts.body)
-                        .foregroundColor(category.isEmpty ? AppTheme.Colors.textSecondary : AppTheme.Colors.textPrimary)
-                        .lineLimit(1)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .foregroundColor(AppTheme.Colors.textSecondary)
-                        .font(.system(size: 12))
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .frame(height: 44)
-        .background(Color.white)
-        .cornerRadius(AppTheme.Radius.base)
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
+        
+        // 保存数据
+        let newRestaurant = Restaurant(
+            name: name,
+            type: category,
+            district: district,
+            city: city,
+            rating: rating,
+            address: address,
+            latitude: latitude,
+            longitude: longitude,
+            coverPhotoFilename: nil,
+            review: review,
+            tags: selectedTags,
+            averagePrice: 0
         )
-        // 微立体感
-        .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-    }
-}
-
-// MARK: - 子视图：巨幕评分行 (28pt星号，12pt间距)
-struct RatingRow: View {
-    @Binding var rating: Double
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            ForEach(1...5, id: \.self) { index in
-                Image(systemName: index <= Int(rating) ? "star.fill" : "star")
-                    .foregroundColor(index <= Int(rating) ? AppTheme.Colors.secondary : AppTheme.Colors.textSecondary)
-                    .font(.system(size: 28))
-                    .symbolRenderingMode(.hierarchical)
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            rating = Double(index)
-                        }
-                    }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(Color.white)
-        .cornerRadius(AppTheme.Radius.base)
-        // 微立体感
-        .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-    }
-}
-
-// MARK: - 子视图：一句话评价 (奶油色底，不带红线)
-struct ReviewSection: View {
-    @Binding var review: String
-    
-    var body: some View {
-        TextField("一句话评价", text: $review, axis: .vertical)
-            .font(AppTheme.Fonts.body)
-            .lineLimit(2)
-            .textFieldStyle(.plain)
-            .padding(.vertical, 12)
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .background(Color(hex: "#FFF9E6"))
-            .cornerRadius(AppTheme.Radius.base)
-            .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-    }
-}
-
-// MARK: - 子视图：沉浸式标签系统
-struct TagSystemSection: View {
-    @Binding var tagsInput: String
-    @Binding var selectedTags: [String]
-    let presetTags: [String]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 已选标签区：输入框上方显示已添加的标签胶囊
-            if !selectedTags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(selectedTags.indices, id: \.self) { index in
-                            HStack(spacing: 4) {
-                                Text(selectedTags[index])
-                                    .font(AppTheme.Fonts.footnote)
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
-                                
-                                Button(action: {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        selectedTags.remove(atOffsets: [index])
-                                    }
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(AppTheme.Colors.textSecondary)
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color(hex: "#EBF3FF"))
-                            .opacity(0.6)
-                            .cornerRadius(16)
-                        }
-                    }
-                }
-                .frame(height: 32)
-            }
-            
-            // 输入框：极简线条风格 TextField
-            TextField("添加标签...", text: $tagsInput)
-                .font(AppTheme.Fonts.body)
-                .autocorrectionDisabled()
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, 10)
-                .background(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
-                )
-                .cornerRadius(AppTheme.Radius.base)
-            
-            // 灵感标签池：使用 | 字符分割
-            if !presetTags.isEmpty {
-                HStack(spacing: 0) {
-                    ForEach(presetTags.indices, id: \.self) { index in
-                        Button(action: {
-                            if !selectedTags.contains(presetTags[index]) && !tagsInput.contains(presetTags[index]) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    selectedTags.append(presetTags[index])
-                                }
-                            }
-                        }) {
-                            Text(presetTags[index])
-                                .font(AppTheme.Fonts.footnote)
-                                .foregroundColor(AppTheme.Colors.primary)
-                                .padding(.vertical, 6)
-                        }
-                        
-                        if index < presetTags.count - 1 {
-                            Text("|")
-                                .font(AppTheme.Fonts.footnote)
-                                .foregroundColor(AppTheme.Colors.divider)
-                                .padding(.vertical, 6)
-                        }
-                    }
-                }
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.top, 4)
-            }
-        }
-        .padding(.vertical, 12)
-        .background(Color.white)
-        .cornerRadius(AppTheme.Radius.base)
-        .shadow(color: AppTheme.Shadows.light.color, radius: AppTheme.Shadows.light.radius, x: AppTheme.Shadows.light.x, y: AppTheme.Shadows.light.y)
-    }
-}
-
-// MARK: - 子视图：底部操作行
-struct ActionButtonsRow: View {
-    var onClose: (() -> Void)?
-    var dismissAction: () -> Void
-    var saveAction: () -> Void
-    var isValid: Bool
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            Button("取消") { 
-                if let onClose = onClose {
-                    onClose()
-                } else {
-                    dismissAction()
-                }
-            }
-            .font(AppTheme.Fonts.headline)
-            .foregroundColor(AppTheme.Colors.textPrimary)
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.vertical, AppTheme.Spacing.sm)
-            .background(AppTheme.Colors.lightGray)
-            .cornerRadius(AppTheme.Radius.base)
-            .frame(width: UIScreen.main.bounds.width * 0.25)
-            .withHapticFeedback()
-            
-            Button("保存") { saveAction() }
-                .font(AppTheme.Fonts.headline)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-                .padding(.horizontal, AppTheme.Spacing.lg)
-                .padding(.vertical, AppTheme.Spacing.sm)
-                .background(isValid ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary)
-                .cornerRadius(AppTheme.Radius.base)
-                .shadow(color: isValid ? AppTheme.Colors.accent.opacity(0.3) : Color.clear, radius: 8, x: 0, y: 4)
-                .disabled(!isValid)
-                .withHapticFeedback()
-                .frame(maxWidth: .infinity)
+        
+        modelContext.insert(newRestaurant)
+        
+        // 延迟关闭
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            closeAction()
         }
     }
 }
+
+
