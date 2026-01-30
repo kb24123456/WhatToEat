@@ -49,10 +49,9 @@ struct CitySelectionView: View {
                 // 5. 城市网格列表
                 cityGrid
             }
-            .background(AppTheme.Colors.background)
         }
         .edgesIgnoringSafeArea(.all)
-        .background(AppTheme.Colors.background)
+        .background(MilkyDiffuseBackground())
         .onAppear {
             // 确保位置管理器已启动
             locationManager.requestLocationPermission()

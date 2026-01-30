@@ -61,8 +61,7 @@ struct LibraryView: View {
     // MARK: - 生命周期
     var body: some View {
         ZStack(alignment: .topLeading) {
-            AppTheme.Colors.softBackground
-                .ignoresSafeArea()
+            MilkyDiffuseBackground()
             
             VStack(alignment: .leading, spacing: 0) {
                 HeaderView(

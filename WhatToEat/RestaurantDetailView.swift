@@ -245,8 +245,7 @@ struct RestaurantDetailView: View {
     }
     
     private var backgroundGradient: some View {
-        AppTheme.Colors.softBackground
-            .ignoresSafeArea()
+        MilkyDiffuseBackground()
     }
     
     // Hero Card Content (重构版：完美解决报错)

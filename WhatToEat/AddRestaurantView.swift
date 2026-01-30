@@ -99,9 +99,9 @@ struct AddRestaurantView: View {
                             .background(
                                 LinearGradient(
                                     colors: [
-                                        AppTheme.Colors.softBackground.opacity(0),
-                                        AppTheme.Colors.softBackground,
-                                        AppTheme.Colors.softBackground
+                                        Color.white.opacity(0),
+                                        Color.white,
+                                        Color.white
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -164,8 +164,7 @@ struct AddRestaurantView: View {
     
     // MARK: - Background
     private var backgroundGradient: some View {
-        Color.white
-            .ignoresSafeArea()
+        MilkyDiffuseBackground()
     }
     
     // MARK: - Close Button
@@ -299,6 +298,7 @@ struct AddRestaurantView: View {
             TextField("餐厅名称", text: $name)
                 .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.darkText)
+                .fixedSize(horizontal: false, vertical: true)
                 .offset(x: nameFieldOffset)
                 .opacity(nameFieldOpacity)
             
@@ -552,7 +552,7 @@ struct AddRestaurantView: View {
         )
     }
     
-    // MARK: - 评分行
+    // MARK: - 评分行（带立体质感星星）
     private var unifiedRatingRow: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("评分")
@@ -560,7 +560,7 @@ struct AddRestaurantView: View {
                 .foregroundColor(AppTheme.Colors.darkText)
                 .padding(.horizontal, 20)
             
-            // 星星
+            // 星星（带立体质感）
             HStack(spacing: 12) {
                 ForEach(0..<5) { index in
                     Button {
@@ -568,10 +568,34 @@ struct AddRestaurantView: View {
                             rating = Double(index + 1)
                         }
                     } label: {
-                        Image(systemName: index < Int(rating) ? "star.fill" : "star")
-                            .font(.system(size: 32, weight: .medium))
-                            .foregroundColor(Color(hex: index < Int(rating) ? "#FFB800" : "#E8E8E8"))
-                            .scaleEffect(index < Int(rating) ? 1.0 : 0.9)
+                        ZStack {
+                            // 底层阴影（立体感）
+                            if index < Int(rating) {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 32, weight: .medium))
+                                    .foregroundColor(Color(hex: "#CC8A00"))
+                                    .offset(x: 0, y: 2)
+                                    .blur(radius: 1)
+                            }
+                            
+                            // 主星星
+                            Image(systemName: index < Int(rating) ? "star.fill" : "star")
+                                .font(.system(size: 32, weight: .medium))
+                                .foregroundColor(Color(hex: index < Int(rating) ? "#FFB800" : "#E8E8E8"))
+                            
+                            // 高光层（立体感）
+                            if index < Int(rating) {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 32, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.4))
+                                    .offset(x: 0, y: -1)
+                                    .mask(
+                                        Image(systemName: "star.fill")
+                                            .font(.system(size: 32, weight: .medium))
+                                    )
+                            }
+                        }
+                        .scaleEffect(index < Int(rating) ? 1.0 : 0.9)
                     }
                     .buttonStyle(ScaleButtonStyle())
                 }

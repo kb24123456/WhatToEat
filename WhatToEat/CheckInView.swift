@@ -104,8 +104,7 @@ struct CheckInView: View {
     
     // MARK: - Premium Soft UI Background
     private var backgroundOverlay: some View {
-        AppTheme.Colors.softBackground
-            .ignoresSafeArea()
+        MilkyDiffuseBackground()
     }
     
     private var scrollContent: some View {

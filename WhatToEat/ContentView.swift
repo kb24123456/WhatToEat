@@ -76,10 +76,10 @@ struct ContentView: View {
         }
     }
     
-    // 自定义导航栏组件 - 悬浮胶囊设计
+    // 自定义导航栏组件 - 奶脂实色风格
     private var customTabBar: some View {
         ZStack {
-            // 1. 底座背景：悬浮胶囊 - 毛玻璃效果
+            // 1. 底座背景：奶脂实色悬浮胶囊
             HStack(spacing: 0) {
                 // 1. 食库按钮
                 tabButton(
@@ -116,31 +116,39 @@ struct ContentView: View {
             .padding(.horizontal, AppTheme.Spacing.md)
             .frame(height: 64)
             .background(
-                // 毛玻璃悬浮胶囊
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                    )
-                    .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 8)
+                // 奶脂实色悬浮胶囊
+                ZStack {
+                    // 基础颜色层
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .fill(AppTheme.Colors.milkyWhite)
+                    
+                    // 模糊效果层
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                    
+                    // 边缘高光描边
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                }
+                .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 8)
             )
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.bottom, 12)
             
-            // 2. 中间圆形突出按钮 - 宝石按钮
+            // 2. 中间圆形突出按钮 - 宝石按钮（弥散红色阴影）
             Button {
                 withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
                     isAdding = true
                 }
+                // 触感反馈
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
             } label: {
                 ZStack {
                     Circle()
                         .fill(AppTheme.Colors.accent)
                         .frame(width: 60, height: 60)
-                        // 红色弥散投影
-                        .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 12, x: 0, y: 8)
-                        .shadow(color: AppTheme.Colors.accent.opacity(0.15), radius: 20, x: 0, y: 12)
+                        // 弥散红色阴影
+                        .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 15, x: 0, y: 8)
                         .overlay(
                             Circle()
                                 .fill(
@@ -157,20 +165,18 @@ struct ContentView: View {
                         )
                     
                     Image(systemName: TabItem.add.iconName)
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))  // 图标稍微缩小
                         .foregroundColor(.white)
                         .matchedGeometryEffect(id: "ADD_BUTTON", in: animationNamespace)
                 }
                 .offset(y: -22)
             }
             .buttonStyle(.plain)
-            .scaleEffect(0.96)
-            .withHapticFeedback()
         }
         .zIndex(100)
     }
     
-    // MARK: - Tab Button with Milky Bubble
+    // MARK: - Tab Button with 奶脂实色风格
     private func tabButton(tab: TabItem, icon: String, title: String) -> some View {
         let isSelected = selectedTab == tab
         
@@ -178,19 +184,11 @@ struct ContentView: View {
             withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.65, blendDuration: 0.1)) {
                 selectedTab = tab
             }
+            // 触感反馈
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } label: {
             ZStack {
-                // Milky Bubble 背板（选中时显示）
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white)
-                        .frame(width: 56, height: 44)
-                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
-                        .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
-                        .transition(.scale.combined(with: .opacity))
-                }
-                
-                VStack(spacing: 3) {
+                VStack(spacing: 4) {
                     Image(systemName: icon)
                         .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
                         .frame(height: 22)
@@ -199,13 +197,26 @@ struct ContentView: View {
                     Text(title)
                         .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .rounded))
                         .frame(height: 10)
+                    
+                    // 选中态：红色横向胶囊短线
+                    ZStack {
+                        if isSelected {
+                            Capsule()
+                                .fill(AppTheme.Colors.accent)
+                                .frame(width: 16, height: 3)
+                                .transition(.asymmetric(
+                                    insertion: .scale.combined(with: .opacity),
+                                    removal: .opacity
+                                ))
+                        }
+                    }
+                    .frame(height: 3)
                 }
                 .foregroundColor(isSelected ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.7))
             }
             .frame(maxWidth: .infinity, maxHeight: 60)
         }
         .buttonStyle(.plain)
-        .withHapticFeedback()
     }
 }
 

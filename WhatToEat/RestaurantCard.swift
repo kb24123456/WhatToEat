@@ -112,7 +112,7 @@ struct RestaurantCard: View {
                 .font(AppTheme.Fonts.title3)
                 .bold()
                 .foregroundColor(AppTheme.Colors.textPrimary)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
                 .matchedGeometryEffect(id: "title-\(restaurant.id)", in: animation)
             
             Color.clear.frame(height: 14)
@@ -228,10 +228,9 @@ struct RestaurantCard: View {
     
     private var checkInButton: some View {
         VStack(alignment: .center, spacing: 1) {
-            Image(systemName: "heart.fill")
-                .font(.system(size: 18))
+            Image(systemName: "checkmark")
+                .font(.system(size: 18, weight: .bold))
                 .foregroundColor(Color(hex: "#FF6B6B"))
-                .symbolRenderingMode(.multicolor)
             Text("\(restaurant.checkInCount)")
                 .font(AppTheme.Fonts.caption)
                 .fontWeight(.bold)
@@ -260,12 +259,11 @@ private struct TagView: View {
     var body: some View {
         Text(tag)
             .font(AppTheme.Fonts.callout)
-            .foregroundColor(AppTheme.Colors.primary)
+            .foregroundColor(Color(hex: "#89CFF0"))
             .padding(.horizontal, 8)
-            .padding(.vertical, 2)
             .background(
                 Capsule()
-                    .fill(AppTheme.Colors.primary.opacity(0.1))
+                    .fill(Color(hex: "#89CFF0").opacity(0.1))
             )
     }
 }
