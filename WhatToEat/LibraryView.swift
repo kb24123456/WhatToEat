@@ -161,10 +161,10 @@ private struct HeaderView: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white)
+                        .fill(Color.white.opacity(0.35))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                                .stroke(Color.white.opacity(0.35), lineWidth: 1)
                         )
                 )
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
@@ -182,7 +182,7 @@ private struct HeaderView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white)
+                    .fill(Color.white.opacity(0.35))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(Color.white.opacity(0.8), lineWidth: 0.5)

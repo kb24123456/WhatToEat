@@ -316,7 +316,7 @@ struct RestaurantDetailView: View {
                             .fontWeight(.semibold)
                             .foregroundColor(AppTheme.Colors.mediumGray)
                             .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Color.white.opacity(0.5), in: Capsule())
+                            .background(Color.white.opacity(0.35), in: Capsule())
                         
                         if restaurant.averagePrice > 0 {
                             Text("¥\(Int(restaurant.averagePrice))/人")
@@ -402,14 +402,14 @@ struct RestaurantDetailView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.35))
                 .overlay(
                     RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.black.opacity(0.03), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
                 )
         )
     }
-    
+
     // MARK: - 统计行
     private var statsRow: some View {
         HStack(spacing: 0) {
@@ -607,15 +607,15 @@ struct RestaurantDetailView: View {
         .padding(4)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.35))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
                 )
         )
         .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 4)
     }
-    
+
     private func statMiniCard(icon: String, iconColor: Color, title: String, value: String) -> some View {
         HStack(spacing: 10) {
             ZStack {
@@ -680,16 +680,16 @@ struct RestaurantDetailView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.35))
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
                 )
         )
         .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 10)
         .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
     }
-    
+
     @ViewBuilder
     private var reviewContent: some View {
         if isEditingReview {
@@ -768,10 +768,10 @@ struct RestaurantDetailView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.35))
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
                 )
         )
         .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 10)
@@ -900,7 +900,7 @@ struct RestaurantDetailView: View {
                 .fill(AppTheme.Colors.warmGray)
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
                 )
         )
     }
@@ -1109,10 +1109,10 @@ struct RestaurantDetailView: View {
         .padding(.vertical, 40)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.35))
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
                 )
         )
         .shadow(color: Color.black.opacity(0.04), radius: 20, x: 0, y: 10)
@@ -1140,7 +1140,7 @@ struct RestaurantDetailView: View {
                     .foregroundStyle(.ultraThinMaterial)
                     .overlay(
                         Capsule()
-                            .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
                     )
             )
         }
@@ -1248,10 +1248,10 @@ struct RestaurantDetailView: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.35))
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
                 )
         )
         .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 10)

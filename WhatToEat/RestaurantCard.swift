@@ -51,10 +51,10 @@ struct RestaurantCard: View {
     
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .fill(Color.white)
+            .fill(Color.white.opacity(0.35))
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                    .stroke(Color.white.opacity(0.35), lineWidth: 1)
             )
     }
     

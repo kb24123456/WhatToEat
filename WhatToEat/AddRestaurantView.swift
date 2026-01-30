@@ -183,7 +183,7 @@ struct AddRestaurantView: View {
                         .foregroundStyle(.ultraThinMaterial)
                         .overlay(
                             Circle()
-                                .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                                .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
                         )
                 )
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
@@ -500,7 +500,7 @@ struct AddRestaurantView: View {
             .padding(.vertical, 16)
             .background(
                 Capsule()
-                    .fill(Color.white)
+                    .fill(Color.white.opacity(0.35))
                     .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
                     .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
             )
@@ -544,10 +544,10 @@ struct AddRestaurantView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.35))
                 .overlay(
                     RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.black.opacity(0.03), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
                 )
         )
     }
@@ -712,7 +712,7 @@ struct AddRestaurantView: View {
                                 .padding(.vertical, 6)
                                 .background(
                                     Capsule()
-                                        .fill(Color.white.opacity(0.5))
+                                        .fill(Color.white.opacity(0.35))
                                 )
                                 .focused($tagInputIsFocused)
                                 .frame(minWidth: 80)
@@ -1004,7 +1004,7 @@ struct AddRestaurantView: View {
                     .padding(.vertical, 6)
                     .background(
                         Capsule()
-                            .fill(Color.white.opacity(0.5))
+                            .fill(Color.white.opacity(0.35))
                     )
                     .focused($tagInputIsFocused)
                     .frame(minWidth: 80)
@@ -1062,7 +1062,7 @@ struct AddRestaurantView: View {
                 .fill(AppTheme.Colors.warmGray)
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
                 )
         )
     }
@@ -1080,7 +1080,7 @@ struct AddRestaurantView: View {
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(Color.white.opacity(0.5))
+                        .fill(Color.white.opacity(0.35))
                 )
                 .overlay(
                     Capsule()

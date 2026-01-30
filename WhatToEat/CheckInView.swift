@@ -153,14 +153,14 @@ struct CheckInView: View {
         .padding(24)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.35))
                 .overlay(
                     RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.black.opacity(0.03), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
                 )
         )
     }
-    
+
     // MARK: - 日历式日期头部（对称布局）
     private var timeHeaderView: some View {
         VStack(spacing: 0) {
