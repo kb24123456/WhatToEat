@@ -5,6 +5,8 @@ import MapKit
 // MARK: - 通知名称扩展
 extension Notification.Name {
     static let restaurantListShouldRefresh = Notification.Name("restaurantListShouldRefresh")
+    static let hideTabBar = Notification.Name("hideTabBar")
+    static let restoreTabBar = Notification.Name("restoreTabBar")
 }
 
 // MARK: - 1. 核心视图
@@ -61,7 +63,7 @@ struct LibraryView: View {
     // MARK: - 生命周期
     var body: some View {
         ZStack(alignment: .topLeading) {
-            MilkyDiffuseBackground()
+            // 背景由 ContentView 统一提供
             
             VStack(alignment: .leading, spacing: 0) {
                 HeaderView(
@@ -128,34 +130,54 @@ struct LibraryView: View {
     }
     
     // MARK: - 顶部 Header 子视图
-private struct HeaderView: View {
-    let selectedCity: String
-    @Binding var showCityPicker: Bool
-    @Binding var searchText: String
-    @FocusState var isSearchFocused: Bool
-    
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            // 1. 标题"吃啥呢"
-            Text("吃啥呢")
-                .font(AppTheme.Fonts.largeTitle)
-                .fontWeight(.bold)
-                .foregroundColor(AppTheme.Colors.textPrimary) // 使用统一的文本主色
-                .tracking(2) // 增加字体间距
-            
-            // 2. 城市选择器
-            Button {
-                showCityPicker = true
-            } label: {
+    private struct HeaderView: View {
+        let selectedCity: String
+        @Binding var showCityPicker: Bool
+        @Binding var searchText: String
+        @FocusState var isSearchFocused: Bool
+        
+        var body: some View {
+            HStack(spacing: AppTheme.Spacing.md) {
+                // 1. 标题"吃啥呢"
+                Text("吃啥呢")
+                    .font(AppTheme.Fonts.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.Colors.textPrimary)
+                    .tracking(2)
+                
+                // 2. 城市选择器
+                Button {
+                    showCityPicker = true
+                } label: {
+                    HStack {
+                        Text(selectedCity)
+                            .font(AppTheme.Fonts.footnote)
+                            .fontWeight(.medium)
+                            .foregroundColor(AppTheme.Colors.textPrimary)
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.white.opacity(0.35))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                            )
+                    )
+                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                }
+                .buttonStyle(.plain)
+
+                // 3. 搜索框（占据剩余空间）
                 HStack {
-                    Text(selectedCity)
+                    Image(systemName: "magnifyingglass").foregroundColor(.gray)
+                    TextField("搜索餐厅名称、菜系...", text: $searchText)
                         .font(AppTheme.Fonts.footnote)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                    Image(systemName: "chevron.down")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                        .symbolRenderingMode(.hierarchical)
+                        .focused($isSearchFocused)
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
@@ -164,39 +186,16 @@ private struct HeaderView: View {
                         .fill(Color.white.opacity(0.35))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                                .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
                         )
                 )
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                .withFocusedInputEffects(isFocused: $isSearchFocused)
             }
-            .buttonStyle(.plain)
-
-            // 3. 搜索框（占据剩余空间）
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundColor(.gray)
-                TextField("搜索餐厅名称、菜系...", text: $searchText)
-                    .font(AppTheme.Fonts.footnote)
-                    .focused($isSearchFocused) // ✅ 绑定焦点状态
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(0.35))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
-            // 使用统一的输入框焦点效果修饰符
-            .withFocusedInputEffects(isFocused: $isSearchFocused)
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            .padding(.vertical, AppTheme.Spacing.sm)
         }
-        .padding(.horizontal, AppTheme.Spacing.lg)
-        .padding(.vertical, AppTheme.Spacing.sm)
-        .background(AppTheme.Colors.softBackground) // 与全局背景色保持一致
     }
-}
     
     // MARK: - 排序选项枚举
 enum SortOption: String, CaseIterable {
@@ -321,7 +320,7 @@ private struct FilterBarView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, AppTheme.Spacing.lg)
-        .padding(.top, AppTheme.Spacing.xs) // 与搜索框的最小间距
+        .padding(.top, AppTheme.Spacing.xs)
         .padding(.bottom, AppTheme.Spacing.md)
     }
 }

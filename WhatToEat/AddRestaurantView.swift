@@ -526,17 +526,9 @@ struct AddRestaurantView: View {
             unifiedRatingRow
                 .padding(.vertical, 20)
             
-            Divider()
-                .background(Color.black.opacity(0.03))
-                .padding(.horizontal, 20)
-            
             // 2. 评价区域（保留编辑动效）
             unifiedReviewRow
                 .padding(.vertical, 20)
-            
-            Divider()
-                .background(Color.black.opacity(0.03))
-                .padding(.horizontal, 20)
             
             // 3. 标签区域（保留编辑动效）
             unifiedTagsRow
@@ -581,7 +573,7 @@ struct AddRestaurantView: View {
                             // 主星星
                             Image(systemName: index < Int(rating) ? "star.fill" : "star")
                                 .font(.system(size: 32, weight: .medium))
-                                .foregroundColor(Color(hex: index < Int(rating) ? "#FFB800" : "#E8E8E8"))
+                                .foregroundColor(Color(hex: index < Int(rating) ? "#FFB800" : "#BDBDBD"))
                             
                             // 高光层（立体感）
                             if index < Int(rating) {
@@ -805,7 +797,7 @@ struct AddRestaurantView: View {
                     } label: {
                         Image(systemName: index < Int(rating) ? "star.fill" : "star")
                             .font(.system(size: 36, weight: .medium))
-                            .foregroundColor(Color(hex: index < Int(rating) ? "#FFB800" : "#E8E8E8"))
+                            .foregroundColor(Color(hex: index < Int(rating) ? "#FFB800" : "#BDBDBD"))
                             .scaleEffect(index < Int(rating) ? 1.0 : 0.9)
                     }
                     .buttonStyle(ScaleButtonStyle())
@@ -973,10 +965,6 @@ struct AddRestaurantView: View {
                 .padding(20)
 
             if isEditingTags {
-                Divider()
-                    .background(AppTheme.Colors.glassBorder)
-                    .padding(.horizontal, 20)
-
                 presetTagsSection
                     .padding(20)
             }

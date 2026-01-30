@@ -13,7 +13,7 @@ enum TabItem: String, CaseIterable {
     case library = "食库"
     case home = "吃啥"
     case add = ""
-    case friends = "食记"
+    case friends = "食图"
     case profile = "我的"
     
     var iconName: String {
@@ -34,18 +34,26 @@ struct ContentView: View {
     @State private var isAdding: Bool = false
     @State private var isTabBarHidden: Bool = false
     
+    // 从数据库查询所有餐厅数据，供子视图使用
+    @Query private var restaurants: [Restaurant]
+    
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
+            // 背景层：弥散背景铺满整个屏幕（包括安全区域）
+            MilkyDiffuseBackground()
+                .ignoresSafeArea()
+            
             Group {
                 switch selectedTab {
                 case .library:
                     LibraryView()
                 case .home:
-                    PlaceholderView(title: "吃啥", description: "随机抽取功能即将上线")
+                    GourmetMatchView()
                 case .add:
                     EmptyView()
                 case .friends:
-                    PlaceholderView(title: "事友圈", description: "社交功能即将上线")
+                    // 将餐厅数据传入地图视图
+                    RestaurantMapView(restaurants: restaurants)
                 case .profile:
                     PlaceholderView(title: "我的", description: "个人设置功能即将上线")
                 }
@@ -60,7 +68,10 @@ struct ContentView: View {
             }
 
             if !isTabBarHidden {
-                customTabBar
+                VStack {
+                    Spacer()
+                    customTabBar
+                }
             }
         }
         .ignoresSafeArea(.keyboard)
@@ -76,103 +87,59 @@ struct ContentView: View {
         }
     }
     
-    // 自定义导航栏组件 - 奶脂实色风格
+    // 自定义导航栏组件 - 沉底样式
     private var customTabBar: some View {
-        ZStack {
-            // 1. 底座背景：奶脂实色悬浮胶囊
-            HStack(spacing: 0) {
-                // 1. 食库按钮
-                tabButton(
-                    tab: .library,
-                    icon: TabItem.library.iconName,
-                    title: TabItem.library.rawValue
-                )
-                
-                // 2. 吃啥按钮
-                tabButton(
-                    tab: .home,
-                    icon: TabItem.home.iconName,
-                    title: TabItem.home.rawValue
-                )
-                
-                // 3. 中间圆形突出按钮占位
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: 60)
-                
-                // 4. 食记按钮
-                tabButton(
-                    tab: .friends,
-                    icon: TabItem.friends.iconName,
-                    title: TabItem.friends.rawValue
-                )
-                
-                // 5. 我的按钮
-                tabButton(
-                    tab: .profile,
-                    icon: TabItem.profile.iconName,
-                    title: TabItem.profile.rawValue
-                )
-            }
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .frame(height: 64)
-            .background(
-                // 奶脂实色悬浮胶囊
-                ZStack {
-                    // 基础颜色层
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .fill(AppTheme.Colors.milkyWhite)
-                    
-                    // 模糊效果层
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                    
-                    // 边缘高光描边
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
-                }
-                .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 8)
+        HStack(spacing: 0) {
+            // 1. 食库按钮
+            tabButton(
+                tab: .library,
+                icon: TabItem.library.iconName,
+                title: TabItem.library.rawValue
             )
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.bottom, 12)
             
-            // 2. 中间圆形突出按钮 - 宝石按钮（弥散红色阴影）
+            // 2. 吃啥按钮
+            tabButton(
+                tab: .home,
+                icon: TabItem.home.iconName,
+                title: TabItem.home.rawValue
+            )
+            
+            // 3. 中间加号按钮
             Button {
                 withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
                     isAdding = true
                 }
-                // 触感反馈
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(AppTheme.Colors.accent)
-                        .frame(width: 60, height: 60)
-                        // 弥散红色阴影
-                        .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 15, x: 0, y: 8)
-                        .overlay(
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.white.opacity(0.25),
-                                            Color.clear
-                                        ]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .frame(width: 56, height: 56)
-                        )
+                        .fill(Color.black)
+                        .frame(width: 44, height: 44)
                     
                     Image(systemName: TabItem.add.iconName)
-                        .font(.system(size: 24, weight: .bold))  // 图标稍微缩小
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.white)
-                        .matchedGeometryEffect(id: "ADD_BUTTON", in: animationNamespace)
                 }
-                .offset(y: -22)
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            
+            // 4. 食记按钮
+            tabButton(
+                tab: .friends,
+                icon: TabItem.friends.iconName,
+                title: TabItem.friends.rawValue
+            )
+            
+            // 5. 我的按钮
+            tabButton(
+                tab: .profile,
+                icon: TabItem.profile.iconName,
+                title: TabItem.profile.rawValue
+            )
         }
+        .frame(height: 64)
+        .background(Color.white)
         .zIndex(100)
     }
     
@@ -192,27 +159,12 @@ struct ContentView: View {
                     Image(systemName: icon)
                         .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
                         .frame(height: 22)
-                        .symbolRenderingMode(.hierarchical)
                     
                     Text(title)
                         .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .rounded))
                         .frame(height: 10)
-                    
-                    // 选中态：红色横向胶囊短线
-                    ZStack {
-                        if isSelected {
-                            Capsule()
-                                .fill(AppTheme.Colors.accent)
-                                .frame(width: 16, height: 3)
-                                .transition(.asymmetric(
-                                    insertion: .scale.combined(with: .opacity),
-                                    removal: .opacity
-                                ))
-                        }
-                    }
-                    .frame(height: 3)
                 }
-                .foregroundColor(isSelected ? AppTheme.Colors.accent : AppTheme.Colors.textSecondary.opacity(0.7))
+                .foregroundColor(isSelected ? .black : AppTheme.Colors.textSecondary.opacity(0.7))
             }
             .frame(maxWidth: .infinity, maxHeight: 60)
         }

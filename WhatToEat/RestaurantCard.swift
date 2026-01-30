@@ -51,10 +51,10 @@ struct RestaurantCard: View {
     
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .fill(Color.white.opacity(0.35))
+            .fill(Color.white.opacity(0.75))
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
             )
     }
     
@@ -227,24 +227,24 @@ struct RestaurantCard: View {
     }
     
     private var checkInButton: some View {
-        VStack(alignment: .center, spacing: 1) {
+        HStack(spacing: 4) {
             Image(systemName: "checkmark")
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundColor(Color(hex: "#FF6B6B"))
             Text("\(restaurant.checkInCount)")
-                .font(AppTheme.Fonts.caption)
-                .fontWeight(.bold)
+                .font(.system(size: 12, weight: .bold))
                 .foregroundColor(AppTheme.Colors.textSecondary)
         }
-        .frame(width: 44, height: 44)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(
-            Circle()
-                .fill(Color.white)
+            Capsule()
+                .fill(Color.white.opacity(0.9))
                 .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                    Capsule()
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
         )
         .onTapGesture {
             showCheckInSheet = true

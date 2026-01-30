@@ -278,7 +278,8 @@ struct RestaurantDetailView: View {
                         LinearGradient(
                             stops: [
                                 .init(color: .clear, location: 0),      // 顶部完全清晰
-                                .init(color: .black.opacity(0.99), location: 0.55), // 中间开始变模糊
+                                .init(color: .black.opacity(0.55), location: 0.55), //开始逐渐模糊
+                                .init(color: .black.opacity(0.75), location: 0.75), // 中间开始变模糊
                                 .init(color: .black, location: 1.0)     // 底部完全模糊
                             ],
                             startPoint: .top,
@@ -384,17 +385,9 @@ struct RestaurantDetailView: View {
             statsRow
                 .padding(.vertical, 16)
             
-            Divider()
-                .background(Color.black.opacity(0.03))
-                .padding(.horizontal, 20)
-            
             // 2. 点评区域（保留编辑动效）
             unifiedReviewRow
                 .padding(.vertical, 16)
-            
-            Divider()
-                .background(Color.black.opacity(0.03))
-                .padding(.horizontal, 20)
             
             // 3. 标签区域（保留编辑动效）
             unifiedTagsRow
@@ -592,10 +585,6 @@ struct RestaurantDetailView: View {
                 title: "累计打卡",
                 value: "\(restaurant.checkInCount)"
             )
-            
-            Divider()
-                .frame(height: 30)
-                .opacity(0.5)
             
             statMiniCard(
                 icon: "creditcard.fill",

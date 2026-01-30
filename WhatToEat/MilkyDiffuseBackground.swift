@@ -16,40 +16,72 @@ struct MilkyDiffuseBackground: View {
                 // 1. 基础底色：纯净白
                 Color.white
                 
-                // 2. 弥散层
+                // 2. 弥散层 - 覆盖整个屏幕
                 ZStack {
-                    // 右上角：Baby Blue
+                    // 左上角：Baby Blue
                     Circle()
                         .fill(blue)
-                        .frame(width: geometry.size.width * 1.2)
+                        .frame(width: geometry.size.width * 1.0)
                         .blur(radius: 80)
-                        .opacity(0.35)
-                        .offset(x: isAnimating ? 30 : -20, y: isAnimating ? -50 : 20)
+                        .opacity(0.4)
+                        .offset(x: isAnimating ? -80 : -60, y: isAnimating ? -100 : -80)
                     
-                    // 左下角：Soft Pink
+                    // 右上角：Baby Blue（第二块）
+                    Circle()
+                        .fill(blue)
+                        .frame(width: geometry.size.width * 0.9)
+                        .blur(radius: 70)
+                        .opacity(0.35)
+                        .offset(x: isAnimating ? 100 : 80, y: isAnimating ? -60 : -40)
+                    
+                    // 左中部：Soft Pink
                     Circle()
                         .fill(pink)
                         .frame(width: geometry.size.width * 1.1)
                         .blur(radius: 90)
-                        .opacity(0.4)
-                        .offset(x: isAnimating ? -40 : 40, y: isAnimating ? 60 : -30)
+                        .opacity(0.45)
+                        .offset(x: isAnimating ? -60 : -40, y: isAnimating ? 100 : 80)
                     
-                    // 中间偏右：奶油色（增加通透感）
+                    // 右中部：Soft Pink（第二块）
+                    Circle()
+                        .fill(pink)
+                        .frame(width: geometry.size.width * 0.9)
+                        .blur(radius: 80)
+                        .opacity(0.4)
+                        .offset(x: isAnimating ? 80 : 60, y: isAnimating ? 50 : 30)
+                    
+                    // 底部中央：奶油色
                     Circle()
                         .fill(cream)
-                        .frame(width: geometry.size.width * 0.8)
-                        .blur(radius: 60)
+                        .frame(width: geometry.size.width * 1.0)
+                        .blur(radius: 70)
                         .opacity(0.5)
-                        .offset(x: isAnimating ? 50 : -30, y: isAnimating ? 20 : 80)
+                        .offset(x: isAnimating ? 30 : 10, y: isAnimating ? 200 : 180)
+                    
+                    // 底部左侧：Baby Blue（补充）
+                    Circle()
+                        .fill(blue)
+                        .frame(width: geometry.size.width * 0.7)
+                        .blur(radius: 60)
+                        .opacity(0.3)
+                        .offset(x: isAnimating ? -100 : -80, y: isAnimating ? 250 : 230)
+                    
+                    // 底部右侧：Soft Pink（补充）
+                    Circle()
+                        .fill(pink)
+                        .frame(width: geometry.size.width * 0.8)
+                        .blur(radius: 70)
+                        .opacity(0.35)
+                        .offset(x: isAnimating ? 120 : 100, y: isAnimating ? 220 : 200)
                 }
-                .scaleEffect(1.3) // 溢出画布，确保边缘无硬边
-                .rotationEffect(.degrees(isAnimating ? 15 : -10))
+                .scaleEffect(1.5) // 溢出画布，确保边缘无硬边
+                .rotationEffect(.degrees(isAnimating ? 10 : -8))
             }
             .drawingGroup() // 关键：开启高性能渲染
         }
         .ignoresSafeArea() // 确保背景铺满，不干扰安全区域布局计算
         .onAppear {
-            withAnimation(.easeInOut(duration: 10).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 12).repeatForever(autoreverses: true)) {
                 isAnimating = true
             }
         }
