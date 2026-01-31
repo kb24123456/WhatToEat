@@ -59,7 +59,7 @@ struct SmartSearchSheet: View {
                     resultsList
                 }
             }
-            .navigationTitle("智能搜索")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -245,7 +245,7 @@ struct SmartSearchSheet: View {
                 .font(.system(size: 17))
                 .foregroundColor(Color(hex: "#999999"))
             
-            TextField("输入店名，智能填充所有信息...", text: $searchQuery)
+            TextField("", text: $searchQuery, prompt: Text("输入店名，智能填充所有信息...").foregroundColor(Color(hex: "#666666")))
                 .font(.system(size: 16))
                 .foregroundColor(Color(hex: "#1A1A1A"))
                 .onChange(of: searchQuery) { _, newValue in
