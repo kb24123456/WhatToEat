@@ -688,17 +688,15 @@ struct ProfileView: View {
                 .padding(.leading, 60)
             
             // 导入餐厅数据
-            Button {
-                showImportSheet = true
-            } label: {
-                MilkyToolRow(
-                    icon: "square.and.arrow.down",
-                    title: "导入餐厅数据",
-                    subtitle: "从 CSV 文件批量导入",
-                    color: .pink
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
+            MilkyToolRow(
+                icon: "square.and.arrow.down",
+                title: "导入餐厅数据",
+                subtitle: "从 CSV 文件批量导入",
+                color: .pink,
+                action: {
+                    showImportSheet = true
+                }
+            )
             
             Divider()
                 .background(AppTheme.Colors.divider)
@@ -1212,10 +1210,11 @@ struct MilkyToolRow: View {
     let title: String
     let subtitle: String
     let color: Color
+    var action: (() -> Void)? = nil
     
     var body: some View {
         Button {
-            // 执行操作
+            action?()
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon)
