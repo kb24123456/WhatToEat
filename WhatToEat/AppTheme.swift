@@ -564,10 +564,18 @@ struct AppTheme {
 // MARK: - 颜色动态适配扩展
 extension Color {
     /// 创建动态适配浅色/深色模式的颜色
+    /// 使用 UIColor 的动态颜色提供者，确保在系统切换模式时自动更新
     static func dynamic(light: Color, dark: Color) -> Color {
-        Color(UIColor { traitCollection in
-            UIColor(traitCollection.userInterfaceStyle == .dark ? dark : light)
-        })
+        // 将 SwiftUI Color 转换为 UIColor
+        let lightUIColor = UIColor(light)
+        let darkUIColor = UIColor(dark)
+        
+        // 创建动态 UIColor
+        let dynamicUIColor = UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark ? darkUIColor : lightUIColor
+        }
+        
+        return Color(dynamicUIColor)
     }
     
     init(hex: String) {
