@@ -256,6 +256,9 @@ class CSVImportManager: ObservableObject {
     @Published var geocodingProgress: (completed: Int, total: Int) = (0, 0)
     @Published var errorMessage: String?
     
+    // 记录本次导入的餐厅 ID，用于批量删除
+    @Published var lastImportedRestaurantIDs: [UUID] = []
+    
     private var cityRecognizer = CityRecognizer()
     private var cancellable: Any?
     
@@ -336,8 +339,12 @@ class CSVImportManager: ObservableObject {
         // 保存到 SwiftData
         try modelContext.save()
         
+        // 记录导入的餐厅 ID
+        let importedIDs = importedRestaurants.map { $0.id }
+        
         await MainActor.run {
             self.importedCount = importedRestaurants.count
+            self.lastImportedRestaurantIDs = importedIDs
             self.importPhase = .geocoding
         }
         
@@ -356,6 +363,40 @@ class CSVImportManager: ObservableObject {
         importedCount = 0
         geocodingProgress = (0, 0)
         errorMessage = nil
+        lastImportedRestaurantIDs = []
+    }
+    
+    /// 批量删除上次导入的餐厅
+    func deleteLastImportedRestaurants(modelContext: ModelContext) async throws -> Int {
+        guard !lastImportedRestaurantIDs.isEmpty else {
+            return 0
+        }
+        
+        let idsToDelete = lastImportedRestaurantIDs
+        var deletedCount = 0
+        
+        // 获取所有餐厅
+        let descriptor = FetchDescriptor<Restaurant>()
+        let allRestaurants = try modelContext.fetch(descriptor)
+        
+        // 删除匹配的餐厅
+        for restaurant in allRestaurants {
+            if idsToDelete.contains(restaurant.id) {
+                modelContext.delete(restaurant)
+                deletedCount += 1
+            }
+        }
+        
+        // 保存更改
+        try modelContext.save()
+        
+        // 清空记录的 ID
+        await MainActor.run {
+            self.lastImportedRestaurantIDs = []
+            self.importedCount = 0
+        }
+        
+        return deletedCount
     }
 }
 

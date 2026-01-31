@@ -28,6 +28,10 @@ struct ImportDataView: View {
     @State private var showConfetti = false
     @State private var isImporting = false
     
+    // 删除确认
+    @State private var showDeleteConfirmation = false
+    @State private var importedRestaurantIDs: [UUID] = []
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -86,6 +90,15 @@ struct ImportDataView: View {
                 if newPhase == .completed {
                     triggerConfetti()
                 }
+            }
+            // 删除确认对话框
+            .alert("确认删除", isPresented: $showDeleteConfirmation) {
+                Button("取消", role: .cancel) { }
+                Button("删除", role: .destructive) {
+                    deleteImportedRestaurants()
+                }
+            } message: {
+                Text("这将删除本次导入的所有餐厅数据（共 \(importManager.importedCount) 家），此操作不可撤销。")
             }
         }
     }
@@ -230,26 +243,32 @@ struct ImportDataView: View {
     // MARK: - Import Button Section
     private var importButtonSection: some View {
         VStack(spacing: 12) {
-            // 选择文件按钮
-            Button {
-                showFilePicker = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "doc.badge.arrow.up")
-                        .font(.system(size: 18))
-                    Text(selectedFileURL != nil ? "重新选择文件" : "选择 CSV 文件")
-                        .font(.system(size: 16, weight: .medium))
+            // 根据状态显示不同按钮
+            if importManager.importPhase == .completed {
+                // 导入完成后的操作按钮
+                completedActionButtons
+            } else {
+                // 选择文件按钮
+                Button {
+                    showFilePicker = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "doc.badge.arrow.up")
+                            .font(.system(size: 18))
+                        Text(selectedFileURL != nil ? "重新选择文件" : "选择 CSV 文件")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(AppTheme.Colors.accent)
+                    )
+                    .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 12, x: 0, y: 6)
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(AppTheme.Colors.accent)
-                )
-                .shadow(color: AppTheme.Colors.accent.opacity(0.3), radius: 12, x: 0, y: 6)
+                .disabled(isImporting)
             }
-            .disabled(isImporting)
             
             // 已选文件显示
             if let url = selectedFileURL {
@@ -267,6 +286,54 @@ struct ImportDataView: View {
                 .background(
                     Capsule()
                         .fill(AppTheme.Colors.accent.opacity(0.1))
+                )
+            }
+        }
+    }
+    
+    // MARK: - Completed Action Buttons
+    private var completedActionButtons: some View {
+        VStack(spacing: 12) {
+            // 完成按钮
+            Button {
+                dismiss()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                    Text("完成")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppTheme.Colors.success)
+                )
+                .shadow(color: AppTheme.Colors.success.opacity(0.3), radius: 12, x: 0, y: 6)
+            }
+            
+            // 批量删除按钮
+            Button {
+                showDeleteConfirmation = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "trash.circle.fill")
+                        .font(.system(size: 18))
+                    Text("删除本次导入的餐厅")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundColor(AppTheme.Colors.warning)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppTheme.Colors.warning.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(AppTheme.Colors.warning.opacity(0.3), lineWidth: 1)
                 )
             }
         }
@@ -439,6 +506,31 @@ struct ImportDataView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             withAnimation {
                 showConfetti = false
+            }
+        }
+    }
+    
+    // MARK: - Delete Imported Restaurants
+    private func deleteImportedRestaurants() {
+        Task {
+            do {
+                let deletedCount = try await importManager.deleteLastImportedRestaurants(
+                    modelContext: modelContext
+                )
+                
+                await MainActor.run {
+                    // 重置状态，允许重新导入
+                    importManager.reset()
+                    selectedFileURL = nil
+                }
+                
+                print("ImportDataView: 成功删除 \(deletedCount) 家餐厅")
+                
+            } catch {
+                await MainActor.run {
+                    importManager.errorMessage = error.localizedDescription
+                    importManager.importPhase = .error(error.localizedDescription)
+                }
             }
         }
     }
