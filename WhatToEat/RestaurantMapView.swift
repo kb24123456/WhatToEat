@@ -554,6 +554,8 @@ struct RestaurantMapView: View {
             )
             .frame(height: 280)
             .ignoresSafeArea()
+            // 修复：允许触摸事件穿透到地图
+            .allowsHitTesting(false)
             
             Spacer()
         }
@@ -668,6 +670,8 @@ struct RestaurantMapView: View {
             }
         }
         .ignoresSafeArea()
+        // 修复：允许触摸事件穿透到地图
+        .allowsHitTesting(false)
     }
     
     // MARK: - 设置初始相机位置
@@ -694,6 +698,9 @@ struct RestaurantMapView: View {
         ))
     }
     
+    // 上次地图移动时间
+    @State private var lastMapMovementTime: Date = Date()
+    
     // MARK: - 处理地图相机变化
     private func handleMapCameraChange(_ newRegion: MKCoordinateRegion) {
         visibleRegion = newRegion
@@ -701,12 +708,14 @@ struct RestaurantMapView: View {
         let newCenter = newRegion.center
         
         // 性能优化：处理地图移动状态
+        lastMapMovementTime = Date()
+        
         if !isMapMoving {
             handleMapMovementStart()
         }
         
-        // 延迟调用移动结束（如果 0.1 秒内没有新调用，则认为移动结束）
-        handleMapMovementEnd()
+        // 延迟检测移动是否结束
+        scheduleMovementEndCheck()
         
         if let initialCenter = initialCenterCoordinate {
             let distance = calculateDistance(from: initialCenter, to: newCenter)
@@ -717,6 +726,23 @@ struct RestaurantMapView: View {
             }
         } else {
             initialCenterCoordinate = newCenter
+        }
+    }
+    
+    // 调度移动结束检测
+    private func scheduleMovementEndCheck() {
+        // 取消之前的检测
+        mapMovementTimer?.invalidate()
+        
+        // 0.15秒后检查是否还在移动
+        mapMovementTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
+            Task { @MainActor in
+                let timeSinceLastMovement = Date().timeIntervalSince(self.lastMapMovementTime)
+                // 如果超过0.15秒没有新移动，认为移动结束
+                if timeSinceLastMovement >= 0.15 {
+                    self.handleMapMovementEnd()
+                }
+            }
         }
     }
     
@@ -791,18 +817,13 @@ struct RestaurantMapView: View {
     
     private func handleMapMovementEnd() {
         // 地图停止移动：延迟显示餐厅
-        mapMovementTimer?.invalidate()
+        isMapMoving = false
         
-        mapMovementTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+        // 延迟 0.5 秒后显示餐厅
+        annotationDelayTimer?.invalidate()
+        annotationDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
             Task { @MainActor in
-                self.isMapMoving = false
-                
-                // 再延迟 0.3 秒后才显示餐厅（给用户一个缓冲时间）
-                self.annotationDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
-                    Task { @MainActor in
-                        self.showAnnotations = true
-                    }
-                }
+                self.showAnnotations = true
             }
         }
     }
