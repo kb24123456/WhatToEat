@@ -20,29 +20,40 @@ class CloudKitManager: NSObject {
     var userID: String?
     var userName: String?
     var errorMessage: String?
+    var isInitialized = false
     
     // MARK: - 私有属性
     private var container: CKContainer?
     private var authController: ASAuthorizationController?
     
+    // MARK: - 常量
+    private let containerIdentifier = "iCloud.com.liaoyunfeng.WhatToEat"
+    
     // MARK: - 初始化
     private override init() {
         super.init()
+        // 不在这里初始化容器，延迟到应用启动后再初始化
+    }
+    
+    // MARK: - 安全初始化容器
+    func initializeIfNeeded() {
+        guard !isInitialized else { return }
         
-        // 延迟初始化容器，避免在应用启动时崩溃
-        // 需要在主线程中初始化
+        // 在主线程初始化
         DispatchQueue.main.async { [weak self] in
-            self?.initializeContainer()
+            self?.setupContainer()
         }
     }
     
-    // MARK: - 初始化容器
-    private func initializeContainer() {
-        // 尝试获取默认容器
-        let ckContainer = CKContainer.default()
+    // MARK: - 设置容器
+    private func setupContainer() {
+        // 使用指定的容器标识符初始化
+        // 这样即使没有配置默认容器也不会崩溃
+        let ckContainer = CKContainer(identifier: containerIdentifier)
         self.container = ckContainer
+        self.isInitialized = true
         
-        // 启动时检查 CloudKit 状态
+        // 检查 CloudKit 状态
         checkCloudKitStatus()
     }
     

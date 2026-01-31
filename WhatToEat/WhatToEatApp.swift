@@ -36,8 +36,11 @@ struct WhatToEatApp: App {
 
     init() {
         setupRegionsFile()
-        // App 启动时检查 CloudKit 状态
-        CloudKitManager.shared.checkCloudKitStatus()
+        // App 启动时安全初始化 CloudKit
+        // 使用延迟初始化避免启动崩溃
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            CloudKitManager.shared.initializeIfNeeded()
+        }
     }
 
     private func setupRegionsFile() {
