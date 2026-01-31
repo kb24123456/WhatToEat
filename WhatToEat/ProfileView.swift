@@ -280,136 +280,8 @@ struct ProfileView: View {
     // MARK: - Phase 2: Tags Cloud (我的标签)
     private var tagsCloudSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("我的标签")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
-                
-                Spacer()
-                
-                if !isEditingTags {
-                    Button {
-                        withAnimation(AppTheme.Animations.editingSpring) {
-                            isEditingTags = true
-                        }
-                    } label: {
-                        Text("管理")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(AppTheme.Colors.babyBlue)
-                    }
-                }
-            }
-            
-            // 标签编辑区域（参考添加页面样式）
-            ZStack(alignment: .bottomTrailing) {
-                VStack(spacing: 0) {
-                    // 标签 FlowLayout - 非编辑模式最多2行
-                    if isEditingTags {
-                        // 编辑模式：显示所有标签
-                        FlowLayout(spacing: 10) {
-                            ForEach(userTags, id: \.self) { tag in
-                                profileTagSticker(tag)
-                            }
-                            
-                            // 新增标签输入框
-                            TextField("新标签...", text: $newTagInput)
-                                .font(.system(size: 14, design: .rounded))
-                                .foregroundColor(AppTheme.Colors.darkText)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.5))
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 1)
-                                )
-                                .focused($tagInputIsFocused)
-                                .frame(minWidth: 80)
-                                .onSubmit {
-                                    addNewTag()
-                                }
-                                .onAppear {
-                                    tagInputIsFocused = true
-                                }
-                        }
-                        .padding(16)
-                    } else {
-                        // 非编辑模式：最多显示2行
-                        LimitedRowsFlowLayout(spacing: 10, maxRows: 2) {
-                            ForEach(userTags, id: \.self) { tag in
-                                profileTagSticker(tag)
-                            }
-                        }
-                        .padding(16)
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color.white.opacity(0.5))
-                    )
-                    
-                    // 推荐标签区域（编辑模式下显示）
-                    if isEditingTags {
-                        presetTagsSection
-                            .padding(16)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    }
-                }
-                .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
-                
-                // 勾叉按钮（压在容器下边缘，一半在内一半在外）
-                if isEditingTags {
-                    HStack(spacing: 12) {
-                        // 取消按钮 - 深灰色
-                        Button {
-                            withAnimation(AppTheme.Animations.editingSpring) {
-                                isEditingTags = false
-                                newTagInput = ""
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 36, height: 36)
-                                .background(
-                                    Circle()
-                                        .fill(AppTheme.Colors.darkBackground)
-                                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                                )
-                        }
-                        
-                        // 确认按钮 - 红色
-                        Button {
-                            withAnimation(AppTheme.Animations.editingSpring) {
-                                saveTags()
-                                isEditingTags = false
-                                newTagInput = ""
-                            }
-                        } label: {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 36, height: 36)
-                                .background(
-                                    Circle()
-                                        .fill(AppTheme.Colors.accent)
-                                        .shadow(color: AppTheme.Shadows.elevated.color, radius: 8, x: 0, y: 4)
-                                )
-                        }
-                    }
-                    .padding(.trailing, 16)
-                    .offset(y: 18)
-                    .transition(.scale.combined(with: .opacity))
-                }
-            }
-            .onTapGesture {
-                if !isEditingTags {
-                    withAnimation(AppTheme.Animations.editingSpring) {
-                        isEditingTags = true
-                    }
-                }
-            }
+            tagsCloudHeader
+            tagsCloudContent
         }
         .padding(16)
         .background(
@@ -420,6 +292,177 @@ struct ProfileView: View {
                         .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                 )
         )
+    }
+    
+    // MARK: - 标签区域头部
+    private var tagsCloudHeader: some View {
+        HStack {
+            Text("我的标签")
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
+            
+            Spacer()
+            
+            if !isEditingTags {
+                Button {
+                    withAnimation(AppTheme.Animations.editingSpring) {
+                        isEditingTags = true
+                    }
+                } label: {
+                    Text("管理")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
+                }
+            }
+        }
+    }
+    
+    // MARK: - 标签区域内容
+    private var tagsCloudContent: some View {
+        ZStack(alignment: .bottomTrailing) {
+            tagsCloudMainContent
+            tagsCloudActionButtons
+        }
+        .onTapGesture {
+            if !isEditingTags {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    isEditingTags = true
+                }
+            }
+        }
+    }
+    
+    // MARK: - 标签区域主内容
+    private var tagsCloudMainContent: some View {
+        VStack(spacing: 0) {
+            tagsLayoutContainer
+            
+            if isEditingTags {
+                presetTagsSection
+                    .padding(16)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
+    }
+    
+    // MARK: - 标签布局容器
+    @ViewBuilder
+    private var tagsLayoutContainer: some View {
+        if isEditingTags {
+            tagsEditingLayout
+        } else {
+            tagsDisplayLayout
+        }
+    }
+    
+    // MARK: - 编辑模式标签布局
+    private var tagsEditingLayout: some View {
+        FlowLayout(spacing: 10) {
+            ForEach(userTags, id: \.self) { tag in
+                profileTagSticker(tag)
+            }
+            newTagInputField
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.5))
+        )
+    }
+    
+    // MARK: - 新标签输入框
+    private var newTagInputField: some View {
+        TextField("新标签...", text: $newTagInput)
+            .font(.system(size: 14, design: .rounded))
+            .foregroundColor(AppTheme.Colors.darkText)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.5))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 1)
+            )
+            .focused($tagInputIsFocused)
+            .frame(minWidth: 80)
+            .onSubmit {
+                addNewTag()
+            }
+            .onAppear {
+                tagInputIsFocused = true
+            }
+    }
+    
+    // MARK: - 展示模式标签布局（最多2行）
+    private var tagsDisplayLayout: some View {
+        LimitedRowsFlowLayout(spacing: 10, maxRows: 2) {
+            ForEach(userTags, id: \.self) { tag in
+                profileTagSticker(tag)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.5))
+        )
+    }
+    
+    // MARK: - 标签区域操作按钮（勾叉）
+    @ViewBuilder
+    private var tagsCloudActionButtons: some View {
+        if isEditingTags {
+            HStack(spacing: 12) {
+                cancelTagEditButton
+                confirmTagEditButton
+            }
+            .padding(.trailing, 16)
+            .offset(y: 18)
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+    
+    // MARK: - 取消编辑按钮
+    private var cancelTagEditButton: some View {
+        Button {
+            withAnimation(AppTheme.Animations.editingSpring) {
+                isEditingTags = false
+                newTagInput = ""
+            }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(AppTheme.Colors.darkBackground)
+                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+                )
+        }
+    }
+    
+    // MARK: - 确认编辑按钮
+    private var confirmTagEditButton: some View {
+        Button {
+            withAnimation(AppTheme.Animations.editingSpring) {
+                saveTags()
+                isEditingTags = false
+                newTagInput = ""
+            }
+        } label: {
+            Image(systemName: "checkmark")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(AppTheme.Colors.accent)
+                        .shadow(color: AppTheme.Shadows.elevated.color, radius: 8, x: 0, y: 4)
+                )
+        }
     }
     
     // MARK: - 推荐标签区域
