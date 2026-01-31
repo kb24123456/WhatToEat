@@ -64,12 +64,18 @@ struct GourmetMatchView: View {
             }
         }
         .padding(.bottom, 120)
-        .alert("就是它了！", isPresented: $showEatConfirmation) {
-            Button("去看看", role: .none) {}
-            Button("继续匹配", role: .cancel) {}
-        } message: {
+        .sheet(isPresented: $showEatConfirmation) {
             if let restaurant = selectedRestaurant {
-                Text("\(restaurant.name) 已加入你的想吃清单")
+                RestaurantSelectionDetailView(
+                    restaurant: restaurant,
+                    locationManager: locationManager,
+                    onClose: {
+                        showEatConfirmation = false
+                    },
+                    onContinue: {
+                        showEatConfirmation = false
+                    }
+                )
             }
         }
     }
