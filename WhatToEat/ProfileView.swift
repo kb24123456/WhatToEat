@@ -13,9 +13,6 @@ struct ProfileView: View {
     @State private var userProfile = UserProfile.load()
     @State private var privacyEnabled = UserDefaults.standard.bool(forKey: "privacyEnabled")
     
-    // MARK: - CloudKit 管理器
-    @State private var cloudKitManager = CloudKitManager.shared
-    
     // MARK: - 打卡记录视图状态
     @State private var showCheckInHistory = false
     
@@ -39,13 +36,6 @@ struct ProfileView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
-                // Phase 0: CloudKit 登录状态
-                if !cloudKitManager.isSignedIn {
-                    cloudKitSignInSection
-                } else {
-                    cloudSyncStatusSection
-                }
-                
                 // Phase 1: 身份识别与全局勋章
                 glassProfileCard
                 grandStatsDashboard
@@ -79,32 +69,6 @@ struct ProfileView: View {
         // 键盘避让：点击空白处收起键盘
         .scrollDismissesKeyboard(.interactively)
         .animation(.easeInOut(duration: 0.25), value: isEditingTags)
-    }
-    
-    // MARK: - Phase 0: CloudKit 登录区域
-    private var cloudKitSignInSection: some View {
-        SignInPromptCard {
-            cloudKitManager.signInWithApple()
-        }
-    }
-    
-    // MARK: - CloudKit 同步状态区域
-    private var cloudSyncStatusSection: some View {
-        HStack {
-            CloudSyncStatusView()
-            
-            Spacer()
-            
-            // 登出按钮
-            Button {
-                cloudKitManager.signOut()
-            } label: {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
-            }
-        }
-        .padding(.horizontal, 4)
     }
     
     // MARK: - Phase 1: Profile Card (白色透明名片，显示背景渐变)
@@ -193,9 +157,9 @@ struct ProfileView: View {
             Divider().frame(height: 40)
             StatCell(value: "\(totalCheckIns)", label: "打卡", color: AppTheme.Colors.darkText)
             Divider().frame(height: 40)
-            StatCell(value: formatCurrency(totalExpense), label: "总支出", color: AppTheme.Colors.babyBlue)
+            StatCell(value: formatCurrency(totalExpense), label: "总支出", color: AppTheme.Colors.darkText)
             Divider().frame(height: 40)
-            StatCell(value: "\(uniqueCities)", label: "城市", color: AppTheme.Colors.accent)
+            StatCell(value: "\(uniqueCities)", label: "城市", color: AppTheme.Colors.darkText)
         }
         .padding(.vertical, 16)
         .background(
@@ -946,19 +910,8 @@ struct TopRestaurantCard: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            // 排名徽章
-            ZStack {
-                Circle()
-                    .fill(rank <= 3 ? AppTheme.Colors.accent.opacity(0.1) : AppTheme.Colors.warmGray)
-                    .frame(width: 32, height: 32)
-                
-                Text("\(rank)")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundColor(rank <= 3 ? AppTheme.Colors.accent : AppTheme.Colors.mediumGray)
-            }
-            
-            // 餐厅头像
-            ZStack {
+            // 餐厅头像（左上角叠加排名徽章）
+            ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(AppTheme.Colors.warmGray)
                     .frame(width: 60, height: 60)
@@ -975,6 +928,18 @@ struct TopRestaurantCard: View {
                         .font(.system(size: 24))
                         .foregroundColor(AppTheme.Colors.babyBlue)
                 }
+                
+                // 排名徽章 - 移至左上角，缩小20%（原32pt -> 25.6pt ≈ 26pt）
+                ZStack {
+                    Circle()
+                        .fill(rank <= 3 ? AppTheme.Colors.accent : AppTheme.Colors.warmGray)
+                        .frame(width: 26, height: 26)
+                    
+                    Text("\(rank)")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundColor(rank <= 3 ? .white : AppTheme.Colors.mediumGray)
+                }
+                .offset(x: -4, y: -4) // 向左上偏移，使徽章一半在图片内
             }
             
             // 餐厅名
@@ -991,6 +956,7 @@ struct TopRestaurantCard: View {
         }
         .frame(width: 80)
         .padding(.vertical, 8)
+        .pressableButton(scale: 0.95) // 添加缩放反馈
     }
 }
 
