@@ -25,6 +25,21 @@ struct RestaurantMapView: View {
     @State private var hasUserInteractedWithMap: Bool = false
     private let regionChangeThreshold: CLLocationDistance = 500 // 移动超过500米后重置
     
+    // 地图缩放级别对应的聚类距离
+    private var dynamicClusteringDistance: CLLocationDistance {
+        // 根据地图缩放级别动态调整聚类距离
+        guard let region = visibleRegion else { return 100 }
+        // 缩放级别越小（地图越缩小），聚类距离越大
+        let spanDelta = max(region.span.latitudeDelta, region.span.longitudeDelta)
+        if spanDelta > 0.5 {
+            return 500 // 大范围视图：500米聚类
+        } else if spanDelta > 0.1 {
+            return 200 // 中等范围：200米聚类
+        } else {
+            return 80 // 小范围：80米聚类
+        }
+    }
+    
     // 选中的餐厅（用于详情抽屉）
     @State private var selectedRestaurant: Restaurant?
     
@@ -428,7 +443,7 @@ struct RestaurantMapView: View {
                 
                 let distance = calculateDistance(from: coordinate, to: otherCoordinate)
                 
-                if distance < clusteringDistance {
+                if distance < dynamicClusteringDistance {
                     nearbyRestaurants.append(other)
                     processed.insert(other.id)
                 }
@@ -677,17 +692,16 @@ struct GourmetAnnotation: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // 任务1：白色无边框气泡，显示一句话点评
-            if !restaurant.review.isEmpty {
+            // 优化：只在选中时显示点评气泡，减少视觉堆积
+            if isSelected && !restaurant.review.isEmpty {
                 Text(restaurant.review)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(AppTheme.Colors.darkText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
-                        // 任务1：气泡背景改为 BabyBlue 到白色的渐变色
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(isSelected ? 
+                            .fill(
                                 AnyShapeStyle(
                                     LinearGradient(
                                         colors: [
@@ -697,13 +711,12 @@ struct GourmetAnnotation: View {
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
-                                ) : 
-                                AnyShapeStyle(Color.white)
+                                )
                             )
                     )
                     .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
                     .offset(y: -10)
-                    .scaleEffect(isSelected ? 1.05 : 1.0)
+                    .scaleEffect(1.05)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
             }
             
@@ -813,18 +826,30 @@ struct ClusterAnnotationView: View {
     
     var body: some View {
         ZStack {
+            // 外圈光晕效果
             Circle()
-                .fill(AppTheme.Colors.milkyWhite)
-                .frame(width: 44, height: 44)
-                .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 3)
+                .fill(AppTheme.Colors.accent.opacity(0.15))
+                .frame(width: 56, height: 56)
             
+            // 主圆形背景
             Circle()
-                .stroke(AppTheme.Colors.accent.opacity(0.3), lineWidth: 2)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AppTheme.Colors.accent,
+                            AppTheme.Colors.accent.opacity(0.8)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .frame(width: 44, height: 44)
+                .shadow(color: AppTheme.Colors.accent.opacity(0.4), radius: 8, x: 0, y: 4)
             
-            Text("+\(count)")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(AppTheme.Colors.darkText)
+            // 数量文字
+            Text("\(count)")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
         }
     }
 }
