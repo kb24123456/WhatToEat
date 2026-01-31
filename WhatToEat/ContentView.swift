@@ -139,12 +139,7 @@ struct ContentView: View {
             )
         }
         .frame(height: 64)
-        .background(
-            Color.dynamic(
-                light: Color.white,
-                dark: Color(hex: "#121212").opacity(0.95)
-            )
-        )
+        .background(Color.white)
         .zIndex(100)
     }
     
@@ -169,7 +164,7 @@ struct ContentView: View {
                         .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .rounded))
                         .frame(height: 10)
                 }
-                .foregroundColor(isSelected ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary.opacity(0.7))
+                .foregroundColor(isSelected ? .black : AppTheme.Colors.textSecondary.opacity(0.7))
             }
             .frame(maxWidth: .infinity, maxHeight: 60)
         }

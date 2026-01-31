@@ -42,7 +42,7 @@ struct RestaurantMapView: View {
         return calculateClusters(from: filtered)
     }
     
-    // 筛选餐厅（搜索 + 区域）
+    // 筛选餐厅（搜索 + 区域 + 有效坐标）
     private func filterRestaurants() -> [Restaurant] {
         // 搜索筛选
         var result = restaurants
@@ -58,6 +58,11 @@ struct RestaurantMapView: View {
             result = result.filter { r in
                 self.isInRegion(lat: r.latitude, lon: r.longitude, region: region)
             }
+        }
+        
+        // 过滤无效坐标（latitude == 0 表示尚未获取坐标）
+        result = result.filter { r in
+            r.latitude != 0 || r.longitude != 0
         }
         
         return result
