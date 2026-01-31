@@ -1093,7 +1093,7 @@ struct AddRestaurantView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
             }
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 40)
             .padding(.vertical, 18)
             .background(
                 Capsule()

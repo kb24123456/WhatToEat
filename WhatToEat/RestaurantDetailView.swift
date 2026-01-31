@@ -283,7 +283,7 @@ struct RestaurantDetailView: View {
                         Text(restaurant.type)
                             .font(.caption)
                             .fontWeight(.semibold)
-                            .foregroundColor(AppTheme.Colors.mediumGray)
+                            .foregroundColor(.black)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(Color.white.opacity(0.35), in: Capsule())
                         
@@ -291,7 +291,7 @@ struct RestaurantDetailView: View {
                             Text("¥\(Int(restaurant.averagePrice))/人")
                                 .font(.caption)
                                 .fontWeight(.semibold)
-                                .foregroundColor(AppTheme.Colors.mediumGray)
+                                .foregroundColor(.black)
                         }
                     }
                 }
