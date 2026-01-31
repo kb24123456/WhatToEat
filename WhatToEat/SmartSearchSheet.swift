@@ -367,9 +367,66 @@ struct SmartSearchSheet: View {
     
     // MARK: - 搜索结果行
     private func searchResultRow(item: MKMapItem, index: Int) -> some View {
-        SearchResultButton(item: item) {
+        Button(action: {
             selectPlace(item)
+        }) {
+            HStack(spacing: 12) {
+                // 图标
+                ZStack {
+                    Circle()
+                        .fill(categoryColor(for: item.pointOfInterestCategory).opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    
+                    Image(systemName: categoryIcon(for: item.pointOfInterestCategory))
+                        .font(.system(size: 18))
+                        .foregroundColor(categoryColor(for: item.pointOfInterestCategory))
+                }
+                
+                // 信息
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.name ?? "未知地点")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Color(hex: "#1A1A1A"))
+                        .lineLimit(1)
+                    
+                    HStack(spacing: 6) {
+                        // 距离
+                        if let distance = calculateDistance(to: item.placemark.coordinate) {
+                            Text(distance)
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(hex: "#FF6B6B"))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(Color(hex: "#FF6B6B").opacity(0.1))
+                                )
+                        }
+                        
+                        // 地址
+                        Text(formatAddress(from: item.placemark))
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(hex: "#888888"))
+                            .lineLimit(1)
+                    }
+                }
+                
+                Spacer()
+                
+                // 箭头
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(hex: "#CCCCCC"))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
+            )
         }
+        .buttonStyle(ScaleButtonStyle())
     }
     
     // MARK: - 搜索输入处理（防抖）
