@@ -30,7 +30,11 @@ struct ImportDataView: View {
     
     // 删除确认
     @State private var showDeleteConfirmation = false
+    @State private var showDeleteAllConfirmation = false
     @State private var importedRestaurantIDs: [UUID] = []
+    
+    // 所有餐厅数量
+    @State private var totalRestaurantCount: Int = 0
     
     var body: some View {
         NavigationStack {
@@ -54,6 +58,9 @@ struct ImportDataView: View {
                         
                         // 说明文字
                         infoSection
+                        
+                        // 批量删除现有餐厅
+                        deleteAllSection
                         
                         Spacer(minLength: 40)
                     }
@@ -91,7 +98,7 @@ struct ImportDataView: View {
                     triggerConfetti()
                 }
             }
-            // 删除确认对话框
+            // 删除本次导入确认对话框
             .alert("确认删除", isPresented: $showDeleteConfirmation) {
                 Button("取消", role: .cancel) { }
                 Button("删除", role: .destructive) {
@@ -99,6 +106,15 @@ struct ImportDataView: View {
                 }
             } message: {
                 Text("这将删除本次导入的所有餐厅数据（共 \(importManager.importedCount) 家），此操作不可撤销。")
+            }
+            // 删除所有餐厅确认对话框
+            .alert("确认删除所有数据", isPresented: $showDeleteAllConfirmation) {
+                Button("取消", role: .cancel) { }
+                Button("删除所有", role: .destructive) {
+                    deleteAllRestaurants()
+                }
+            } message: {
+                Text("这将删除所有 \(totalRestaurantCount) 家餐厅及其打卡记录，此操作不可撤销。")
             }
         }
     }
@@ -360,6 +376,58 @@ struct ImportDataView: View {
         )
     }
     
+    // MARK: - Delete All Section
+    private var deleteAllSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("危险操作")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.warning)
+                
+                Spacer()
+                
+                Text("\(totalRestaurantCount) 家餐厅")
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+            }
+            
+            Button {
+                showDeleteAllConfirmation = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 16))
+                    Text("删除所有餐厅数据")
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .foregroundColor(AppTheme.Colors.warning)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(AppTheme.Colors.warning.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AppTheme.Colors.warning.opacity(0.3), lineWidth: 1)
+                )
+            }
+            
+            Text("此操作将删除所有餐厅数据，包括历史打卡记录，不可撤销。")
+                .font(.system(size: 12))
+                .foregroundColor(AppTheme.Colors.mediumGray)
+                .lineLimit(2)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.35))
+        )
+        .onAppear {
+            updateTotalRestaurantCount()
+        }
+    }
+    
     // MARK: - Info Row
     private func infoRow(icon: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
@@ -522,9 +590,50 @@ struct ImportDataView: View {
                     // 重置状态，允许重新导入
                     importManager.reset()
                     selectedFileURL = nil
+                    // 更新总数
+                    updateTotalRestaurantCount()
                 }
                 
                 print("ImportDataView: 成功删除 \(deletedCount) 家餐厅")
+                
+            } catch {
+                await MainActor.run {
+                    importManager.errorMessage = error.localizedDescription
+                    importManager.importPhase = .error(error.localizedDescription)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Update Total Restaurant Count
+    private func updateTotalRestaurantCount() {
+        let descriptor = FetchDescriptor<Restaurant>()
+        if let restaurants = try? modelContext.fetch(descriptor) {
+            totalRestaurantCount = restaurants.count
+        }
+    }
+    
+    // MARK: - Delete All Restaurants
+    private func deleteAllRestaurants() {
+        Task {
+            do {
+                let descriptor = FetchDescriptor<Restaurant>()
+                let allRestaurants = try modelContext.fetch(descriptor)
+                
+                for restaurant in allRestaurants {
+                    modelContext.delete(restaurant)
+                }
+                
+                try modelContext.save()
+                
+                await MainActor.run {
+                    totalRestaurantCount = 0
+                    // 重置导入状态
+                    importManager.reset()
+                    selectedFileURL = nil
+                }
+                
+                print("ImportDataView: 成功删除所有 \(allRestaurants.count) 家餐厅")
                 
             } catch {
                 await MainActor.run {
