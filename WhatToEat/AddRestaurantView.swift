@@ -281,6 +281,8 @@ struct AddRestaurantView: View {
                     Image(uiImage: firstImage)
                         .resizable()
                         .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
                 } else {
                     VStack(spacing: 6) {
                         Image(systemName: "camera.fill")
