@@ -1277,6 +1277,17 @@ struct AddRestaurantView: View {
         
         modelContext.insert(newRestaurant)
         
+        // 保存到持久化存储
+        do {
+            try modelContext.save()
+            print("[AddRestaurant] 餐厅保存成功: \(name), city=\(finalCity)")
+        } catch {
+            print("[AddRestaurant] 保存失败: \(error)")
+        }
+        
+        // 发送刷新通知
+        NotificationCenter.default.post(name: .restaurantListShouldRefresh, object: nil)
+        
         // 延迟关闭
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             closeAction()
