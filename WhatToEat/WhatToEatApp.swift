@@ -10,12 +10,22 @@ import SwiftData
 
 @main
 struct WhatToEatApp: App {
+    // MARK: - CloudKit 管理器
+    @State private var cloudKitManager = CloudKitManager.shared
+    
+    // MARK: - SwiftData 容器（配置 CloudKit 同步）
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Restaurant.self,
             VisitLog.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        
+        // 配置 CloudKit 同步
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .automatic
+        )
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
@@ -26,6 +36,8 @@ struct WhatToEatApp: App {
 
     init() {
         setupRegionsFile()
+        // App 启动时检查 CloudKit 状态
+        CloudKitManager.shared.checkCloudKitStatus()
     }
 
     private func setupRegionsFile() {

@@ -13,6 +13,9 @@ struct ProfileView: View {
     @State private var userProfile = UserProfile.load()
     @State private var privacyEnabled = UserDefaults.standard.bool(forKey: "privacyEnabled")
     
+    // MARK: - CloudKit 管理器
+    @State private var cloudKitManager = CloudKitManager.shared
+    
     // MARK: - 打卡记录视图状态
     @State private var showCheckInHistory = false
     
@@ -36,6 +39,13 @@ struct ProfileView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
+                // Phase 0: CloudKit 登录状态
+                if !cloudKitManager.isSignedIn {
+                    cloudKitSignInSection
+                } else {
+                    cloudSyncStatusSection
+                }
+                
                 // Phase 1: 身份识别与全局勋章
                 glassProfileCard
                 grandStatsDashboard
@@ -69,6 +79,32 @@ struct ProfileView: View {
         // 键盘避让：点击空白处收起键盘
         .scrollDismissesKeyboard(.interactively)
         .animation(.easeInOut(duration: 0.25), value: isEditingTags)
+    }
+    
+    // MARK: - Phase 0: CloudKit 登录区域
+    private var cloudKitSignInSection: some View {
+        SignInPromptCard {
+            cloudKitManager.signInWithApple()
+        }
+    }
+    
+    // MARK: - CloudKit 同步状态区域
+    private var cloudSyncStatusSection: some View {
+        HStack {
+            CloudSyncStatusView()
+            
+            Spacer()
+            
+            // 登出按钮
+            Button {
+                cloudKitManager.signOut()
+            } label: {
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+            }
+        }
+        .padding(.horizontal, 4)
     }
     
     // MARK: - Phase 1: Profile Card (白色透明名片，显示背景渐变)
