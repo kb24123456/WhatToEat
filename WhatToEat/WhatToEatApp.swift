@@ -10,8 +10,6 @@ import SwiftData
 
 @main
 struct WhatToEatApp: App {
-    @StateObject private var themeManager = ThemeManager.shared
-    
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Restaurant.self,
@@ -64,7 +62,6 @@ struct WhatToEatApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(themeManager.colorScheme)
         }
         .modelContainer(sharedModelContainer)
     }

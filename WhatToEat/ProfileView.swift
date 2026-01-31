@@ -13,9 +13,6 @@ struct ProfileView: View {
     @State private var userProfile = UserProfile.load()
     @State private var privacyEnabled = UserDefaults.standard.bool(forKey: "privacyEnabled")
     
-    // MARK: - 主题管理
-    @StateObject private var themeManager = ThemeManager.shared
-    
     // MARK: - 打卡记录视图状态
     @State private var showCheckInHistory = false
     
@@ -674,13 +671,6 @@ struct ProfileView: View {
     // MARK: - Phase 4: Milky Tool List (奶脂风格工具列表)
     private var milkyToolList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 主题切换
-            themeToggleRow
-            
-            Divider()
-                .background(AppTheme.Colors.divider)
-                .padding(.leading, 60)
-            
             // 隐私锁开关
             PrivacyToggleView(privacyEnabled: $privacyEnabled)
                 .padding(.horizontal, 16)
@@ -742,49 +732,6 @@ struct ProfileView: View {
                         .stroke(AppTheme.Colors.separatorGray.opacity(0.3), lineWidth: 0.5)
                 )
         )
-    }
-    
-    // MARK: - 主题切换行
-    private var themeToggleRow: some View {
-        HStack(spacing: 12) {
-            // 图标
-            Image(systemName: "circle.lefthalf.filled")
-                .font(.system(size: 20))
-                .foregroundColor(.purple)
-                .frame(width: 28, height: 28)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text("外观")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
-                
-                Text(themeManager.currentMode.title)
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
-            }
-            
-            Spacer()
-            
-            // 主题切换按钮组
-            HStack(spacing: 8) {
-                ForEach(ThemeMode.allCases) { mode in
-                    Button {
-                        themeManager.setMode(mode)
-                    } label: {
-                        Image(systemName: mode.icon)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(themeManager.currentMode == mode ? .white : AppTheme.Colors.mediumGray)
-                            .frame(width: 32, height: 32)
-                            .background(
-                                Circle()
-                                    .fill(themeManager.currentMode == mode ? AppTheme.Colors.accent : Color.clear)
-                            )
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
     
     // MARK: - Phase 4: Bottom Info (底部信息)
