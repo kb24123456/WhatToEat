@@ -569,8 +569,8 @@ struct RestaurantMapView: View {
                     stops: [
                         .init(color: Color.white.opacity(0), location: 0.0),       // 最上方完全透明（显示地图）
                         .init(color: Color.white.opacity(0.0), location: 0.2),   // 20%位置轻微白色
-                        .init(color: Color.white.opacity(0.0), location: 0.4),    // 40%位置较明显
-                        .init(color: Color.white, location: 0.85),   // 85%位置开始纯白
+                        .init(color: Color.white.opacity(0.85), location: 0.65),    // 65%位置较明显
+                        .init(color: Color.white.opacity(0.98), location: 0.85),   // 85%位置开始几乎纯白
                         .init(color: Color.white, location: 1.0)                  // 最下方纯白色（与导航栏衔接）
                     ],
                     startPoint: .top,

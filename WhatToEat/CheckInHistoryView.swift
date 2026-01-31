@@ -174,128 +174,133 @@ struct CheckInHistoryView: View {
         )
     }
     
-    // MARK: - Check In Log Card (与 RestaurantDetailView 同款)
+    // MARK: - Check In Log Card (方案1：卡片式重构)
     private func checkInLogCard(item: LogItem) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 餐厅名称（仅在全局视图显示）
-            if restaurant == nil {
-                Text(item.restaurantName)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.darkText)
-                    .padding(.bottom, 8)
-            }
-            
-            // 日期行
-            Text(item.log.date.chineseDateTime)
-                .font(.subheadline)
-                .foregroundColor(AppTheme.Colors.mediumGray)
-            
-            // 指标水平栏
-            HStack(spacing: 0) {
-                // 人均
-                metricCell(
-                    title: "人均",
-                    value: Int(item.log.peopleCount > 0 ? item.log.expense / Double(item.log.peopleCount) : 0),
-                    unit: "¥",
-                    valueColor: AppTheme.Colors.accent
-                )
+            // 顶部：餐厅封面 + 名称 + 心情
+            HStack(spacing: 12) {
+                // 餐厅封面缩略图
+                restaurantThumbnail(item: item)
+                    .frame(width: 48, height: 48)
                 
-                // 分隔线
-                Divider()
-                    .frame(height: 20)
-                    .opacity(0.1)
-                
-                // 总额
-                metricCell(
-                    title: "总额",
-                    value: Int(item.log.expense),
-                    unit: "¥"
-                )
-                
-                // 分隔线
-                Divider()
-                    .frame(height: 20)
-                    .opacity(0.1)
-                
-                // 人数
-                metricCell(
-                    title: "人数",
-                    value: item.log.peopleCount,
-                    unit: "人"
-                )
-            }
-            .padding(.top, 12)
-            
-            // 图片
-            if let firstFilename = item.log.photoFilenames.first {
-                AsyncImageView(
-                    filename: firstFilename,
-                    placeholder: AnyView(EmptyView())
-                )
-                .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .frame(height: 200)
-                .clipped()
-                .cornerRadius(16)
-                .padding(.top, 12)
-            }
-            
-            // 菜品标签
-            if !item.log.goodDishes.isEmpty || !item.log.badDishes.isEmpty {
-                HStack(spacing: 16) {
-                    if !item.log.goodDishes.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "hand.thumbsup.fill")
-                                .font(.caption)
-                                .foregroundColor(AppTheme.Colors.accent)
-                            Text(item.log.goodDishes)
-                                .font(.caption)
-                                .foregroundColor(AppTheme.Colors.darkText)
-                        }
-                    }
-                    if !item.log.badDishes.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "hand.thumbsdown.fill")
-                                .font(.caption)
-                                .foregroundColor(AppTheme.Colors.mediumGray)
-                            Text(item.log.badDishes)
-                                .font(.caption)
-                                .foregroundColor(AppTheme.Colors.darkText)
+                VStack(alignment: .leading, spacing: 4) {
+                    // 餐厅名称
+                    Text(item.restaurantName)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                        .lineLimit(1)
+                    
+                    // 日期 + 心情
+                    HStack(spacing: 6) {
+                        Text(item.log.date.chineseDateTime)
+                            .font(.system(size: 13))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                        
+                        if let mood = item.log.mood, let moodType = MoodType.allCases.first(where: { $0.rawValue == mood }) {
+                            Text(moodType.rawValue)
+                                .font(.system(size: 14))
+                            Text(moodType.title)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(moodType.glowColor)
                         }
                     }
                 }
-                .padding(.top, 12)
+                
+                Spacer()
             }
+            .padding(.bottom, 16)
             
-            // 评价
-            if !item.log.review.isEmpty {
-                Text(item.log.review)
-                    .font(.subheadline)
-                    .foregroundColor(AppTheme.Colors.darkText)
-                    .lineSpacing(4)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(AppTheme.Colors.softBackground)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
-                            )
-                    )
-                    .padding(.top, 12)
+            // 消费信息行（紧凑布局）
+            HStack(spacing: 0) {
+                // 总额
+                HStack(spacing: 4) {
+                    Text("💰")
+                        .font(.system(size: 14))
+                    Text("¥\(Int(item.log.expense))")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // 人数
+                HStack(spacing: 4) {
+                    Text("👥")
+                        .font(.system(size: 14))
+                    Text("\(item.log.peopleCount)人")
+                        .font(.system(size: 14))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // 人均
+                HStack(spacing: 4) {
+                    Text("📊")
+                        .font(.system(size: 14))
+                    Text("¥\(Int(item.log.peopleCount > 0 ? item.log.expense / Double(item.log.peopleCount) : 0))")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.accent)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.bottom, 12)
+            
+            // 菜品标签（优化样式）
+            if !item.log.goodDishes.isEmpty || !item.log.badDishes.isEmpty {
+                HStack(spacing: 12) {
+                    if !item.log.goodDishes.isEmpty {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hand.thumbsup.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                            
+                            Text(item.log.goodDishes)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.Colors.accent)
+                        )
+                    }
+                    
+                    if !item.log.badDishes.isEmpty {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hand.thumbsdown.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.Colors.mediumGray)
+                            
+                            Text(item.log.badDishes)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.darkText)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.Colors.softBackground)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(AppTheme.Colors.lightGray, lineWidth: 0.5)
+                                )
+                        )
+                    }
+                }
             }
         }
-        .padding(20)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.35))
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.5))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.6), lineWidth: 1)
                 )
         )
-        .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 10)
+        .shadow(color: Color.black.opacity(0.04), radius: 16, x: 0, y: 6)
         .contextMenu {
             Button {
                 logToEdit = item.log
@@ -311,6 +316,39 @@ struct CheckInHistoryView: View {
                 Label("删除", systemImage: "trash")
             }
         }
+    }
+    
+    // MARK: - 餐厅封面缩略图
+    private func restaurantThumbnail(item: LogItem) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(AppTheme.Colors.lightGray)
+            
+            // 尝试加载餐厅封面
+            if let coverFilename = item.restaurant.coverPhotoFilename {
+                AsyncImageView(
+                    filename: coverFilename,
+                    placeholder: AnyView(
+                        Image(systemName: "fork.knife")
+                            .font(.system(size: 20))
+                            .foregroundColor(AppTheme.Colors.lighterGray)
+                    )
+                )
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+            } else {
+                // 默认图标
+                Image(systemName: "fork.knife")
+                    .font(.system(size: 20))
+                    .foregroundColor(AppTheme.Colors.lighterGray)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+        )
     }
     
     // MARK: - Metric Cell
