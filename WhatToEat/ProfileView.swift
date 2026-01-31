@@ -60,12 +60,8 @@ struct ProfileView: View {
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
         }
-        // 键盘避让：编辑标签时自动调整底部内边距
-        .safeAreaInset(edge: .bottom) {
-            if isEditingTags {
-                Color.clear.frame(height: 300)
-            }
-        }
+        // 键盘避让：使用 ignoresSafeArea 让 ScrollView 内容可以滚动到键盘上方
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeInOut(duration: 0.25), value: isEditingTags)
     }
     

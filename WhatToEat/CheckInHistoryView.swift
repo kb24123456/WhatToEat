@@ -349,7 +349,7 @@ struct CheckInHistoryView: View {
                     )
                 )
                 .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(width: 48, height: 48)
                 .clipped()
             } else {
                 // 默认图标
@@ -358,6 +358,7 @@ struct CheckInHistoryView: View {
                     .foregroundColor(AppTheme.Colors.lighterGray)
             }
         }
+        .frame(width: 48, height: 48)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
