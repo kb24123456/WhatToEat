@@ -20,6 +20,11 @@ struct RestaurantMapView: View {
     @State private var visibleRegion: MKCoordinateRegion?
     @State private var clusteringDistance: CLLocationDistance = 50 // 聚合距离（米）
     
+    // 区域内搜索状态
+    @State private var initialCenterCoordinate: CLLocationCoordinate2D?
+    @State private var hasUserInteractedWithMap: Bool = false
+    private let regionChangeThreshold: CLLocationDistance = 500 // 移动超过500米后重置
+    
     // 选中的餐厅（用于详情抽屉）
     @State private var selectedRestaurant: Restaurant?
     
@@ -31,111 +36,50 @@ struct RestaurantMapView: View {
     @State private var showExitNavigationButton: Bool = false
     @State private var navigatingRestaurant: Restaurant? // 导航中的餐厅（独立于selectedRestaurant）
     
-    // 筛选后的餐厅
-    private var filteredRestaurants: [Restaurant] {
-        if searchText.isEmpty {
-            return restaurants
-        }
-        return restaurants.filter { restaurant in
-            restaurant.name.localizedCaseInsensitiveContains(searchText) ||
-            restaurant.type.localizedCaseInsensitiveContains(searchText) ||
-            restaurant.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
-        }
+    // 聚合后的餐厅组（仅在当前区域内显示）
+    private var clusteredRestaurants: [RestaurantCluster] {
+        let filtered = filterRestaurants()
+        return calculateClusters(from: filtered)
     }
     
-    // 聚合后的餐厅组
-    private var clusteredRestaurants: [RestaurantCluster] {
-        calculateClusters(from: filteredRestaurants)
+    // 筛选餐厅（搜索 + 区域）
+    private func filterRestaurants() -> [Restaurant] {
+        // 搜索筛选
+        var result = restaurants
+        if !searchText.isEmpty {
+            result = result.filter { r in
+                r.name.localizedCaseInsensitiveContains(searchText) ||
+                r.type.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+        
+        // 区域筛选
+        if hasUserInteractedWithMap, let region = visibleRegion {
+            result = result.filter { r in
+                self.isInRegion(lat: r.latitude, lon: r.longitude, region: region)
+            }
+        }
+        
+        return result
+    }
+    
+    // 检查坐标是否在区域内
+    private func isInRegion(lat: Double, lon: Double, region: MKCoordinateRegion) -> Bool {
+        let halfLat = region.span.latitudeDelta / 2.0
+        let halfLon = region.span.longitudeDelta / 2.0
+        
+        let minLat = region.center.latitude - halfLat
+        let maxLat = region.center.latitude + halfLat
+        let minLon = region.center.longitude - halfLon
+        let maxLon = region.center.longitude + halfLon
+        
+        return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon
     }
     
     var body: some View {
         ZStack {
-            // MARK: - 地图层（使用 MapContentBuilder 优化）
-            Map(position: $cameraPosition) {
-                // 使用 MapContentBuilder 渲染聚合后的大头针
-                ForEach(clusteredRestaurants) { cluster in
-                    if cluster.isCluster {
-                        // 聚合点
-                        Annotation("", coordinate: cluster.coordinate) {
-                            ClusterAnnotationView(count: cluster.restaurants.count)
-                        }
-                    } else if let restaurant = cluster.restaurants.first {
-                        // 单个餐厅大头针
-                        Annotation("", coordinate: cluster.coordinate) {
-                            GourmetAnnotation(
-                                restaurant: restaurant,
-                                isNavigating: isNavigating,
-                                isDestination: isNavigating && selectedRestaurant?.id == restaurant.id
-                            ) { selected in
-                                selectedRestaurant = selected
-                                // 任务1：将选中餐厅移动到视野上方居中位置（避免被卡片遮挡）
-                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                    // 计算向上偏移的坐标（约屏幕高度的 1/4）
-                                    let offsetLatitude = 0.008  // 向上偏移的纬度值
-                                    cameraPosition = .region(MKCoordinateRegion(
-                                        center: CLLocationCoordinate2D(
-                                            latitude: selected.latitude - offsetLatitude,
-                                            longitude: selected.longitude
-                                        ),
-                                        span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
-                                    ))
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // 显示用户当前位置
-                if let userLocation = locationManager.userLocation {
-                    Annotation("", coordinate: userLocation.coordinate) {
-                        UserLocationAnnotation()
-                    }
-                }
-                
-                // MARK: - 绘制导航路线（高德地图风格：绿色高亮路线）
-                if let route = route, isNavigating {
-                    // 路线阴影层（发光效果）
-                    MapPolyline(route)
-                        .stroke(Color(hex: "#4CAF50").opacity(0.4), lineWidth: 14)
-                    
-                    // 主路线层 - 高德同款绿色
-                    MapPolyline(route)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color(hex: "#4CAF50"),
-                                    Color(hex: "#66BB6A")
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 8
-                        )
-                }
-            }
-            // 导航模式下降低地图饱和度，提升路线易读性
-            .mapStyle(isNavigating ? 
-                .standard(
-                    emphasis: .muted,
-                    pointsOfInterest: .excludingAll
-                ) : 
-                .standard(pointsOfInterest: .excludingAll)
-            )
-            .mapControls {
-                MapUserLocationButton()
-                MapCompass()
-            }
-            .ignoresSafeArea()
-            .onAppear {
-                setupInitialCameraPosition()
-            }
-            .onChange(of: locationManager.userLocation) { _, newLocation in
-                if let location = newLocation {
-                    if !isNavigating {
-                        updateCameraToUserLocation(location)
-                    }
-                }
-            }
+            // MARK: - 地图层
+            mapLayer
             
             // MARK: - 顶部遮罩与控件
             topOverlay
@@ -171,6 +115,71 @@ struct RestaurantMapView: View {
             .presentationDetents([.fraction(0.65), .large])
             .presentationBackground(.white)
             .presentationDragIndicator(.visible)
+        }
+    }
+    
+    // MARK: - 地图层
+    private var mapLayer: some View {
+        Map(position: $cameraPosition) {
+            // 聚合后的大头针
+            ForEach(clusteredRestaurants) { cluster in
+                mapAnnotation(for: cluster)
+            }
+            
+            // 用户当前位置
+            if let userLocation = locationManager.userLocation {
+                Annotation("", coordinate: userLocation.coordinate) {
+                    UserLocationAnnotation()
+                }
+            }
+            
+            // 导航路线
+            if let route = route, isNavigating {
+                MapPolyline(route)
+                    .stroke(Color(hex: "#4CAF50").opacity(0.4), lineWidth: 14)
+                MapPolyline(route)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color(hex: "#4CAF50"), Color(hex: "#66BB6A")],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 8
+                    )
+            }
+        }
+        .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
+        .mapControls {
+            MapUserLocationButton()
+            MapCompass()
+        }
+        .ignoresSafeArea()
+        .onAppear { setupInitialCameraPosition() }
+        .onMapCameraChange { context in handleMapCameraChange(context.region) }
+        .onChange(of: locationManager.userLocation) { _, newLocation in
+            if let location = newLocation, !isNavigating {
+                updateCameraToUserLocation(location)
+            }
+        }
+    }
+    
+    // MARK: - 地图标注
+    @MapContentBuilder
+    private func mapAnnotation(for cluster: RestaurantCluster) -> some MapContent {
+        if cluster.isCluster {
+            Annotation("", coordinate: cluster.coordinate) {
+                ClusterAnnotationView(count: cluster.restaurants.count)
+            }
+        } else if let restaurant = cluster.restaurants.first {
+            let isDest = isNavigating && selectedRestaurant?.id == restaurant.id
+            Annotation("", coordinate: cluster.coordinate) {
+                GourmetAnnotation(
+                    restaurant: restaurant,
+                    isNavigating: isNavigating,
+                    isDestination: isDest,
+                    onSelect: handleRestaurantSelection
+                )
+            }
         }
     }
     
@@ -599,6 +608,39 @@ struct RestaurantMapView: View {
             center: location.coordinate,
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         ))
+    }
+    
+    // MARK: - 处理地图相机变化
+    private func handleMapCameraChange(_ newRegion: MKCoordinateRegion) {
+        visibleRegion = newRegion
+        
+        let newCenter = newRegion.center
+        
+        if let initialCenter = initialCenterCoordinate {
+            let distance = calculateDistance(from: initialCenter, to: newCenter)
+            
+            if distance > regionChangeThreshold {
+                hasUserInteractedWithMap = true
+                initialCenterCoordinate = newCenter
+            }
+        } else {
+            initialCenterCoordinate = newCenter
+        }
+    }
+    
+    // MARK: - 处理餐厅选择
+    private func handleRestaurantSelection(_ selected: Restaurant) {
+        selectedRestaurant = selected
+        // 将选中餐厅移动到视野上方居中位置（避免被卡片遮挡）
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            let offsetLatitude = 0.008
+            let center = CLLocationCoordinate2D(
+                latitude: selected.latitude - offsetLatitude,
+                longitude: selected.longitude
+            )
+            let span = MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+            cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
+        }
     }
 }
 
