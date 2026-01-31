@@ -146,7 +146,6 @@ struct AddRestaurantView: View {
                 selectedName: $name,
                 selectedAddress: $address,
                 selectedDistrict: $district,
-                selectedCity: $city,
                 selectedCategory: $category,
                 selectedLatitude: $latitude,
                 selectedLongitude: $longitude,
@@ -437,7 +436,7 @@ struct AddRestaurantView: View {
             
             Text(address)
                 .font(.caption)
-                .foregroundColor(Color(hex: "#666666"))
+                .foregroundColor(Color.secondary)
                 .lineLimit(1)
             
             Spacer()
@@ -695,7 +694,7 @@ struct AddRestaurantView: View {
                         }
                         
                         if isEditingTags {
-                            TextField("", text: $newTagInput, prompt: Text("新标签...").foregroundColor(Color(hex: "#666666")))
+                            TextField("新标签...", text: $newTagInput)
                                 .font(.system(size: 14))
                                 .foregroundColor(Color(hex: "#1A1A1A"))
                                 .padding(.horizontal, 12)
@@ -982,7 +981,7 @@ struct AddRestaurantView: View {
             }
             
             if isEditingTags {
-                TextField("", text: $newTagInput, prompt: Text("新标签...").foregroundColor(Color(hex: "#666666")))
+                TextField("新标签...", text: $newTagInput)
                     .font(.system(size: 14))
                     .foregroundColor(Color(hex: "#1A1A1A"))
                     .padding(.horizontal, 12)
@@ -1159,14 +1158,8 @@ struct AddRestaurantView: View {
     }
     
     private func handleViewAppear() {
-        // 优先从 UserDefaults 获取用户当前选择的城市
-        if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity"), !savedCity.isEmpty {
-            city = savedCity
-            print("[AddRestaurant] handleViewAppear: 从 UserDefaults 获取城市=\(savedCity)")
-        } else if let firstRestaurant = allRestaurants.first {
-            // 如果没有保存的城市，从已有餐厅获取
+        if let firstRestaurant = allRestaurants.first {
             city = firstRestaurant.city
-            print("[AddRestaurant] handleViewAppear: 从已有餐厅获取城市=\(firstRestaurant.city)")
         }
     }
     
@@ -1252,19 +1245,15 @@ struct AddRestaurantView: View {
             coverFilename = ImageManager.shared.saveImage(coverImage)
         }
         
-        // 确保城市字段有值（如果为空，使用用户选择的城市或默认城市）
-        let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity")
-        let finalCity = city.isEmpty ? (savedCity ?? "重庆") : city
-        
-        // 调试日志
-        print("[AddRestaurant] 保存餐厅: name=\(name), city=\(city), finalCity=\(finalCity), savedCity=\(savedCity ?? "nil")")
+        // 统一使用 LibraryView 中选择的城市（不再使用智能搜索返回的城市）
+        let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity") ?? "重庆"
         
         // 保存数据
         let newRestaurant = Restaurant(
             name: name,
             type: category,
             district: district,
-            city: finalCity,
+            city: savedCity,
             rating: rating,
             address: address,
             latitude: latitude,
@@ -1276,17 +1265,6 @@ struct AddRestaurantView: View {
         )
         
         modelContext.insert(newRestaurant)
-        
-        // 保存到持久化存储
-        do {
-            try modelContext.save()
-            print("[AddRestaurant] 餐厅保存成功: \(name), city=\(finalCity)")
-        } catch {
-            print("[AddRestaurant] 保存失败: \(error)")
-        }
-        
-        // 发送刷新通知
-        NotificationCenter.default.post(name: .restaurantListShouldRefresh, object: nil)
         
         // 延迟关闭
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {

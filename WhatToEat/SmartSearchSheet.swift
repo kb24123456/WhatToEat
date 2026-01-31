@@ -14,7 +14,6 @@ struct SmartSearchSheet: View {
     @Binding var selectedName: String
     @Binding var selectedAddress: String
     @Binding var selectedDistrict: String
-    @Binding var selectedCity: String
     @Binding var selectedCategory: String
     @Binding var selectedLatitude: Double
     @Binding var selectedLongitude: Double
@@ -59,7 +58,7 @@ struct SmartSearchSheet: View {
                     resultsList
                 }
             }
-            .navigationTitle("")
+            .navigationTitle("智能搜索")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -245,7 +244,7 @@ struct SmartSearchSheet: View {
                 .font(.system(size: 17))
                 .foregroundColor(Color(hex: "#999999"))
             
-            TextField("", text: $searchQuery, prompt: Text("输入店名，智能填充所有信息...").foregroundColor(Color(hex: "#666666")))
+            TextField("输入店名，智能填充所有信息...", text: $searchQuery)
                 .font(.system(size: 16))
                 .foregroundColor(Color(hex: "#1A1A1A"))
                 .onChange(of: searchQuery) { _, newValue in
@@ -335,7 +334,6 @@ struct SmartSearchSheet: View {
                             Spacer()
                         }
                         .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
                     } else if searchResults.isEmpty {
                         HStack {
                             Spacer()
@@ -351,7 +349,6 @@ struct SmartSearchSheet: View {
                             Spacer()
                         }
                         .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
                     } else {
                         ForEach(Array(searchResults.enumerated()), id: \.element) { index, item in
                             searchResultRow(item: item, index: index)
@@ -365,76 +362,13 @@ struct SmartSearchSheet: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        // 移除 List 的高光效果
-        .environment(\.defaultMinListRowHeight, 0)
-        // 禁用点击时的高亮
-        .onAppear {
-            UITableView.appearance().allowsSelection = false
-        }
     }
     
     // MARK: - 搜索结果行
     private func searchResultRow(item: MKMapItem, index: Int) -> some View {
-        Button(action: {
+        SearchResultButton(item: item) {
             selectPlace(item)
-        }) {
-            HStack(spacing: 12) {
-                // 图标
-                ZStack {
-                    Circle()
-                        .fill(categoryColor(for: item.pointOfInterestCategory).opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: categoryIcon(for: item.pointOfInterestCategory))
-                        .font(.system(size: 18))
-                        .foregroundColor(categoryColor(for: item.pointOfInterestCategory))
-                }
-                
-                // 信息
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name ?? "未知地点")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(Color(hex: "#1A1A1A"))
-                        .lineLimit(1)
-                    
-                    HStack(spacing: 6) {
-                        // 距离
-                        if let distance = calculateDistance(to: item.placemark.coordinate) {
-                            Text(distance)
-                                .font(.system(size: 12))
-                                .foregroundColor(Color(hex: "#FF6B6B"))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color(hex: "#FF6B6B").opacity(0.1))
-                                )
-                        }
-                        
-                        // 地址
-                        Text(formatAddress(from: item.placemark))
-                            .font(.system(size: 13))
-                            .foregroundColor(Color(hex: "#888888"))
-                            .lineLimit(1)
-                    }
-                }
-                
-                Spacer()
-                
-                // 箭头
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color(hex: "#CCCCCC"))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
-            )
         }
-        .buttonStyle(ScaleButtonStyle())
     }
     
     // MARK: - 搜索输入处理（防抖）
@@ -523,7 +457,7 @@ struct SmartSearchSheet: View {
         selectedName = item.name ?? ""
         selectedAddress = formatFullAddress(from: item.placemark)
         selectedDistrict = extractDistrict(from: item.placemark)
-        selectedCity = extractCity(from: item.placemark)
+        // 注意：城市字段不再由 SmartSearchSheet 设置，统一使用 LibraryView 中选择的城市
         
         // 使用双重匹配逻辑确定品类
         let categoryResult = determineCategory(from: item)
@@ -536,23 +470,6 @@ struct SmartSearchSheet: View {
         
         // 关闭浮层
         dismiss()
-    }
-    
-    // MARK: - 提取城市
-    private func extractCity(from placemark: CLPlacemark) -> String {
-        // 优先使用 locality（城市级别）
-        if let locality = placemark.locality {
-            return locality
-        }
-        // 其次使用 administrativeArea（省级）
-        if let administrativeArea = placemark.administrativeArea {
-            return administrativeArea
-        }
-        // 兜底使用 subLocality（区县级）
-        if let subLocality = placemark.subLocality {
-            return subLocality
-        }
-        return ""
     }
     
     // MARK: - 辅助方法
