@@ -31,6 +31,15 @@ struct RestaurantMapView: View {
     @State private var clusteringThrottleTimer: Timer?
     @State private var isClusteringPending: Bool = false
     
+    // MARK: - 性能优化：滑动时隐藏餐厅
+    @State private var isMapMoving: Bool = false
+    @State private var mapMovementTimer: Timer?
+    @State private var showAnnotations: Bool = true
+    @State private var annotationDelayTimer: Timer?
+    
+    // 最大显示餐厅数量
+    private let maxVisibleRestaurants = 50
+    
     // 地图缩放级别对应的聚类距离
     private var dynamicClusteringDistance: CLLocationDistance {
         // 根据地图缩放级别动态调整聚类距离
@@ -170,21 +179,24 @@ struct RestaurantMapView: View {
     // MARK: - 地图层
     private var mapLayer: some View {
         Map(position: $cameraPosition) {
-            // 分层渲染：根据缩放级别决定显示内容
-            if currentZoomLevel == .far {
-                // 大范围：只显示聚类点（不显示单个餐厅）
-                ForEach(clusteredRestaurants.filter { $0.isCluster }) { cluster in
-                    mapAnnotation(for: cluster)
-                }
-            } else if currentZoomLevel == .medium {
-                // 中等范围：显示聚类点 + 简化版单个餐厅（无气泡）
-                ForEach(clusteredRestaurants) { cluster in
-                    mapAnnotation(for: cluster, simplified: true)
-                }
-            } else {
-                // 小范围：显示完整大头针
-                ForEach(clusteredRestaurants) { cluster in
-                    mapAnnotation(for: cluster, simplified: false)
+            // 性能优化：滑动时不显示餐厅，停止后才显示
+            if showAnnotations {
+                // 分层渲染：根据缩放级别决定显示内容
+                if currentZoomLevel == .far {
+                    // 大范围：只显示聚类点（不显示单个餐厅）
+                    ForEach(clusteredRestaurants.filter { $0.isCluster }) { cluster in
+                        mapAnnotation(for: cluster)
+                    }
+                } else if currentZoomLevel == .medium {
+                    // 中等范围：显示聚类点 + 简化版单个餐厅（无气泡）
+                    ForEach(clusteredRestaurants) { cluster in
+                        mapAnnotation(for: cluster, simplified: true)
+                    }
+                } else {
+                    // 小范围：显示完整大头针
+                    ForEach(clusteredRestaurants) { cluster in
+                        mapAnnotation(for: cluster, simplified: false)
+                    }
                 }
             }
             
@@ -679,6 +691,14 @@ struct RestaurantMapView: View {
         
         let newCenter = newRegion.center
         
+        // 性能优化：处理地图移动状态
+        if !isMapMoving {
+            handleMapMovementStart()
+        }
+        
+        // 延迟调用移动结束（如果 0.1 秒内没有新调用，则认为移动结束）
+        handleMapMovementEnd()
+        
         if let initialCenter = initialCenterCoordinate {
             let distance = calculateDistance(from: initialCenter, to: newCenter)
             
@@ -739,12 +759,43 @@ struct RestaurantMapView: View {
     }
     
     private func performClustering() {
+        // 性能优化：限制同时显示的餐厅数量
         let filtered = filterRestaurants()
-        let clusters = calculateClusters(from: filtered)
+        let limitedRestaurants = Array(filtered.prefix(maxVisibleRestaurants))
+        let clusters = calculateClusters(from: limitedRestaurants)
         
         cachedClusters = clusters
         lastClusteringRegion = visibleRegion
         isClusteringPending = false
+    }
+    
+    // MARK: - 性能优化：处理地图移动状态
+    private func handleMapMovementStart() {
+        // 地图开始移动：立即隐藏所有餐厅
+        isMapMoving = true
+        showAnnotations = false
+        
+        // 取消之前的定时器
+        mapMovementTimer?.invalidate()
+        annotationDelayTimer?.invalidate()
+    }
+    
+    private func handleMapMovementEnd() {
+        // 地图停止移动：延迟显示餐厅
+        mapMovementTimer?.invalidate()
+        
+        mapMovementTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+            Task { @MainActor in
+                self.isMapMoving = false
+                
+                // 再延迟 0.3 秒后才显示餐厅（给用户一个缓冲时间）
+                self.annotationDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+                    Task { @MainActor in
+                        self.showAnnotations = true
+                    }
+                }
+            }
+        }
     }
 }
 
