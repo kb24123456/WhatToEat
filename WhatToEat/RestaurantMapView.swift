@@ -28,17 +28,17 @@ struct RestaurantMapView: View {
     // 地图缩放级别对应的聚类距离
     private var dynamicClusteringDistance: CLLocationDistance {
         // 根据地图缩放级别动态调整聚类距离
-        guard let region = visibleRegion else { return 150 }
+        guard let region = visibleRegion else { return 200 }
         // 缩放级别越小（地图越缩小），聚类距离越大
         let spanDelta = max(region.span.latitudeDelta, region.span.longitudeDelta)
         if spanDelta > 0.5 {
-            return 1000 // 大范围视图：1000米聚类
+            return 2000 // 大范围视图：2000米聚类
         } else if spanDelta > 0.2 {
-            return 500 // 中等范围：500米聚类
+            return 1000 // 中等范围：1000米聚类
         } else if spanDelta > 0.05 {
-            return 200 // 较小范围：200米聚类
+            return 500 // 较小范围：500米聚类
         } else {
-            return 100 // 小范围：100米聚类
+            return 200 // 小范围：200米聚类
         }
     }
     
@@ -701,6 +701,24 @@ struct GourmetAnnotation: View {
         return String(restaurant.review.prefix(maxLength)) + "..."
     }
     
+    // 气泡背景颜色：选中蓝色，未选中白色
+    private var bubbleBackground: some ShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color(hex: "#89CFF0").opacity(0.85),
+                        Color(hex: "#89CFF0").opacity(0.6)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        } else {
+            return AnyShapeStyle(Color.white)
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // 常驻评论气泡，限制最大字数与气泡长度
@@ -714,18 +732,7 @@ struct GourmetAnnotation: View {
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                AnyShapeStyle(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(hex: "#89CFF0").opacity(0.85),
-                                            Color.white.opacity(0.9)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            )
+                            .fill(bubbleBackground)
                     )
                     .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
                     .offset(y: -8)
