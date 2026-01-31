@@ -51,6 +51,12 @@ struct ProfileView: View {
                 // Phase 4: 工具箱、安全与隐私
                 milkyToolList
                 bottomInfo
+                
+                // 键盘避让：编辑标签时增加额外底部空间
+                if isEditingTags {
+                    Color.clear.frame(height: 300)
+                        .transition(.opacity)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -60,8 +66,8 @@ struct ProfileView: View {
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
         }
-        // 键盘避让：使用 ignoresSafeArea 让 ScrollView 内容可以滚动到键盘上方
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+        // 键盘避让：点击空白处收起键盘
+        .scrollDismissesKeyboard(.interactively)
         .animation(.easeInOut(duration: 0.25), value: isEditingTags)
     }
     
@@ -288,6 +294,7 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 16) {
             tagsCloudHeader
             tagsCloudContent
+                .padding(.bottom, isEditingTags ? 28 : 0) // 编辑模式下增加底部空间容纳按钮
         }
         .padding(16)
         .background(
@@ -416,7 +423,7 @@ struct ProfileView: View {
         )
     }
     
-    // MARK: - 标签区域操作按钮（勾叉）
+    // MARK: - 标签区域操作按钮（勾叉）- 一半在容器内一半在容器外
     @ViewBuilder
     private var tagsCloudActionButtons: some View {
         if isEditingTags {
@@ -424,8 +431,9 @@ struct ProfileView: View {
                 cancelTagEditButton
                 confirmTagEditButton
             }
-            .padding(.trailing, 16)
-            .offset(y: 18)
+            .padding(.trailing, 8)
+            .padding(.bottom, 8)
+            .offset(y: 26) // 向下偏移，使按钮一半在容器外
             .transition(.scale.combined(with: .opacity))
         }
     }
