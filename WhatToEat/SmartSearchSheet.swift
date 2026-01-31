@@ -414,12 +414,55 @@ struct SmartSearchSheet: View {
             DispatchQueue.main.async {
                 isSearching = false
                 if let items = response?.mapItems {
-                    searchResults = items
+                    // 只筛选餐厅、咖啡、烘焙、甜品等美食类地点
+                    searchResults = items.filter { isFoodRelated($0) }
                 } else {
                     searchResults = []
                 }
             }
         }
+    }
+    
+    // MARK: - 判断是否美食类地点
+    private func isFoodRelated(_ item: MKMapItem) -> Bool {
+        // 1. 检查 POI 类别
+        if let category = item.pointOfInterestCategory {
+            let categoryString = String(describing: category)
+            let foodKeywords = ["restaurant", "cafe", "bakery", "food", "coffee", "tea", "bar", "pub"]
+            for keyword in foodKeywords {
+                if categoryString.lowercased().contains(keyword) {
+                    return true
+                }
+            }
+        }
+        
+        // 2. 检查店名是否包含美食关键词
+        let name = item.name?.lowercased() ?? ""
+        let foodNameKeywords = [
+            "餐厅", "火锅", "烧烤", "烤肉", "面馆", "小吃", "快餐", "美食",
+            "咖啡", "奶茶", "茶饮", "甜品", "蛋糕", "面包", "烘焙",
+            "寿司", "日料", "韩料", "西餐", "中餐", "川菜", "粤菜",
+            "店", "馆", "厅", "铺", "坊", "屋", "舍"
+        ]
+        for keyword in foodNameKeywords {
+            if name.contains(keyword) {
+                return true
+            }
+        }
+        
+        // 3. 排除明显非美食类（如公司、珠宝店等）
+        let nonFoodKeywords = [
+            "公司", "集团", "珠宝", "钻石", "金饰", "银饰", "保险", "银行",
+            "证券", "投资", "科技", "网络", "软件", "咨询", "律师", "会计"
+        ]
+        for keyword in nonFoodKeywords {
+            if name.contains(keyword) {
+                return false
+            }
+        }
+        
+        // 默认保留（让其他可能的美食店通过）
+        return true
     }
     
     // MARK: - 加载附近推荐
@@ -445,7 +488,8 @@ struct SmartSearchSheet: View {
         search.start { response, error in
             DispatchQueue.main.async {
                 if let items = response?.mapItems {
-                    nearbyPlaces = Array(items.prefix(6))
+                    // 只筛选美食类地点
+                    nearbyPlaces = Array(items.filter { isFoodRelated($0) }.prefix(6))
                 }
             }
         }
@@ -623,7 +667,11 @@ struct SearchResultButton: View {
                     .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
             )
         }
-        .buttonStyle(ScaleButtonStyle())
+        .buttonStyle(PlainButtonStyle())
+        .contentShape(Rectangle())
+        .onTapGesture {
+            action()
+        }
     }
     
     private var categoryIcon: String {
