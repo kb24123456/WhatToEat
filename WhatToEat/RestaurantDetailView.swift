@@ -127,10 +127,6 @@ struct RestaurantDetailView: View {
     @State private var isAnimated = false
     @State private var cardScale: CGFloat = 1.0
     
-    // MARK: - Drag to Dismiss States
-    @State private var dragOffset: CGSize = .zero
-    @State private var isDragging = false
-    
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
@@ -153,41 +149,13 @@ struct RestaurantDetailView: View {
                 .ignoresSafeArea(edges: .top)
             }
             .offset(y: animateOffset)
-            .offset(y: dragOffset.height)
             .animation(
                 .interpolatingSpring(stiffness: 120, damping: 15)
                     .speed(1.2)
                     .delay(0.1),
                 value: animateOffset
             )
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        // 只允许向下拖动
-                        if value.translation.height > 0 {
-                            dragOffset = value.translation
-                            isDragging = true
-                        }
-                    }
-                    .onEnded { value in
-                        isDragging = false
-                        // 如果拖动距离超过 100pt 或速度超过阈值，则关闭
-                        if value.translation.height > 100 || value.velocity.height > 500 {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                isPresented = false
-                            }
-                        } else {
-                            // 否则回弹到原位
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                dragOffset = .zero
-                            }
-                        }
-                    }
-            )
         }
-        .interactiveDismissDisabled(true)
-        .presentationDragIndicator(.visible)
     }
     
     // MARK: - Bottom Content Section (Premium Staggered Animation)

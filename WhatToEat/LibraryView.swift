@@ -89,13 +89,15 @@ struct LibraryView: View {
                 )
             }
         }
-        .fullScreenCover(isPresented: $isDetailPresented) {
+        .sheet(isPresented: $isDetailPresented) {
             if let restaurant = selectedRestaurant {
                 RestaurantDetailView(
                     restaurant: restaurant,
                     locationManager: locationManager,
                     isPresented: $isDetailPresented
                 )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
         }
         .onChange(of: isDetailPresented) { _, newValue in

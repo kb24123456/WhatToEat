@@ -439,11 +439,6 @@ struct CheckInView: View {
                 .font(.system(size: 14))
                 .autocorrectionDisabled()
                 .padding(.vertical, 8)
-                .background(
-                    Rectangle()
-                        .fill(AppTheme.Colors.softBackground)
-                        .frame(height: 1)
-                )
                 .onSubmit {
                     triggerHaptic()
                     addTag(from: inputText, to: tags)
