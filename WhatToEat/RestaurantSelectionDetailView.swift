@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import UIKit
 
 // MARK: - 餐厅选择详情视图（展示距离、时间和导航）
 struct RestaurantSelectionDetailView: View {
@@ -171,10 +172,26 @@ struct RestaurantSelectionDetailView: View {
         }
     }
     
-    // MARK: - 导航按钮
+    // MARK: - 导航按钮（弹出地图选择）
     private var navigationButton: some View {
-        Button {
-            openNavigation()
+        Menu {
+            Button {
+                openAppleMaps()
+            } label: {
+                Label("苹果地图", systemImage: "map.fill")
+            }
+            
+            Button {
+                openAmap()
+            } label: {
+                Label("高德地图", systemImage: "car.fill")
+            }
+            
+            Button {
+                openBaiduMap()
+            } label: {
+                Label("百度地图", systemImage: "car.fill")
+            }
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "location.north.fill")
@@ -268,8 +285,8 @@ struct RestaurantSelectionDetailView: View {
         }
     }
     
-    // MARK: - 打开导航
-    private func openNavigation() {
+    // MARK: - 打开苹果地图
+    private func openAppleMaps() {
         let coordinate = CLLocationCoordinate2D(
             latitude: restaurant.latitude,
             longitude: restaurant.longitude
@@ -277,12 +294,52 @@ struct RestaurantSelectionDetailView: View {
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
         mapItem.name = restaurant.name
         
-        // 设置导航选项
         let launchOptions = [
             MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
         ]
         
         mapItem.openInMaps(launchOptions: launchOptions)
+    }
+    
+    // MARK: - 打开高德地图
+    private func openAmap() {
+        // 导航到目的地
+        let urlString = "iosamap://path?sourceApplication=WhatToEat&sid=&did=&dlat=\(restaurant.latitude)&dlon=\(restaurant.longitude)&dname=\(restaurant.name)&dev=0&t=0"
+        openMapURL(urlString)
+    }
+    
+    // MARK: - 打开百度地图
+    private func openBaiduMap() {
+        // 百度地图使用百度坐标系，需要进行坐标转换
+        // 这里使用简化版本，直接打开百度地图搜索目的地
+        let urlString = "baidumap://map/direction?origin=latlng:\(locationManager.userLocation?.coordinate.latitude ?? 0),\(locationManager.userLocation?.coordinate.longitude ?? 0)|name:我的位置&destination=latlng:\(restaurant.latitude),\(restaurant.longitude)|name:\(restaurant.name)&mode=driving&src=WhatToEat"
+        openMapURL(urlString)
+    }
+    
+    // MARK: - 打开地图 URL
+    private func openMapURL(_ urlString: String) {
+        guard let encodedString = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: encodedString) else {
+            return
+        }
+        
+        if UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        } else {
+            // 如果无法打开，尝试打开 App Store
+            let appStoreURL: URL?
+            if urlString.contains("iosamap") {
+                appStoreURL = URL(string: "https://apps.apple.com/cn/app/高德地图/id461703208")
+            } else if urlString.contains("baidumap") {
+                appStoreURL = URL(string: "https://apps.apple.com/cn/app/百度地图/id452186370")
+            } else {
+                appStoreURL = nil
+            }
+            
+            if let appStoreURL = appStoreURL {
+                UIApplication.shared.open(appStoreURL)
+            }
+        }
     }
 }
 
