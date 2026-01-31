@@ -177,7 +177,7 @@ struct AnnualReportOverlay: View {
     
     // MARK: - 英雄海报区域
     private var heroSection: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 32) {
             // 英雄卡片：Top 1 餐厅
             if let restaurant = annualStats.topRestaurant {
                 heroCard(restaurant: restaurant)
@@ -186,16 +186,79 @@ struct AnnualReportOverlay: View {
                 emptyHeroCard
             }
             
-            // 餐厅名称
-            if let restaurant = annualStats.topRestaurant {
-                Text(restaurant.name)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
-                    .multilineTextAlignment(.center)
-                    .opacity(isAppeared ? 1 : 0)
-                    .offset(y: isAppeared ? 0 : 20)
+            // 分段叙事文字
+            if annualStats.topRestaurant != nil {
+                narrativeTextSection
             }
         }
+    }
+    
+    // MARK: - 分段叙事文字（跳动效果）
+    private var narrativeTextSection: some View {
+        VStack(spacing: 16) {
+            // 第一行：相遇次数
+            narrativeLine(
+                text: "这一年，你与美食相遇了",
+                highlight: "\(annualStats.totalCheckIns)",
+                suffix: "次",
+                delay: 0.5
+            )
+            
+            // 第二行：最深足迹
+            if let restaurant = annualStats.topRestaurant {
+                narrativeLine(
+                    text: "在",
+                    highlight: restaurant.name,
+                    suffix: "留下了最深的足迹",
+                    delay: 0.8
+                )
+            }
+            
+            // 第三行：标签
+            if let restaurant = annualStats.topRestaurant,
+               let firstTag = restaurant.tags.first {
+                narrativeLine(
+                    text: "它是你心中无可替代的",
+                    highlight: firstTag,
+                    suffix: "",
+                    delay: 1.1
+                )
+            }
+        }
+        .padding(.horizontal, 24)
+    }
+    
+    // MARK: - 单行叙事文字（带跳动动画）
+    private func narrativeLine(text: String, highlight: String, suffix: String, delay: Double) -> some View {
+        HStack(spacing: 0) {
+            Text(text)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
+            
+            Text(highlight)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(xiaohongshuRed) // 小红书红
+            
+            if !suffix.isEmpty {
+                Text(suffix)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .opacity(isAppeared ? 1 : 0)
+        .offset(y: isAppeared ? 0 : 30)
+        .scaleEffect(isAppeared ? 1 : 0.8)
+        .animation(
+            .spring(response: 0.6, dampingFraction: 0.7)
+            .delay(delay),
+            value: isAppeared
+        )
+    }
+    
+    // MARK: - 小红书红
+    private var xiaohongshuRed: Color {
+        Color(hex: "#FF2442")
     }
     
     // MARK: - 英雄卡片（带 3D 效果）
