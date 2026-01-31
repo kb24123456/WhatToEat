@@ -208,12 +208,6 @@ struct AddRestaurantView: View {
                             }
                         }
                     
-                    // 地址信息行（一行式展示，未填时隐藏）
-                    if !address.isEmpty {
-                        addressSubline
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                    
                     Spacer().frame(height: 120)
                 }
                 .padding(.horizontal, 20)
@@ -239,35 +233,28 @@ struct AddRestaurantView: View {
             }
             .padding(16)
             
-            // 智能搜索入口（放在名片与评分之间）
+            // 智能搜索入口
             smartSearchButton
                 .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                .padding(.bottom, 12)
             
-            // 分隔线
-            Divider()
-                .background(Color.white.opacity(0.5))
-                .padding(.horizontal, 16)
+            // 地址信息行（放在智能搜索之下）
+            if !address.isEmpty {
+                addressSubline
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             
             // 第二部分：评分
             unifiedRatingRow
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
             
-            // 分隔线
-            Divider()
-                .background(Color.white.opacity(0.5))
-                .padding(.horizontal, 16)
-            
             // 第三部分：评价
             unifiedReviewRow
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
-            
-            // 分隔线
-            Divider()
-                .background(Color.white.opacity(0.5))
-                .padding(.horizontal, 16)
             
             // 第四部分：标签
             unifiedTagsRow
