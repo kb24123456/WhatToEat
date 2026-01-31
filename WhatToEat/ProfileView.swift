@@ -10,8 +10,15 @@ struct ProfileView: View {
     @Query(sort: \Restaurant.createdAt, order: .reverse) private var restaurants: [Restaurant]
     
     @State private var showingEditProfile = false
+    @State private var showingTagManagement = false
     @State private var userProfile = UserProfile.load()
     @State private var privacyEnabled = UserDefaults.standard.bool(forKey: "privacyEnabled")
+    
+    // MARK: - 标签管理状态
+    @State private var userTags: [String] = UserDefaults.standard.stringArray(forKey: "userCustomTags") ?? ["氛围感", "老字号", "二刷", "排队王", "性价比"]
+    @State private var isEditingTags = false
+    @State private var newTagInput = ""
+    @FocusState private var tagInputIsFocused: Bool
     
     // MARK: - 统计数据
     private var totalRestaurants: Int { restaurants.count }
@@ -51,9 +58,17 @@ struct ProfileView: View {
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
         }
+        .sheet(isPresented: $showingTagManagement) {
+            TagManagementView(
+                userTags: $userTags,
+                isEditingTags: $isEditingTags,
+                newTagInput: $newTagInput,
+                tagInputIsFocused: _tagInputIsFocused
+            )
+        }
     }
     
-    // MARK: - Phase 1: Glass Profile Card (磨砂名片)
+    // MARK: - Phase 1: Profile Card (白色透明名片，显示背景渐变)
     private var glassProfileCard: some View {
         Button {
             showingEditProfile = true
@@ -62,7 +77,7 @@ struct ProfileView: View {
                 // 头像
                 ZStack {
                     Circle()
-                        .fill(.ultraThinMaterial)
+                        .fill(Color.white.opacity(0.5))
                         .frame(width: 72, height: 72)
                     
                     if let avatarData = userProfile.avatarData,
@@ -84,6 +99,14 @@ struct ProfileView: View {
                     Text(userProfile.nickname)
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.Colors.darkText)
+                    
+                    // 个性签名
+                    if !userProfile.bio.isEmpty {
+                        Text(userProfile.bio)
+                            .font(.system(size: 13, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                            .lineLimit(1)
+                    }
                     
                     // 等级勋章 - Baby Blue 渐变边框
                     LevelBadgeView(level: calculateLevel(), checkIns: totalCheckIns)
@@ -113,10 +136,10 @@ struct ProfileView: View {
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(Color.white.opacity(0.75))
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.white.opacity(0.4), lineWidth: 1)
+                            .stroke(Color.white.opacity(0.5), lineWidth: 1)
                     )
             )
         }
@@ -138,10 +161,10 @@ struct ProfileView: View {
         .padding(.vertical, 16)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.75))
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                 )
         )
     }
@@ -157,7 +180,7 @@ struct ProfileView: View {
             consumptionTrendChart
             
             Divider()
-                .background(AppTheme.Colors.divider)
+                .background(Color.white.opacity(0.3))
             
             // 餐饮类型占比分段进度条
             cuisineTypeBars
@@ -165,10 +188,10 @@ struct ProfileView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.75))
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                 )
         )
     }
@@ -274,7 +297,7 @@ struct ProfileView: View {
                 Spacer()
                 
                 Button {
-                    // 管理标签
+                    showingTagManagement = true
                 } label: {
                     Text("管理")
                         .font(.system(size: 12, weight: .medium))
@@ -296,10 +319,10 @@ struct ProfileView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.75))
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                 )
         )
     }
@@ -340,10 +363,10 @@ struct ProfileView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.75))
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                 )
         )
     }
@@ -368,14 +391,15 @@ struct ProfileView: View {
             }
             
             // 时间轴
-            let recentLogs = getRecentLogs(limit: 5)
+            let recentLogs = getRecentLogsWithRestaurant(limit: 5)
             VStack(spacing: 0) {
                 ForEach(0..<recentLogs.count, id: \.self) { index in
-                    let log = recentLogs[index]
+                    let item = recentLogs[index]
                     TimelineItemView(
-                        log: log,
+                        log: item.log,
+                        restaurantName: item.restaurantName,
                         isLast: index == recentLogs.count - 1,
-                        isToday: Calendar.current.isDateInToday(log.date)
+                        isToday: Calendar.current.isDateInToday(item.log.date)
                     )
                 }
             }
@@ -383,10 +407,10 @@ struct ProfileView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.white.opacity(0.75))
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                 )
         )
     }
@@ -545,6 +569,16 @@ struct ProfileView: View {
         }
         return allLogs.sorted { $0.date > $1.date }.prefix(limit).map { $0 }
     }
+    
+    private func getRecentLogsWithRestaurant(limit: Int) -> [(log: VisitLog, restaurantName: String)] {
+        var allLogs: [(log: VisitLog, restaurantName: String)] = []
+        for restaurant in restaurants {
+            for log in restaurant.logs {
+                allLogs.append((log: log, restaurantName: restaurant.name))
+            }
+        }
+        return allLogs.sorted { $0.log.date > $1.log.date }.prefix(limit).map { $0 }
+    }
 }
 
 // MARK: - Stat Cell (仪表盘单元)
@@ -694,6 +728,7 @@ struct TopRestaurantCard: View {
 // MARK: - Timeline Item View (时间轴项)
 struct TimelineItemView: View {
     let log: VisitLog
+    let restaurantName: String
     let isLast: Bool
     let isToday: Bool
     
@@ -707,7 +742,7 @@ struct TimelineItemView: View {
                 
                 if !isLast {
                     Rectangle()
-                        .fill(AppTheme.Colors.separatorGray)
+                        .fill(AppTheme.Colors.separatorGray.opacity(0.5))
                         .frame(width: 1)
                         .frame(maxHeight: .infinity)
                 }
@@ -721,9 +756,10 @@ struct TimelineItemView: View {
                     .foregroundColor(AppTheme.Colors.lightText)
                 
                 HStack {
-                    Text("打卡消费")
+                    Text(restaurantName)
                         .font(.system(size: 14, weight: .medium, design: .rounded))
                         .foregroundColor(AppTheme.Colors.darkText)
+                        .lineLimit(1)
                     
                     Spacer()
                     
@@ -1030,6 +1066,231 @@ struct EditProfileView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Tag Management View (标签管理页面)
+struct TagManagementView: View {
+    @Binding var userTags: [String]
+    @Binding var isEditingTags: Bool
+    @Binding var newTagInput: String
+    @FocusState var tagInputIsFocused: Bool
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                // 奶脂扩散背景
+                AppTheme.Colors.softBackground
+                    .ignoresSafeArea()
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        // 标签编辑区域
+                        tagsEditingSection
+                        
+                        // 使用统计
+                        tagsStatisticsSection
+                    }
+                    .padding(16)
+                    .padding(.bottom, 100)
+                }
+            }
+            .navigationTitle("管理标签")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("完成") {
+                        saveTags()
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            isEditingTags = true
+        }
+        .onDisappear {
+            isEditingTags = false
+            newTagInput = ""
+        }
+    }
+    
+    // MARK: - 标签编辑区域
+    private var tagsEditingSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("我的标签")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                
+                Spacer()
+                
+                Text("\(userTags.count) 个")
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.lightText)
+            }
+            
+            // 标签内容（可点击编辑）
+            ZStack(alignment: .bottomTrailing) {
+                VStack(spacing: 0) {
+                    FlowLayout(spacing: 10) {
+                        ForEach(userTags, id: \.self) { tag in
+                            editableTagSticker(tag)
+                        }
+                        
+                        // 新增标签输入框
+                        TextField("新标签...", text: $newTagInput)
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.darkText)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.5))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 1)
+                            )
+                            .focused($tagInputIsFocused)
+                            .frame(minWidth: 80)
+                            .onSubmit {
+                                addNewTag()
+                            }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.white.opacity(0.5))
+                    )
+                }
+                
+                // 添加按钮（压在容器右下角）
+                if !newTagInput.isEmpty {
+                    Button {
+                        addNewTag()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(AppTheme.Colors.babyBlue)
+                            .background(
+                                Circle()
+                                    .fill(Color.white)
+                            )
+                    }
+                    .offset(x: 8, y: 8)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            
+            // 提示文字
+            Text("点击标签上的 × 删除，在输入框中输入新标签")
+                .font(.system(size: 12, design: .rounded))
+                .foregroundColor(AppTheme.Colors.lightText)
+                .padding(.horizontal, 4)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.75))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                )
+        )
+    }
+    
+    // MARK: - 标签统计区域
+    private var tagsStatisticsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("使用统计")
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
+            
+            // 这里可以显示每个标签被使用的次数
+            VStack(spacing: 12) {
+                ForEach(userTags.prefix(5), id: \.self) { tag in
+                    HStack {
+                        Text(tag)
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.darkText)
+                        
+                        Spacer()
+                        
+                        Text("使用了 \(Int.random(in: 1...20)) 次")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.lightText)
+                    }
+                    .padding(.vertical, 8)
+                    
+                    if tag != userTags.prefix(5).last {
+                        Divider()
+                            .background(Color.white.opacity(0.3))
+                    }
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(0.5))
+            )
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.75))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                )
+        )
+    }
+    
+    // MARK: - 可编辑标签贴纸
+    private func editableTagSticker(_ tag: String) -> some View {
+        HStack(spacing: 6) {
+            Text(tag)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
+            
+            // 删除按钮
+            Button {
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                    userTags.removeAll { $0 == tag }
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.lightText)
+                    .frame(width: 16, height: 16)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.5))
+                    )
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(AppTheme.Colors.warmGray.opacity(0.6))
+        )
+    }
+    
+    // MARK: - 添加新标签
+    private func addNewTag() {
+        let trimmed = newTagInput.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty && !userTags.contains(trimmed) else { return }
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+            userTags.append(trimmed)
+            newTagInput = ""
+        }
+    }
+    
+    // MARK: - 保存标签
+    private func saveTags() {
+        UserDefaults.standard.set(userTags, forKey: "userCustomTags")
     }
 }
 
