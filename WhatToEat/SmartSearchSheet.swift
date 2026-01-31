@@ -366,66 +366,9 @@ struct SmartSearchSheet: View {
     
     // MARK: - 搜索结果行
     private func searchResultRow(item: MKMapItem, index: Int) -> some View {
-        Button {
+        SearchResultButton(item: item) {
             selectPlace(item)
-        } label: {
-            HStack(spacing: 12) {
-                // 图标
-                ZStack {
-                    Circle()
-                        .fill(categoryColor(for: item.pointOfInterestCategory).opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: categoryIcon(for: item.pointOfInterestCategory))
-                        .font(.system(size: 18))
-                        .foregroundColor(categoryColor(for: item.pointOfInterestCategory))
-                }
-                
-                // 信息
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name ?? "未知地点")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(Color(hex: "#1A1A1A"))
-                        .lineLimit(1)
-                    
-                    HStack(spacing: 6) {
-                        // 距离
-                        if let distance = calculateDistance(to: item.placemark.coordinate) {
-                            Text(distance)
-                                .font(.system(size: 12))
-                                .foregroundColor(Color(hex: "#FF6B6B"))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color(hex: "#FF6B6B").opacity(0.1))
-                                )
-                        }
-                        
-                        // 地址
-                        Text(formatAddress(from: item.placemark))
-                            .font(.system(size: 13))
-                            .foregroundColor(Color(hex: "#888888"))
-                            .lineLimit(1)
-                    }
-                }
-                
-                Spacer()
-                
-                // 箭头
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color(hex: "#CCCCCC"))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
-            )
         }
-        .buttonStyle(ScaleButtonStyle())
     }
     
     // MARK: - 搜索输入处理（防抖）
@@ -611,5 +554,134 @@ struct SmartSearchSheet: View {
         } else {
             return Color(hex: "#3498DB")
         }
+    }
+}
+
+// MARK: - 搜索结果按钮（独立结构体避免类型检查问题）
+struct SearchResultButton: View {
+    let item: MKMapItem
+    let action: () -> Void
+    
+    @ObservedObject private var locationManager = LocationManager.shared
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                // 图标
+                ZStack {
+                    Circle()
+                        .fill(categoryColor.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    
+                    Image(systemName: categoryIcon)
+                        .font(.system(size: 18))
+                        .foregroundColor(categoryColor)
+                }
+                
+                // 信息
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.name ?? "未知地点")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Color(hex: "#1A1A1A"))
+                        .lineLimit(1)
+                    
+                    HStack(spacing: 6) {
+                        // 距离
+                        if let distance = calculateDistance() {
+                            Text(distance)
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(hex: "#FF6B6B"))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(Color(hex: "#FF6B6B").opacity(0.1))
+                                )
+                        }
+                        
+                        // 地址
+                        Text(formatAddress())
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(hex: "#888888"))
+                            .lineLimit(1)
+                    }
+                }
+                
+                Spacer()
+                
+                // 箭头
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(hex: "#CCCCCC"))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .pressableButton()
+    }
+    
+    private var categoryIcon: String {
+        guard let category = item.pointOfInterestCategory else { return "mappin" }
+        let categoryString = String(describing: category)
+        
+        if categoryString.contains("restaurant") {
+            return "fork.knife"
+        } else if categoryString.contains("bakery") {
+            return "birthday.cake"
+        } else if categoryString.contains("cafe") {
+            return "cup.and.saucer"
+        } else if categoryString.contains("food") {
+            return "basket"
+        } else {
+            return "mappin"
+        }
+    }
+    
+    private var categoryColor: Color {
+        guard let category = item.pointOfInterestCategory else { return Color(hex: "#999999") }
+        let categoryString = String(describing: category)
+        
+        if categoryString.contains("restaurant") {
+            return Color(hex: "#FF6B6B")
+        } else if categoryString.contains("bakery") {
+            return Color(hex: "#FFB347")
+        } else if categoryString.contains("cafe") {
+            return Color(hex: "#8B4513")
+        } else if categoryString.contains("food") {
+            return Color(hex: "#27AE60")
+        } else {
+            return Color(hex: "#3498DB")
+        }
+    }
+    
+    private func calculateDistance() -> String? {
+        guard let userLocation = locationManager.userLocation else { return nil }
+        let coordinate = item.placemark.coordinate
+        let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let distance = userLocation.distance(from: targetLocation)
+        
+        if distance < 1000 {
+            return String(format: "%.0f米", distance)
+        } else {
+            return String(format: "%.1f公里", distance / 1000)
+        }
+    }
+    
+    private func formatAddress() -> String {
+        let placemark = item.placemark
+        var components: [String] = []
+        if let subLocality = placemark.subLocality {
+            components.append(subLocality)
+        }
+        if let thoroughfare = placemark.thoroughfare {
+            components.append(thoroughfare)
+        }
+        return components.joined(separator: " ")
     }
 }

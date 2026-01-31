@@ -57,6 +57,13 @@ struct ProfileView: View {
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
         }
+        // 键盘避让：编辑标签时自动调整底部内边距
+        .safeAreaInset(edge: .bottom) {
+            if isEditingTags {
+                Color.clear.frame(height: 300)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: isEditingTags)
     }
     
     // MARK: - Phase 1: Profile Card (白色透明名片，显示背景渐变)

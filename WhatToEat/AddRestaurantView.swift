@@ -534,6 +534,7 @@ struct AddRestaurantView: View {
             unifiedTagsRow
                 .padding(.vertical, 20)
         }
+        .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
                 .fill(Color.white.opacity(0.35))
@@ -550,7 +551,6 @@ struct AddRestaurantView: View {
             Text("评分")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 20)
             
             // 星星（带立体质感）
             HStack(spacing: 12) {
@@ -603,7 +603,6 @@ struct AddRestaurantView: View {
             Text("评价")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 20)
             
             // 评价内容（可点击编辑）
             ZStack(alignment: .bottomTrailing) {
@@ -667,7 +666,6 @@ struct AddRestaurantView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(.horizontal, 20)
             .animation(AppTheme.Animations.standardSpring, value: isEditingReview)
             .onTapGesture {
                 if !isEditingReview {
@@ -686,7 +684,6 @@ struct AddRestaurantView: View {
             Text("标签")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 20)
             
             // 标签内容（可点击编辑）
             ZStack(alignment: .bottomTrailing) {
@@ -768,7 +765,6 @@ struct AddRestaurantView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(.horizontal, 20)
             .onTapGesture {
                 if !isEditingTags {
                     withAnimation(AppTheme.Animations.editingSpring) {
