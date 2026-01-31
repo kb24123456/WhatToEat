@@ -23,6 +23,14 @@ struct RestaurantMapView: View {
     // 选中的餐厅（用于详情抽屉）
     @State private var selectedRestaurant: Restaurant?
     
+    // MARK: - 导航状态与路线变量
+    @State private var route: MKRoute?
+    @State private var isNavigating: Bool = false
+    @State private var navigationSheetHeight: PresentationDetent = .fraction(0.65)
+    @State private var routeUpdateTimer: Timer?
+    @State private var showExitNavigationButton: Bool = false
+    @State private var navigatingRestaurant: Restaurant? // 导航中的餐厅（独立于selectedRestaurant）
+    
     // 筛选后的餐厅
     private var filteredRestaurants: [Restaurant] {
         if searchText.isEmpty {
@@ -54,7 +62,11 @@ struct RestaurantMapView: View {
                     } else if let restaurant = cluster.restaurants.first {
                         // 单个餐厅大头针
                         Annotation("", coordinate: cluster.coordinate) {
-                            GourmetAnnotation(restaurant: restaurant) { selected in
+                            GourmetAnnotation(
+                                restaurant: restaurant,
+                                isNavigating: isNavigating,
+                                isDestination: isNavigating && selectedRestaurant?.id == restaurant.id
+                            ) { selected in
                                 selectedRestaurant = selected
                                 // 任务1：将选中餐厅移动到视野上方居中位置（避免被卡片遮挡）
                                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -79,8 +91,36 @@ struct RestaurantMapView: View {
                         UserLocationAnnotation()
                     }
                 }
+                
+                // MARK: - 绘制导航路线（高德地图风格：绿色高亮路线）
+                if let route = route, isNavigating {
+                    // 路线阴影层（发光效果）
+                    MapPolyline(route)
+                        .stroke(Color(hex: "#4CAF50").opacity(0.4), lineWidth: 14)
+                    
+                    // 主路线层 - 高德同款绿色
+                    MapPolyline(route)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color(hex: "#4CAF50"),
+                                    Color(hex: "#66BB6A")
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: 8
+                        )
+                }
             }
-            .mapStyle(.standard(pointsOfInterest: .excludingAll))
+            // 导航模式下降低地图饱和度，提升路线易读性
+            .mapStyle(isNavigating ? 
+                .standard(
+                    emphasis: .muted,
+                    pointsOfInterest: .excludingAll
+                ) : 
+                .standard(pointsOfInterest: .excludingAll)
+            )
             .mapControls {
                 MapUserLocationButton()
                 MapCompass()
@@ -91,7 +131,9 @@ struct RestaurantMapView: View {
             }
             .onChange(of: locationManager.userLocation) { _, newLocation in
                 if let location = newLocation {
-                    updateCameraToUserLocation(location)
+                    if !isNavigating {
+                        updateCameraToUserLocation(location)
+                    }
                 }
             }
             
@@ -100,18 +142,246 @@ struct RestaurantMapView: View {
             
             // MARK: - 底部遮罩
             bottomOverlay
+            
+            // MARK: - 导航信息卡片和退出按钮（悬浮在地图上）
+            if isNavigating && navigatingRestaurant != nil {
+                navigationInfoOverlay
+            }
         }
         .sheet(isPresented: $showCityPicker) {
             CityPickerView(selectedCity: $selectedCity)
         }
-        .sheet(item: $selectedRestaurant) { restaurant in
+        // 导航模式下不显示餐厅详情抽屉
+        .sheet(item: Binding(
+            get: { isNavigating ? nil : selectedRestaurant },
+            set: { selectedRestaurant = $0 }
+        )) { restaurant in
             RestaurantDetailSheet(
                 restaurant: restaurant,
-                userLocation: locationManager.userLocation
+                userLocation: locationManager.userLocation,
+                isNavigating: $isNavigating,
+                route: $route,
+                onStartNavigation: { destination in
+                    startNavigation(to: destination)
+                },
+                onExitNavigation: {
+                    exitNavigation()
+                }
             )
-            .presentationDetents([.fraction(0.65), .large])  // 任务3：默认高度65%（参考图3，显示更多信息）
+            .presentationDetents([.fraction(0.65), .large])
             .presentationBackground(.white)
             .presentationDragIndicator(.visible)
+        }
+    }
+    
+    // MARK: - 导航信息悬浮卡片（包含退出按钮）
+    private var navigationInfoOverlay: some View {
+        VStack {
+            Spacer()
+            
+            if let restaurant = navigatingRestaurant {
+                ZStack(alignment: .topTrailing) {
+                    // 导航信息卡片主体
+                    VStack(spacing: 0) {
+                        NavigationInfoCard(
+                            distance: calculateDistanceToRestaurant(restaurant),
+                            drivingTime: calculateDrivingTimeToRestaurant(restaurant),
+                            route: route
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                    }
+                    .background(
+                        // 高级立体感背景
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.95),
+                                        Color.white
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .shadow(
+                                color: Color.black.opacity(0.12),
+                                radius: 20,
+                                x: 0,
+                                y: 8
+                            )
+                            .shadow(
+                                color: Color(hex: "#89CFF0").opacity(0.15),
+                                radius: 30,
+                                x: 0,
+                                y: 4
+                            )
+                    )
+                    
+                    // 退出按钮 - 放在卡片右上边缘，叠放样式
+                    Button {
+                        exitNavigation()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("退出")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.black)
+                        )
+                        .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+                    }
+                    .offset(x: 8, y: -12) // 向右上偏移，形成叠放效果
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+        }
+    }
+    
+    // MARK: - 计算到餐厅的距离（用于导航信息卡片）
+    private func calculateDistanceToRestaurant(_ restaurant: Restaurant) -> String {
+        guard let userLoc = locationManager.userLocation else { return "--" }
+        let restaurantLoc = CLLocation(
+            latitude: restaurant.latitude,
+            longitude: restaurant.longitude
+        )
+        let dist = userLoc.distance(from: restaurantLoc)
+        if dist < 1000 {
+            return String(format: "%.0f", dist)
+        } else {
+            return String(format: "%.1f", dist / 1000)
+        }
+    }
+    
+    // MARK: - 计算到餐厅的驾车时长（用于导航信息卡片）
+    private func calculateDrivingTimeToRestaurant(_ restaurant: Restaurant) -> String {
+        if let route = route {
+            let minutes = Int(route.expectedTravelTime / 60)
+            return "\(minutes)"
+        }
+        
+        guard let userLoc = locationManager.userLocation else { return "--" }
+        let restaurantLoc = CLLocation(
+            latitude: restaurant.latitude,
+            longitude: restaurant.longitude
+        )
+        let dist = userLoc.distance(from: restaurantLoc)
+        let minutes = Int(dist / 500)
+        if minutes < 1 {
+            return "<1"
+        } else {
+            return "\(minutes)"
+        }
+    }
+    
+    // MARK: - 开始导航
+    private func startNavigation(to destination: CLLocationCoordinate2D) {
+        // 保存当前餐厅到导航餐厅
+        navigatingRestaurant = selectedRestaurant
+        
+        isNavigating = true
+        showExitNavigationButton = true
+        
+        // 关闭抽屉
+        selectedRestaurant = nil
+        
+        // 隐藏底部导航条
+        NotificationCenter.default.post(name: .hideTabBar, object: nil)
+        
+        // 计算路线
+        Task {
+            await calculateRoute(to: destination)
+        }
+        
+        // 调整视角以显示完整路线
+        adjustCameraForNavigation()
+        
+        // 启动定时器，每30秒更新一次路线
+        routeUpdateTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+            Task {
+                await calculateRoute(to: destination)
+            }
+        }
+    }
+    
+    // MARK: - 退出导航
+    private func exitNavigation() {
+        isNavigating = false
+        route = nil
+        showExitNavigationButton = false
+        navigatingRestaurant = nil
+        
+        // 停止定时器
+        routeUpdateTimer?.invalidate()
+        routeUpdateTimer = nil
+        
+        // 恢复底部导航条
+        NotificationCenter.default.post(name: .restoreTabBar, object: nil)
+    }
+    
+    // MARK: - 计算路线
+    private func calculateRoute(to destination: CLLocationCoordinate2D) async {
+        guard let userLocation = locationManager.userLocation?.coordinate else { return }
+        
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: userLocation))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
+        request.transportType = .automobile
+        request.requestsAlternateRoutes = false
+        
+        let directions = MKDirections(request: request)
+        
+        do {
+            let response = try await directions.calculate()
+            if let route = response.routes.first {
+                await MainActor.run {
+                    self.route = route
+                }
+            }
+        } catch {
+            print("计算路线失败: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - 调整导航视角
+    private func adjustCameraForNavigation() {
+        guard let userLocation = locationManager.userLocation?.coordinate,
+              let destination = navigatingRestaurant else { return }
+        
+        let destinationCoordinate = CLLocationCoordinate2D(
+            latitude: destination.latitude,
+            longitude: destination.longitude
+        )
+        
+        // 计算包含起点和终点的区域
+        let minLat = min(userLocation.latitude, destinationCoordinate.latitude)
+        let maxLat = max(userLocation.latitude, destinationCoordinate.latitude)
+        let minLon = min(userLocation.longitude, destinationCoordinate.longitude)
+        let maxLon = max(userLocation.longitude, destinationCoordinate.longitude)
+        
+        // 添加边距，确保起点和终点都能在视野内
+        let latPadding = (maxLat - minLat) * 0.3 + 0.01
+        let lonPadding = (maxLon - minLon) * 0.3 + 0.01
+        
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+        
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) + latPadding * 2, 0.02),
+            longitudeDelta: max((maxLon - minLon) + lonPadding * 2, 0.02)
+        )
+        
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+            cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
         }
     }
     
@@ -291,14 +561,13 @@ struct RestaurantMapView: View {
                         .init(color: Color.white.opacity(0), location: 0.0),       // 最上方完全透明（显示地图）
                         .init(color: Color.white.opacity(0.45), location: 0.2),   // 20%位置轻微白色
                         .init(color: Color.white.opacity(0.65), location: 0.4),    // 40%位置较明显
-                        .init(color: Color.white.opacity(0.85), location: 0.65),   // 65%位置较强
-                        .init(color: Color.white.opacity(0.95), location: 0.85),   // 85%位置接近白色
+                        .init(color: Color.white, location: 0.85),   // 85%位置开始纯白
                         .init(color: Color.white, location: 1.0)                  // 最下方纯白色（与导航栏衔接）
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 180)  // 过渡区域高度180pt
+                .frame(height: 180)  // 过渡区域高度120pt
                 
                 // 纯白色区域，与导航栏背景颜色一致
                 Color.white
@@ -344,6 +613,8 @@ struct RestaurantCluster: Identifiable {
 // MARK: - 奶脂大头针组件 (GourmetAnnotation)
 struct GourmetAnnotation: View {
     let restaurant: Restaurant
+    let isNavigating: Bool
+    let isDestination: Bool
     @State private var isSelected: Bool = false
     var onSelect: (Restaurant) -> Void
     
@@ -414,6 +685,11 @@ struct GourmetAnnotation: View {
                 .clipShape(Circle())
                 .scaleEffect(isSelected ? 1.15 : 1.0)
                 .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isSelected)
+                
+                // MARK: - 导航模式下的终点波纹动画
+                if isDestination && isNavigating {
+                    RippleAnimation()
+                }
             }
             
             // 小三角形指针
@@ -442,6 +718,32 @@ struct GourmetAnnotation: View {
             
             // 触发选中回调
             onSelect(restaurant)
+        }
+    }
+}
+
+// MARK: - 波纹动画组件
+struct RippleAnimation: View {
+    @State private var animate = false
+    
+    var body: some View {
+        ZStack {
+            ForEach(0..<3) { index in
+                Circle()
+                    .stroke(Color(hex: "#89CFF0").opacity(0.6), lineWidth: 2)
+                    .frame(width: 60, height: 60)
+                    .scaleEffect(animate ? 1.5 : 0.8)
+                    .opacity(animate ? 0 : 1)
+                    .animation(
+                        Animation.easeOut(duration: 1.5)
+                            .repeatForever(autoreverses: false)
+                            .delay(Double(index) * 0.5),
+                        value: animate
+                    )
+            }
+        }
+        .onAppear {
+            animate = true
         }
     }
 }
@@ -538,10 +840,14 @@ struct CityPickerView: View {
 struct RestaurantDetailSheet: View {
     let restaurant: Restaurant
     let userLocation: CLLocation?
+    @Binding var isNavigating: Bool
+    @Binding var route: MKRoute?
     @Environment(\.dismiss) private var dismiss
-    @State private var showNavigationOptions = false
-    @State private var showCheckInView = false
-    @State private var isFavorite = false
+    @State private var showCheckInView: Bool = false
+    @State private var isFavorite: Bool = false
+    
+    var onStartNavigation: (CLLocationCoordinate2D) -> Void
+    var onExitNavigation: () -> Void
     
     // 计算距离
     private var distance: String {
@@ -560,13 +866,17 @@ struct RestaurantDetailSheet: View {
     
     // 计算预计驾车时长（分钟）
     private var drivingTime: String {
+        if let route = route, isNavigating {
+            let minutes = Int(route.expectedTravelTime / 60)
+            return "\(minutes)"
+        }
+        
         guard let userLoc = userLocation else { return "--" }
         let restaurantLoc = CLLocation(
             latitude: restaurant.latitude,
             longitude: restaurant.longitude
         )
         let dist = userLoc.distance(from: restaurantLoc)
-        // 假设平均车速 30km/h = 500m/min
         let minutes = Int(dist / 500)
         if minutes < 1 {
             return "<1"
@@ -622,46 +932,57 @@ struct RestaurantDetailSheet: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
                     
-                    // 高亮行 (Baby Blue)：距离 + 预计驾车时长
-                    HStack(spacing: 24) {
-                        // 距离
-                        HStack(spacing: 6) {
-                            Image(systemName: "location.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(Color(hex: "#89CFF0"))
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(distance) km")
-                                    .font(.system(size: 16, weight: .semibold))
+                    // 导航模式：显示实时导航信息
+                    if isNavigating {
+                        NavigationInfoCard(
+                            distance: distance,
+                            drivingTime: drivingTime,
+                            route: route
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                    } else {
+                        // 普通模式：高亮行 (Baby Blue)：距离 + 预计驾车时长
+                        HStack(spacing: 24) {
+                            // 距离
+                            HStack(spacing: 6) {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 14))
                                     .foregroundColor(Color(hex: "#89CFF0"))
-                                Text("距离")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.gray)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\(distance) km")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#89CFF0"))
+                                    Text("距离")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color.gray)
+                                }
                             }
-                        }
-                        
-                        // 预计驾车时长
-                        HStack(spacing: 6) {
-                            Image(systemName: "car.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(Color(hex: "#89CFF0"))
                             
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(drivingTime) 分钟")
-                                    .font(.system(size: 16, weight: .semibold))
+                            // 预计驾车时长
+                            HStack(spacing: 6) {
+                                Image(systemName: "car.fill")
+                                    .font(.system(size: 14))
                                     .foregroundColor(Color(hex: "#89CFF0"))
-                                Text("预计驾车")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.gray)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\(drivingTime) 分钟")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#89CFF0"))
+                                    Text("预计驾车")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color.gray)
+                                }
                             }
+                            
+                            Spacer()
                         }
-                        
-                        Spacer()
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
                     
-                    // 任务3：一句话点评（原地点介绍）
+                    // 一句话点评（原地点介绍）
                     if !restaurant.review.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("一句话点评")
@@ -677,7 +998,7 @@ struct RestaurantDetailSheet: View {
                         .padding(.top, 20)
                     }
                     
-                    // 任务4：统计信息（人均消费、累积打卡、总消费、标签）
+                    // 统计信息（人均消费、累积打卡、总消费、标签）
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 20) {
                             // 人均消费
@@ -764,23 +1085,11 @@ struct RestaurantDetailSheet: View {
             }
             .background(Color.white)
             .safeAreaInset(edge: .bottom) {
-                // 任务5：底部工具栏（参考图3，删除收藏按钮）
+                // 底部工具栏
                 bottomToolbar
             }
             .navigationTitle("")
             .navigationBarHidden(true)
-            .confirmationDialog("选择导航应用", isPresented: $showNavigationOptions, titleVisibility: .visible) {
-                Button("苹果地图") {
-                    openAppleMaps()
-                }
-                Button("高德地图") {
-                    openAMap()
-                }
-                Button("百度地图") {
-                    openBaiduMap()
-                }
-                Button("取消", role: .cancel) {}
-            }
             .fullScreenCover(isPresented: $showCheckInView) {
                 CheckInView(restaurant: restaurant, onClose: {
                     showCheckInView = false
@@ -789,93 +1098,146 @@ struct RestaurantDetailSheet: View {
         }
     }
     
-    // MARK: - 底部工具栏（自适应宽度、右对齐、阴影样式）
+    // MARK: - 底部工具栏
     private var bottomToolbar: some View {
         HStack(spacing: 12) {
             Spacer() // 将按钮推到右侧
             
-            // 打卡按钮（自适应宽度、加大字号、阴影样式）
-            Button {
-                showCheckInView = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle")
-                        .font(.system(size: 15))
-                        .foregroundColor(.black)
-                    Text("打卡")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.black)
+            if isNavigating {
+                // 导航模式：显示退出导航按钮
+                Button {
+                    onExitNavigation()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark.circle")
+                            .font(.system(size: 15))
+                            .foregroundColor(.white)
+                        Text("退出导航")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 20)
+                    .frame(height: 40)
+                    .background(
+                        Capsule()
+                            .fill(Color.red.opacity(0.8))
+                    )
+                    .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 2)
                 }
-                .padding(.horizontal, 16)
-                .frame(height: 36)
-                .background(
-                    Capsule()
-                        .fill(Color.white)
-                )
-                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
-            }
-            
-            // 导航按钮（自适应宽度、加大字号、阴影样式）
-            Button {
-                showNavigationOptions = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.turn.up.right")
-                        .font(.system(size: 15))
-                        .foregroundColor(.black)
-                    Text("导航")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.black)
+            } else {
+                // 普通模式：打卡和导航按钮
+                // 打卡按钮
+                Button {
+                    showCheckInView = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle")
+                            .font(.system(size: 15))
+                            .foregroundColor(.black)
+                        Text("打卡")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 36)
+                    .background(
+                        Capsule()
+                            .fill(Color.white)
+                    )
+                    .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
                 }
-                .padding(.horizontal, 16)
-                .frame(height: 36)
-                .background(
-                    Capsule()
-                        .fill(Color.white)
-                )
-                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+                
+                // 导航按钮（内置导航）
+                Button {
+                    let destination = CLLocationCoordinate2D(
+                        latitude: restaurant.latitude,
+                        longitude: restaurant.longitude
+                    )
+                    onStartNavigation(destination)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.turn.up.right")
+                            .font(.system(size: 15))
+                            .foregroundColor(.black)
+                        Text("导航")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 36)
+                    .background(
+                        Capsule()
+                            .fill(Color.white)
+                    )
+                    .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+                }
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(Color.white)
     }
+}
+
+// MARK: - 导航信息卡片
+struct NavigationInfoCard: View {
+    let distance: String
+    let drivingTime: String
+    let route: MKRoute?
     
-    // MARK: - 打开苹果地图
-    private func openAppleMaps() {
-        let coordinate = CLLocationCoordinate2D(latitude: restaurant.latitude, longitude: restaurant.longitude)
-        let placemark = MKPlacemark(coordinate: coordinate)
-        let mapItem = MKMapItem(placemark: placemark)
-        mapItem.name = restaurant.name
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-        ])
-    }
-    
-    // MARK: - 打开高德地图
-    private func openAMap() {
-        let urlString = "iosamap://path?sourceApplication=WhatToEat&dlat=\(restaurant.latitude)&dlon=\(restaurant.longitude)&dname=\(restaurant.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&dev=0&t=0"
-        if let url = URL(string: urlString), UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url)
-        } else {
-            // 未安装高德地图，跳转到 App Store
-            if let appStoreURL = URL(string: "https://apps.apple.com/cn/app/%E9%AB%98%E5%BE%B7%E5%9C%B0%E5%9B%BE/id461703208") {
-                UIApplication.shared.open(appStoreURL)
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 24) {
+                // 剩余距离 - 删除图标，使用黑色rounded字体
+                VStack(spacing: 4) {
+                    Text("\(distance)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(.black)
+                    Text("km")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundColor(.black.opacity(0.6))
+                    Text("剩余距离")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundColor(.gray)
+                }
+                
+                Divider()
+                    .frame(height: 50)
+                
+                // 预计到达时间 - 删除图标，使用黑色rounded字体
+                VStack(spacing: 4) {
+                    Text("\(drivingTime)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(.black)
+                    Text("分钟")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundColor(.black.opacity(0.6))
+                    Text("预计时间")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundColor(.gray)
+                }
+                
+                if let route = route {
+                    Divider()
+                        .frame(height: 50)
+                    
+                    // 路线距离 - 删除图标，使用黑色rounded字体
+                    VStack(spacing: 4) {
+                        Text(String(format: "%.1f", route.distance / 1000))
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.black)
+                        Text("km")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundColor(.black.opacity(0.6))
+                        Text("路线长度")
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundColor(.gray)
+                    }
+                }
             }
         }
-    }
-    
-    // MARK: - 打开百度地图
-    private func openBaiduMap() {
-        let urlString = "baidumap://map/direction?origin=latlng:\(userLocation?.coordinate.latitude ?? 0),\(userLocation?.coordinate.longitude ?? 0)|name:我的位置&destination=latlng:\(restaurant.latitude),\(restaurant.longitude)|name:\(restaurant.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&mode=driving"
-        if let url = URL(string: urlString), UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url)
-        } else {
-            // 未安装百度地图，跳转到 App Store
-            if let appStoreURL = URL(string: "https://apps.apple.com/cn/app/%E7%99%BE%E5%BA%A6%E5%9C%B0%E5%9B%BE/id452186370") {
-                UIApplication.shared.open(appStoreURL)
-            }
-        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 20)
     }
 }
 
