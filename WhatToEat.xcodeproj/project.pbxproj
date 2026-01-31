@@ -10,9 +10,22 @@
 		12B7D1AD2F1A98940021A936 /* WhatToEat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhatToEat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		12F656BE2F2E826100FBE87D /* Exceptions for "WhatToEat" folder in "WhatToEat" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 12B7D1AC2F1A98940021A936 /* WhatToEat */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		12B7D1AF2F1A98940021A936 /* WhatToEat */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				12F656BE2F2E826100FBE87D /* Exceptions for "WhatToEat" folder in "WhatToEat" target */,
+			);
 			path = WhatToEat;
 			sourceTree = "<group>";
 		};
@@ -256,6 +269,8 @@
 				DEVELOPMENT_TEAM = N2ZJ3W3FFD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WhatToEat/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = CloudKit;
 				INFOPLIST_KEY_NSCameraUsageDescription = "我们要访问您的相机以拍摄美食瞬间";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "使用 Face ID 保护您的美食手账隐私";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "我们需要获取您的位置以计算您与餐厅的距离";
@@ -293,6 +308,8 @@
 				DEVELOPMENT_TEAM = N2ZJ3W3FFD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WhatToEat/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = CloudKit;
 				INFOPLIST_KEY_NSCameraUsageDescription = "我们要访问您的相机以拍摄美食瞬间";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "使用 Face ID 保护您的美食手账隐私";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "我们需要获取您的位置以计算您与餐厅的距离";

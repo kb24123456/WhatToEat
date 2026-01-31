@@ -22,13 +22,25 @@ class CloudKitManager: NSObject {
     var errorMessage: String?
     
     // MARK: - 私有属性
-    private let container: CKContainer
+    private var container: CKContainer?
     private var authController: ASAuthorizationController?
     
     // MARK: - 初始化
     private override init() {
-        self.container = CKContainer.default()
         super.init()
+        
+        // 延迟初始化容器，避免在应用启动时崩溃
+        // 需要在主线程中初始化
+        DispatchQueue.main.async { [weak self] in
+            self?.initializeContainer()
+        }
+    }
+    
+    // MARK: - 初始化容器
+    private func initializeContainer() {
+        // 尝试获取默认容器
+        let ckContainer = CKContainer.default()
+        self.container = ckContainer
         
         // 启动时检查 CloudKit 状态
         checkCloudKitStatus()
@@ -36,6 +48,13 @@ class CloudKitManager: NSObject {
     
     // MARK: - 检查 CloudKit 状态
     func checkCloudKitStatus() {
+        guard let container = container else {
+            self.errorMessage = "CloudKit 容器未初始化"
+            self.isCloudKitAvailable = false
+            self.isSignedIn = false
+            return
+        }
+        
         container.accountStatus { [weak self] status, error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -74,6 +93,8 @@ class CloudKitManager: NSObject {
     
     // MARK: - 获取用户记录 ID
     private func fetchUserRecordID() {
+        guard let container = container else { return }
+        
         container.fetchUserRecordID { [weak self] recordID, error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
