@@ -31,12 +31,6 @@ struct RestaurantMapView: View {
     @State private var clusteringThrottleTimer: Timer?
     @State private var isClusteringPending: Bool = false
     
-    // MARK: - 性能优化：滑动时隐藏餐厅
-    @State private var isMapMoving: Bool = false
-    @State private var mapMovementTimer: Timer?
-    @State private var showAnnotations: Bool = true
-    @State private var annotationDelayTimer: Timer?
-    
     // 最大显示餐厅数量
     private let maxVisibleRestaurants = 10
     
@@ -197,13 +191,10 @@ struct RestaurantMapView: View {
     // MARK: - 地图层
     private var mapLayer: some View {
         Map(position: $cameraPosition) {
-            // 性能优化：滑动时不显示餐厅，停止后才显示
-            if showAnnotations {
-                // 简化：所有范围都显示普通大头针（不再区分聚类点）
-                // 每个聚类只显示一家代表餐厅
-                ForEach(clusteredRestaurants) { cluster in
-                    mapAnnotation(for: cluster, simplified: currentZoomLevel != .close)
-                }
+            // 简化：所有范围都显示普通大头针（不再区分聚类点）
+            // 每个聚类只显示一家代表餐厅
+            ForEach(clusteredRestaurants) { cluster in
+                mapAnnotation(for: cluster, simplified: currentZoomLevel != .close)
             }
             
             // 用户当前位置
@@ -662,7 +653,7 @@ struct RestaurantMapView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 180)  // 过渡区域高度120pt
+                .frame(height: 120)  // 过渡区域高度120pt
                 
                 // 纯白色区域，与导航栏背景颜色一致
                 Color.white
@@ -698,24 +689,11 @@ struct RestaurantMapView: View {
         ))
     }
     
-    // 上次地图移动时间
-    @State private var lastMapMovementTime: Date = Date()
-    
     // MARK: - 处理地图相机变化
     private func handleMapCameraChange(_ newRegion: MKCoordinateRegion) {
         visibleRegion = newRegion
         
         let newCenter = newRegion.center
-        
-        // 性能优化：处理地图移动状态
-        lastMapMovementTime = Date()
-        
-        if !isMapMoving {
-            handleMapMovementStart()
-        }
-        
-        // 延迟检测移动是否结束
-        scheduleMovementEndCheck()
         
         if let initialCenter = initialCenterCoordinate {
             let distance = calculateDistance(from: initialCenter, to: newCenter)
@@ -726,23 +704,6 @@ struct RestaurantMapView: View {
             }
         } else {
             initialCenterCoordinate = newCenter
-        }
-    }
-    
-    // 调度移动结束检测
-    private func scheduleMovementEndCheck() {
-        // 取消之前的检测
-        mapMovementTimer?.invalidate()
-        
-        // 0.15秒后检查是否还在移动
-        mapMovementTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-            Task { @MainActor in
-                let timeSinceLastMovement = Date().timeIntervalSince(self.lastMapMovementTime)
-                // 如果超过0.15秒没有新移动，认为移动结束
-                if timeSinceLastMovement >= 0.15 {
-                    self.handleMapMovementEnd()
-                }
-            }
         }
     }
     
@@ -802,30 +763,6 @@ struct RestaurantMapView: View {
         cachedClusters = clusters
         lastClusteringRegion = visibleRegion
         isClusteringPending = false
-    }
-    
-    // MARK: - 性能优化：处理地图移动状态
-    private func handleMapMovementStart() {
-        // 地图开始移动：立即隐藏所有餐厅
-        isMapMoving = true
-        showAnnotations = false
-        
-        // 取消之前的定时器
-        mapMovementTimer?.invalidate()
-        annotationDelayTimer?.invalidate()
-    }
-    
-    private func handleMapMovementEnd() {
-        // 地图停止移动：延迟显示餐厅
-        isMapMoving = false
-        
-        // 延迟 0.5 秒后显示餐厅
-        annotationDelayTimer?.invalidate()
-        annotationDelayTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-            Task { @MainActor in
-                self.showAnnotations = true
-            }
-        }
     }
 }
 
