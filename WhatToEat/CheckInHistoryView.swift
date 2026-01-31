@@ -8,6 +8,17 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - 日期格式化扩展
+extension Date {
+    /// 带年份的日期时间格式：yyyy年M月d日 HH:mm
+    var formattedWithYear: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        return formatter.string(from: self)
+    }
+}
+
 // MARK: - 打卡记录视图
 struct CheckInHistoryView: View {
     @Environment(\.modelContext) private var modelContext
@@ -174,7 +185,7 @@ struct CheckInHistoryView: View {
         )
     }
     
-    // MARK: - Check In Log Card (方案1：卡片式重构)
+    // MARK: - Check In Log Card (优化版)
     private func checkInLogCard(item: LogItem) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // 顶部：餐厅封面 + 名称 + 心情
@@ -190,9 +201,9 @@ struct CheckInHistoryView: View {
                         .foregroundColor(AppTheme.Colors.darkText)
                         .lineLimit(1)
                     
-                    // 日期 + 心情
+                    // 日期（带年份）+ 心情
                     HStack(spacing: 6) {
-                        Text(item.log.date.chineseDateTime)
+                        Text(item.log.date.formattedWithYear)
                             .font(.system(size: 13))
                             .foregroundColor(AppTheme.Colors.mediumGray)
                         
@@ -201,7 +212,7 @@ struct CheckInHistoryView: View {
                                 .font(.system(size: 14))
                             Text(moodType.title)
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(moodType.glowColor)
+                                .foregroundColor(AppTheme.Colors.darkText)
                         }
                     }
                 }
@@ -210,12 +221,13 @@ struct CheckInHistoryView: View {
             }
             .padding(.bottom, 16)
             
-            // 消费信息行（紧凑布局）
+            // 消费信息行（文本标签 + 统一黑色字体）
             HStack(spacing: 0) {
-                // 总额
-                HStack(spacing: 4) {
-                    Text("💰")
-                        .font(.system(size: 14))
+                // 消费
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("消费")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
                     Text("¥\(Int(item.log.expense))")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.Colors.darkText)
@@ -223,22 +235,24 @@ struct CheckInHistoryView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // 人数
-                HStack(spacing: 4) {
-                    Text("👥")
-                        .font(.system(size: 14))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("人数")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
                     Text("\(item.log.peopleCount)人")
-                        .font(.system(size: 14))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.Colors.darkText)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // 人均
-                HStack(spacing: 4) {
-                    Text("📊")
-                        .font(.system(size: 14))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("人均")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
                     Text("¥\(Int(item.log.peopleCount > 0 ? item.log.expense / Double(item.log.peopleCount) : 0))")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.accent)
+                        .foregroundColor(AppTheme.Colors.darkText)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
