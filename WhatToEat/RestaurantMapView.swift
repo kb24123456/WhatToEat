@@ -25,13 +25,11 @@ struct RestaurantMapView: View {
     @State private var hasUserInteractedWithMap: Bool = false
     private let regionChangeThreshold: CLLocationDistance = 500 // 移动超过500米后重置
     
-    // Step 3: 地图移动状态（用于替身方案）
-    @State private var isMapMoving: Bool = false
-    @State private var mapMovementTimer: Timer?
-    
-    // Step 3: 防抖处理 - 最后一次地图变化时间
-    @State private var lastMapChangeTime: Date = Date()
-    private let mapChangeDebounceInterval: TimeInterval = 0.3 // 300ms 防抖
+    // MARK: - 性能优化：聚类计算节流与缓存
+    @State private var cachedClusters: [RestaurantCluster] = []
+    @State private var lastClusteringRegion: MKCoordinateRegion?
+    @State private var clusteringThrottleTimer: Timer?
+    @State private var isClusteringPending: Bool = false
     
     // 地图缩放级别对应的聚类距离
     private var dynamicClusteringDistance: CLLocationDistance {
@@ -50,6 +48,19 @@ struct RestaurantMapView: View {
         }
     }
     
+    // 当前地图缩放级别
+    private var currentZoomLevel: MapZoomLevel {
+        guard let region = visibleRegion else { return .medium }
+        let spanDelta = max(region.span.latitudeDelta, region.span.longitudeDelta)
+        if spanDelta > 0.5 {
+            return .far
+        } else if spanDelta > 0.1 {
+            return .medium
+        } else {
+            return .close
+        }
+    }
+    
     // 选中的餐厅（用于详情抽屉）
     @State private var selectedRestaurant: Restaurant?
     
@@ -61,10 +72,18 @@ struct RestaurantMapView: View {
     @State private var showExitNavigationButton: Bool = false
     @State private var navigatingRestaurant: Restaurant? // 导航中的餐厅（独立于selectedRestaurant）
     
-    // 聚合后的餐厅组（仅在当前区域内显示）
+    // 聚合后的餐厅组（使用缓存）
     private var clusteredRestaurants: [RestaurantCluster] {
-        let filtered = filterRestaurants()
-        return calculateClusters(from: filtered)
+        // 如果缓存为空或区域变化较大，返回空数组（等待节流更新）
+        if cachedClusters.isEmpty || shouldRecalculateClusters() {
+            // 触发后台计算
+            if !isClusteringPending {
+                scheduleClusteringUpdate()
+            }
+            // 返回缓存或空数组
+            return cachedClusters
+        }
+        return cachedClusters
     }
     
     // 筛选餐厅（搜索 + 区域 + 有效坐标）
@@ -151,9 +170,22 @@ struct RestaurantMapView: View {
     // MARK: - 地图层
     private var mapLayer: some View {
         Map(position: $cameraPosition) {
-            // 聚合后的大头针
-            ForEach(clusteredRestaurants) { cluster in
-                mapAnnotation(for: cluster)
+            // 分层渲染：根据缩放级别决定显示内容
+            if currentZoomLevel == .far {
+                // 大范围：只显示聚类点（不显示单个餐厅）
+                ForEach(clusteredRestaurants.filter { $0.isCluster }) { cluster in
+                    mapAnnotation(for: cluster)
+                }
+            } else if currentZoomLevel == .medium {
+                // 中等范围：显示聚类点 + 简化版单个餐厅（无气泡）
+                ForEach(clusteredRestaurants) { cluster in
+                    mapAnnotation(for: cluster, simplified: true)
+                }
+            } else {
+                // 小范围：显示完整大头针
+                ForEach(clusteredRestaurants) { cluster in
+                    mapAnnotation(for: cluster, simplified: false)
+                }
             }
             
             // 用户当前位置
@@ -195,32 +227,21 @@ struct RestaurantMapView: View {
     
     // MARK: - 地图标注
     @MapContentBuilder
-    private func mapAnnotation(for cluster: RestaurantCluster) -> some MapContent {
+    private func mapAnnotation(for cluster: RestaurantCluster, simplified: Bool = false) -> some MapContent {
         if cluster.isCluster {
             Annotation("", coordinate: cluster.coordinate) {
-                // Step 3: 地图移动时使用简化视图
-                if isMapMoving {
-                    SimpleClusterView(count: cluster.restaurants.count)
-                } else {
-                    ClusterAnnotationView(count: cluster.restaurants.count)
-                }
+                ClusterAnnotationView(count: cluster.restaurants.count)
             }
         } else if let restaurant = cluster.restaurants.first {
             let isDest = isNavigating && selectedRestaurant?.id == restaurant.id
-            let isSel = selectedRestaurant?.id == restaurant.id
             Annotation("", coordinate: cluster.coordinate) {
-                // Step 3: 地图移动时使用简化大头针（替身方案）
-                if isMapMoving && !isSel {
-                    SimpleAnnotationView(isCheckedIn: !restaurant.logs.isEmpty)
-                } else {
-                    GourmetAnnotation(
-                        restaurant: restaurant,
-                        isNavigating: isNavigating,
-                        isDestination: isDest,
-                        isSelected: isSel,
-                        onSelect: handleRestaurantSelection
-                    )
-                }
+                GourmetAnnotation(
+                    restaurant: restaurant,
+                    isNavigating: isNavigating,
+                    isDestination: isDest,
+                    simplified: simplified,
+                    onSelect: handleRestaurantSelection
+                )
             }
         }
     }
@@ -475,8 +496,8 @@ struct RestaurantMapView: View {
             let avgLat = nearbyRestaurants.map(\.latitude).reduce(0, +) / Double(nearbyRestaurants.count)
             let avgLon = nearbyRestaurants.map(\.longitude).reduce(0, +) / Double(nearbyRestaurants.count)
             
-            // Step 2: 使用新的初始化器，自动处理 ID
             let cluster = RestaurantCluster(
+                id: restaurant.id,
                 coordinate: CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon),
                 restaurants: nearbyRestaurants,
                 isCluster: nearbyRestaurants.count > 1
@@ -652,39 +673,21 @@ struct RestaurantMapView: View {
         ))
     }
     
-    // MARK: - 处理地图相机变化（添加防抖）
+    // MARK: - 处理地图相机变化
     private func handleMapCameraChange(_ newRegion: MKCoordinateRegion) {
-        let now = Date()
-        lastMapChangeTime = now
+        visibleRegion = newRegion
         
-        // Step 3: 设置地图移动状态（替身方案）
-        isMapMoving = true
-        mapMovementTimer?.invalidate()
-        mapMovementTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-            withAnimation(.easeOut(duration: 0.2)) {
-                self.isMapMoving = false
-            }
-        }
+        let newCenter = newRegion.center
         
-        // Step 3: 防抖处理 - 延迟更新区域
-        DispatchQueue.main.asyncAfter(deadline: .now() + mapChangeDebounceInterval) {
-            // 只有在没有新的变化时才更新
-            if now == self.lastMapChangeTime {
-                self.visibleRegion = newRegion
-                
-                let newCenter = newRegion.center
-                
-                if let initialCenter = self.initialCenterCoordinate {
-                    let distance = self.calculateDistance(from: initialCenter, to: newCenter)
-                    
-                    if distance > self.regionChangeThreshold {
-                        self.hasUserInteractedWithMap = true
-                        self.initialCenterCoordinate = newCenter
-                    }
-                } else {
-                    self.initialCenterCoordinate = newCenter
-                }
+        if let initialCenter = initialCenterCoordinate {
+            let distance = calculateDistance(from: initialCenter, to: newCenter)
+            
+            if distance > regionChangeThreshold {
+                hasUserInteractedWithMap = true
+                initialCenterCoordinate = newCenter
             }
+        } else {
+            initialCenterCoordinate = newCenter
         }
     }
     
@@ -702,29 +705,62 @@ struct RestaurantMapView: View {
             cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
         }
     }
+    
+    // MARK: - 性能优化：聚类计算节流
+    private func shouldRecalculateClusters() -> Bool {
+        guard let currentRegion = visibleRegion,
+              let lastRegion = lastClusteringRegion else {
+            return true
+        }
+        
+        // 计算区域变化距离
+        let centerDistance = calculateDistance(
+            from: lastRegion.center,
+            to: currentRegion.center
+        )
+        
+        // 如果移动超过阈值，需要重新计算
+        let threshold = dynamicClusteringDistance * 0.5
+        return centerDistance > threshold
+    }
+    
+    private func scheduleClusteringUpdate() {
+        isClusteringPending = true
+        
+        // 取消之前的定时器
+        clusteringThrottleTimer?.invalidate()
+        
+        // 延迟 0.3 秒后执行聚类计算
+        clusteringThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+            Task { @MainActor in
+                self.performClustering()
+            }
+        }
+    }
+    
+    private func performClustering() {
+        let filtered = filterRestaurants()
+        let clusters = calculateClusters(from: filtered)
+        
+        cachedClusters = clusters
+        lastClusteringRegion = visibleRegion
+        isClusteringPending = false
+    }
+}
+
+// MARK: - 地图缩放级别
+enum MapZoomLevel {
+    case far      // 大范围
+    case medium   // 中等范围
+    case close    // 小范围
 }
 
 // MARK: - 餐厅聚合模型
 struct RestaurantCluster: Identifiable {
-    // Step 2: 使用 persistentModelID 帮助 SwiftUI 更高效识别
-    let id: String
+    let id: UUID
     let coordinate: CLLocationCoordinate2D
     let restaurants: [Restaurant]
     let isCluster: Bool
-    
-    init(id: String? = nil, coordinate: CLLocationCoordinate2D, restaurants: [Restaurant], isCluster: Bool) {
-        // 如果是单个餐厅，使用其 persistentModelID；如果是聚合，使用组合 ID
-        if let id = id {
-            self.id = id
-        } else if restaurants.count == 1, let first = restaurants.first {
-            self.id = "\(first.persistentModelID)"
-        } else {
-            self.id = restaurants.map { "\($0.persistentModelID)" }.joined(separator: "-")
-        }
-        self.coordinate = coordinate
-        self.restaurants = restaurants
-        self.isCluster = isCluster
-    }
 }
 
 // MARK: - 奶脂大头针组件 (GourmetAnnotation)
@@ -732,7 +768,8 @@ struct GourmetAnnotation: View {
     let restaurant: Restaurant
     let isNavigating: Bool
     let isDestination: Bool
-    let isSelected: Bool
+    let simplified: Bool  // 简化模式：不显示气泡和名称
+    @State private var isSelected: Bool = false
     var onSelect: (Restaurant) -> Void
     
     // 判断是否已打卡
@@ -774,8 +811,8 @@ struct GourmetAnnotation: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Step 1: 简化非选中态 - 只有选中时才显示气泡和复杂效果
-            if isSelected && !restaurant.review.isEmpty {
+            // 简化模式：不显示评论气泡
+            if !simplified && !restaurant.review.isEmpty {
                 Text(truncatedReview)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(AppTheme.Colors.darkText)
@@ -789,39 +826,49 @@ struct GourmetAnnotation: View {
                     )
                     .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
                     .offset(y: -8)
-                    .transition(.opacity.combined(with: .scale))
+                    .scaleEffect(isSelected ? 1.05 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
             }
             
-            // 头像层：40pt 圆形
+            // 头像层：简化模式下缩小尺寸
             ZStack {
-                // Step 1: 简化非选中态 - 非选中时减少阴影
+                // 外圈边框
                 Circle()
                     .fill(borderColor)
-                    .frame(width: 46, height: 46)
-                    .shadow(
-                        color: Color.black.opacity(isSelected ? 0.15 : 0.08),
-                        radius: isSelected ? 6 : 3,
-                        x: 0,
-                        y: isSelected ? 3 : 2
-                    )
+                    .frame(width: simplified ? 36 : 46, height: simplified ? 36 : 46)
+                    .shadow(color: Color.black.opacity(0.15), radius: simplified ? 4 : 6, x: 0, y: simplified ? 2 : 3)
                 
-                // 封面图 - Step 1: 使用缩略图尺寸减少内存占用
-                AsyncImageView(
-                    filename: restaurant.coverPhotoFilename,
-                    placeholder: AnyView(
-                        ZStack {
-                            Circle()
-                                .fill(AppTheme.Colors.primary.opacity(0.1))
-                            Image(systemName: "fork.knife")
-                                .font(.system(size: 16))
-                                .foregroundColor(AppTheme.Colors.primary)
-                        }
+                // 封面图 - 简化模式下不加载图片，使用占位符
+                if simplified {
+                    // 简化模式：纯色背景 + 图标
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.Colors.primary.opacity(0.1))
+                        Image(systemName: "fork.knife")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.Colors.primary)
+                    }
+                    .frame(width: 30, height: 30)
+                    .clipShape(Circle())
+                } else {
+                    // 完整模式：加载真实图片
+                    AsyncImageView(
+                        filename: restaurant.coverPhotoFilename,
+                        placeholder: AnyView(
+                            ZStack {
+                                Circle()
+                                    .fill(AppTheme.Colors.primary.opacity(0.1))
+                                Image(systemName: "fork.knife")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(AppTheme.Colors.primary)
+                            }
+                        )
                     )
-                )
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
-                .scaleEffect(isSelected ? 1.15 : 1.0)
-                .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isSelected)
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                    .scaleEffect(isSelected ? 1.15 : 1.0)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isSelected)
+                }
                 
                 // MARK: - 导航模式下的终点波纹动画
                 if isDestination && isNavigating {
@@ -829,26 +876,31 @@ struct GourmetAnnotation: View {
                 }
             }
             
-            // 小三角形指针
+            // 小三角形指针（简化模式下缩小）
             Triangle()
                 .fill(borderColor)
-                .frame(width: 10, height: 6)
+                .frame(width: simplified ? 8 : 10, height: simplified ? 5 : 6)
                 .offset(y: -1)
             
-            // 餐厅名称 - Step 1: 非选中时简化文字效果
-            Text(restaurant.name)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .lineLimit(1)
-                .shadow(color: isSelected ? Color.white : Color.clear, radius: 2, x: 0, y: 0)
-                .padding(.top, 2)
+            // 餐厅名称（简化模式下不显示）
+            if !simplified {
+                Text(restaurant.name)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                    .lineLimit(1)
+                    .shadow(color: Color.white, radius: 2, x: 0, y: 0)
+                    .padding(.top, 2)
+            }
         }
-        // Step 1: 添加 drawingGroup 进行光栅化，减轻 CPU 重绘压力
-        .drawingGroup(opaque: false, colorMode: .linear)
         .onTapGesture {
-            // 震动反馈
+            // 任务2：震动反馈
             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
             impactFeedback.impactOccurred()
+            
+            // 切换选中状态
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                isSelected.toggle()
+            }
             
             // 触发选中回调
             onSelect(restaurant)
@@ -944,40 +996,6 @@ struct UserLocationAnnotation: View {
                         .stroke(Color.white, lineWidth: 2)
                 )
         }
-    }
-}
-
-// MARK: - Step 3: 简化大头针视图（地图移动时的替身方案）
-struct SimpleAnnotationView: View {
-    let isCheckedIn: Bool
-    
-    var body: some View {
-        Circle()
-            .fill(isCheckedIn ? AppTheme.Colors.accent : AppTheme.Colors.milkyWhite)
-            .frame(width: 16, height: 16)
-            .overlay(
-                Circle()
-                    .stroke(Color.white, lineWidth: 2)
-            )
-            .drawingGroup()
-    }
-}
-
-// MARK: - Step 3: 简化聚合点视图（地图移动时的替身方案）
-struct SimpleClusterView: View {
-    let count: Int
-    
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(AppTheme.Colors.accent)
-                .frame(width: 28, height: 28)
-            
-            Text("\(count)")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white)
-        }
-        .drawingGroup()
     }
 }
 
