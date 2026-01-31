@@ -38,7 +38,7 @@ struct RestaurantMapView: View {
     @State private var annotationDelayTimer: Timer?
     
     // 最大显示餐厅数量
-    private let maxVisibleRestaurants = 50
+    private let maxVisibleRestaurants = 10
     
     // 地图缩放级别对应的聚类距离
     private var dynamicClusteringDistance: CLLocationDistance {
