@@ -94,8 +94,9 @@ struct AddRestaurantView: View {
                     .safeAreaInset(edge: .bottom) {
                         // 保存按钮放入 safeAreaInset，ScrollView 会自动避开
                         saveButton
-                            .padding(.horizontal, 40)
-                            .padding(.bottom, 20)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 30)
+                            .padding(.top, 10)
                             .background(
                                 LinearGradient(
                                     colors: [
@@ -107,8 +108,12 @@ struct AddRestaurantView: View {
                                     endPoint: .bottom
                                 )
                                 .ignoresSafeArea()
-                                .frame(height: 100)
+                                .frame(height: 120)
                             )
+                    }
+                    // 键盘规避：当键盘弹出时自动调整底部内边距
+                    .safeAreaInset(edge: .bottom) {
+                        Color.clear.frame(height: 0)
                     }
                 
                 // Confetti 特效

@@ -110,12 +110,33 @@ struct CheckInView: View {
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
-                // 顶部标题
-                Text(editingLog != nil ? "编辑打卡" : "此食此刻")
-                    .font(.headline)
-                    .foregroundColor(AppTheme.Colors.darkText)
-                    .padding(.top, 60)
-                    .padding(.bottom, 20)
+                // 顶部标题栏（带关闭按钮）
+                ZStack {
+                    // 中间标题
+                    Text(editingLog != nil ? "编辑打卡" : "此食此刻")
+                        .font(.headline)
+                        .foregroundColor(AppTheme.Colors.darkText)
+                    
+                    // 右侧关闭按钮
+                    HStack {
+                        Spacer()
+                        Button {
+                            onClose()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.mediumGray)
+                                .frame(width: 32, height: 32)
+                                .background(
+                                    Circle()
+                                        .fill(Color.white.opacity(0.5))
+                                )
+                        }
+                    }
+                }
+                .padding(.top, 60)
+                .padding(.bottom, 20)
+                .padding(.horizontal, 20)
                 
                 globalContainer
                     .padding(.horizontal, 16)
@@ -399,40 +420,38 @@ struct CheckInView: View {
             }
 
             if !tags.wrappedValue.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(tags.wrappedValue.indices, id: \.self) { index in
-                            HStack(spacing: 4) {
-                                Text(tags.wrappedValue[index])
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(AppTheme.Colors.darkText)
+                // 使用 FlowLayout 实现自动换行
+                FlowLayout(spacing: 6) {
+                    ForEach(tags.wrappedValue.indices, id: \.self) { index in
+                        HStack(spacing: 4) {
+                            Text(tags.wrappedValue[index])
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.darkText)
 
-                                Button {
-                                    triggerHaptic()
-                                    let currentTags = tags.wrappedValue
-                                    if index < currentTags.count {
-                                        withAnimation(AppTheme.Animations.tagSpring) {
-                                            var mutableTags = currentTags
-                                            mutableTags.remove(at: index)
-                                            tags.wrappedValue = mutableTags
-                                        }
+                            Button {
+                                triggerHaptic()
+                                let currentTags = tags.wrappedValue
+                                if index < currentTags.count {
+                                    withAnimation(AppTheme.Animations.tagSpring) {
+                                        var mutableTags = currentTags
+                                        mutableTags.remove(at: index)
+                                        tags.wrappedValue = mutableTags
                                     }
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(AppTheme.Colors.lightText)
                                 }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(AppTheme.Colors.lightText)
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(type.color.opacity(0.1))
-                            )
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(type.color.opacity(0.1))
+                        )
                     }
                 }
-                .frame(height: 26)
             }
 
             TextField(placeholder, text: inputText)
