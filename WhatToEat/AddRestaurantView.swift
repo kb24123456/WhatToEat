@@ -437,7 +437,7 @@ struct AddRestaurantView: View {
             
             Text(address)
                 .font(.caption)
-                .foregroundColor(Color.secondary)
+                .foregroundColor(Color(hex: "#666666"))
                 .lineLimit(1)
             
             Spacer()
@@ -695,7 +695,7 @@ struct AddRestaurantView: View {
                         }
                         
                         if isEditingTags {
-                            TextField("新标签...", text: $newTagInput)
+                            TextField("", text: $newTagInput, prompt: Text("新标签...").foregroundColor(Color(hex: "#666666")))
                                 .font(.system(size: 14))
                                 .foregroundColor(Color(hex: "#1A1A1A"))
                                 .padding(.horizontal, 12)
@@ -982,7 +982,7 @@ struct AddRestaurantView: View {
             }
             
             if isEditingTags {
-                TextField("新标签...", text: $newTagInput)
+                TextField("", text: $newTagInput, prompt: Text("新标签...").foregroundColor(Color(hex: "#666666")))
                     .font(.system(size: 14))
                     .foregroundColor(Color(hex: "#1A1A1A"))
                     .padding(.horizontal, 12)
@@ -1247,7 +1247,11 @@ struct AddRestaurantView: View {
         }
         
         // 确保城市字段有值（如果为空，使用用户选择的城市或默认城市）
-        let finalCity = city.isEmpty ? (UserDefaults.standard.string(forKey: "UserSelectedCity") ?? "重庆") : city
+        let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity")
+        let finalCity = city.isEmpty ? (savedCity ?? "重庆") : city
+        
+        // 调试日志
+        print("[AddRestaurant] 保存餐厅: name=\(name), city=\(city), finalCity=\(finalCity), savedCity=\(savedCity ?? "nil")")
         
         // 保存数据
         let newRestaurant = Restaurant(

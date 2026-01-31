@@ -127,8 +127,9 @@ struct LibraryView: View {
         .onChange(of: selectedCity) {
             UserDefaults.standard.set($0, forKey: kSavedCityKey)
         }
+        .presentationDetents([.fraction(0.65), .large])
     }
-    
+
     // MARK: - 顶部 Header 子视图
     private struct HeaderView: View {
         let selectedCity: String
@@ -370,12 +371,18 @@ private struct FilterBarView: View {
     
     /// 过滤和排序后的餐厅列表
     private var filteredRestaurants: [Restaurant] {
+        // 调试日志
+        print("[LibraryView] 总餐厅数: \(restaurants.count), 选中城市: \(selectedCity)")
+        print("[LibraryView] 餐厅城市分布: \(Dictionary(grouping: restaurants, by: { $0.city }).mapValues { $0.count })")
+        
         var result = restaurants.filter { restaurant in
             guard restaurant.modelContext != nil else {
+                print("[LibraryView] 过滤掉无context的餐厅: \(restaurant.name)")
                 return false
             }
             
             guard restaurant.city == selectedCity else {
+                print("[LibraryView] 过滤掉城市不匹配的餐厅: \(restaurant.name), city=\(restaurant.city), selectedCity=\(selectedCity)")
                 return false
             }
             

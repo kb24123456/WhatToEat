@@ -335,6 +335,7 @@ struct SmartSearchSheet: View {
                             Spacer()
                         }
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     } else if searchResults.isEmpty {
                         HStack {
                             Spacer()
@@ -350,6 +351,7 @@ struct SmartSearchSheet: View {
                             Spacer()
                         }
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     } else {
                         ForEach(Array(searchResults.enumerated()), id: \.element) { index, item in
                             searchResultRow(item: item, index: index)
@@ -363,6 +365,12 @@ struct SmartSearchSheet: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // 移除 List 的高光效果
+        .environment(\.defaultMinListRowHeight, 0)
+        // 禁用点击时的高亮
+        .onAppear {
+            UITableView.appearance().allowsSelection = false
+        }
     }
     
     // MARK: - 搜索结果行
