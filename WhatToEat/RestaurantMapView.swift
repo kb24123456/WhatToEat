@@ -40,6 +40,9 @@ struct RestaurantMapView: View {
     // 最大显示餐厅数量
     private let maxVisibleRestaurants = 10
     
+    // 可视区域边距比例（上下渐变区域不显示餐厅）
+    private let visibleAreaInsetRatio: CGFloat = 0.25
+    
     // 地图缩放级别对应的聚类距离
     private var dynamicClusteringDistance: CLLocationDistance {
         // 根据地图缩放级别动态调整聚类距离
@@ -95,7 +98,7 @@ struct RestaurantMapView: View {
         return cachedClusters
     }
     
-    // 筛选餐厅（搜索 + 区域 + 有效坐标）
+    // 筛选餐厅（搜索 + 可视区域 + 有效坐标）
     private func filterRestaurants() -> [Restaurant] {
         // 搜索筛选
         var result = restaurants
@@ -106,10 +109,10 @@ struct RestaurantMapView: View {
             }
         }
         
-        // 区域筛选
-        if hasUserInteractedWithMap, let region = visibleRegion {
+        // 区域筛选（只在中间可视区域显示）
+        if let region = visibleRegion {
             result = result.filter { r in
-                self.isInRegion(lat: r.latitude, lon: r.longitude, region: region)
+                self.isInVisibleCenterArea(lat: r.latitude, lon: r.longitude, region: region)
             }
         }
         
@@ -121,7 +124,22 @@ struct RestaurantMapView: View {
         return result
     }
     
-    // 检查坐标是否在区域内
+    // 检查坐标是否在中间可视区域（排除上下渐变区域）
+    private func isInVisibleCenterArea(lat: Double, lon: Double, region: MKCoordinateRegion) -> Bool {
+        let halfLat = region.span.latitudeDelta / 2.0
+        let halfLon = region.span.longitudeDelta / 2.0
+        
+        // 计算中间可视区域的边界（排除上下 25% 的渐变区域）
+        let visibleHalfLat = halfLat * (1.0 - visibleAreaInsetRatio * 2)
+        let minLat = region.center.latitude - visibleHalfLat
+        let maxLat = region.center.latitude + visibleHalfLat
+        let minLon = region.center.longitude - halfLon
+        let maxLon = region.center.longitude + halfLon
+        
+        return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon
+    }
+    
+    // 检查坐标是否在区域内（保留原方法用于其他用途）
     private func isInRegion(lat: Double, lon: Double, region: MKCoordinateRegion) -> Bool {
         let halfLat = region.span.latitudeDelta / 2.0
         let halfLon = region.span.longitudeDelta / 2.0
@@ -181,22 +199,10 @@ struct RestaurantMapView: View {
         Map(position: $cameraPosition) {
             // 性能优化：滑动时不显示餐厅，停止后才显示
             if showAnnotations {
-                // 分层渲染：根据缩放级别决定显示内容
-                if currentZoomLevel == .far {
-                    // 大范围：只显示聚类点（不显示单个餐厅）
-                    ForEach(clusteredRestaurants.filter { $0.isCluster }) { cluster in
-                        mapAnnotation(for: cluster)
-                    }
-                } else if currentZoomLevel == .medium {
-                    // 中等范围：显示聚类点 + 简化版单个餐厅（无气泡）
-                    ForEach(clusteredRestaurants) { cluster in
-                        mapAnnotation(for: cluster, simplified: true)
-                    }
-                } else {
-                    // 小范围：显示完整大头针
-                    ForEach(clusteredRestaurants) { cluster in
-                        mapAnnotation(for: cluster, simplified: false)
-                    }
+                // 简化：所有范围都显示普通大头针（不再区分聚类点）
+                // 每个聚类只显示一家代表餐厅
+                ForEach(clusteredRestaurants) { cluster in
+                    mapAnnotation(for: cluster, simplified: currentZoomLevel != .close)
                 }
             }
             
@@ -469,7 +475,7 @@ struct RestaurantMapView: View {
         }
     }
     
-    // MARK: - 计算聚合点
+    // MARK: - 计算聚合点（简化版：每个聚类只显示一家代表餐厅）
     private func calculateClusters(from restaurants: [Restaurant]) -> [RestaurantCluster] {
         guard !restaurants.isEmpty else { return [] }
         
@@ -504,15 +510,18 @@ struct RestaurantMapView: View {
                 }
             }
             
-            // 计算聚合中心点
-            let avgLat = nearbyRestaurants.map(\.latitude).reduce(0, +) / Double(nearbyRestaurants.count)
-            let avgLon = nearbyRestaurants.map(\.longitude).reduce(0, +) / Double(nearbyRestaurants.count)
+            // 简化：每个聚类只显示第一家餐厅，不显示聚类数量
+            // 用户放大后自然能看到其他餐厅
+            let representativeRestaurant = nearbyRestaurants.first!
             
             let cluster = RestaurantCluster(
-                id: restaurant.id,
-                coordinate: CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon),
-                restaurants: nearbyRestaurants,
-                isCluster: nearbyRestaurants.count > 1
+                id: representativeRestaurant.id,
+                coordinate: CLLocationCoordinate2D(
+                    latitude: representativeRestaurant.latitude,
+                    longitude: representativeRestaurant.longitude
+                ),
+                restaurants: [representativeRestaurant], // 只包含代表餐厅
+                isCluster: false // 标记为非聚类，使用普通大头针显示
             )
             clusters.append(cluster)
         }
