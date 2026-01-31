@@ -10,7 +10,6 @@ struct ProfileView: View {
     @Query(sort: \Restaurant.createdAt, order: .reverse) private var restaurants: [Restaurant]
     
     @State private var showingEditProfile = false
-    @State private var showingTagManagement = false
     @State private var userProfile = UserProfile.load()
     @State private var privacyEnabled = UserDefaults.standard.bool(forKey: "privacyEnabled")
     
@@ -57,14 +56,6 @@ struct ProfileView: View {
         .useMilkyDiffuseBackground()
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
-        }
-        .sheet(isPresented: $showingTagManagement) {
-            TagManagementView(
-                userTags: $userTags,
-                isEditingTags: $isEditingTags,
-                newTagInput: $newTagInput,
-                tagInputIsFocused: _tagInputIsFocused
-            )
         }
     }
     
@@ -286,32 +277,127 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - Phase 2: Tags Cloud (标签云)
+    // MARK: - Phase 2: Tags Cloud (我的标签)
     private var tagsCloudSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("常用标签")
+                Text("我的标签")
                     .font(.system(size: 17, weight: .semibold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.darkText)
                 
                 Spacer()
                 
-                Button {
-                    showingTagManagement = true
-                } label: {
-                    Text("管理")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.babyBlue)
+                if !isEditingTags {
+                    Button {
+                        withAnimation(AppTheme.Animations.editingSpring) {
+                            isEditingTags = true
+                        }
+                    } label: {
+                        Text("管理")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.babyBlue)
+                    }
                 }
             }
             
-            // 横向滑动标签云
-            let topTags = getTopTags(limit: 8)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(0..<topTags.count, id: \.self) { index in
-                        let tag = topTags[index]
-                        TagCloudItem(name: tag.name, count: tag.count, index: index)
+            // 标签编辑区域（参考添加页面样式）
+            ZStack(alignment: .bottomTrailing) {
+                VStack(spacing: 0) {
+                    // 标签 FlowLayout
+                    FlowLayout(spacing: 10) {
+                        ForEach(userTags, id: \.self) { tag in
+                            profileTagSticker(tag)
+                        }
+                        
+                        if isEditingTags {
+                            // 新增标签输入框
+                            TextField("新标签...", text: $newTagInput)
+                                .font(.system(size: 14, design: .rounded))
+                                .foregroundColor(AppTheme.Colors.darkText)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.5))
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 1)
+                                )
+                                .focused($tagInputIsFocused)
+                                .frame(minWidth: 80)
+                                .onSubmit {
+                                    addNewTag()
+                                }
+                                .onAppear {
+                                    tagInputIsFocused = true
+                                }
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.white.opacity(0.5))
+                    )
+                    
+                    // 推荐标签区域（编辑模式下显示）
+                    if isEditingTags {
+                        presetTagsSection
+                            .padding(16)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
+                }
+                .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
+                
+                // 勾叉按钮（压在容器下边缘，一半在内一半在外）
+                if isEditingTags {
+                    HStack(spacing: 12) {
+                        // 取消按钮 - 深灰色
+                        Button {
+                            withAnimation(AppTheme.Animations.editingSpring) {
+                                isEditingTags = false
+                                newTagInput = ""
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    Circle()
+                                        .fill(AppTheme.Colors.darkBackground)
+                                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+                                )
+                        }
+                        
+                        // 确认按钮 - 红色
+                        Button {
+                            withAnimation(AppTheme.Animations.editingSpring) {
+                                saveTags()
+                                isEditingTags = false
+                                newTagInput = ""
+                            }
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    Circle()
+                                        .fill(AppTheme.Colors.accent)
+                                        .shadow(color: AppTheme.Shadows.elevated.color, radius: 8, x: 0, y: 4)
+                                )
+                        }
+                    }
+                    .padding(.trailing, 16)
+                    .offset(y: 18)
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .onTapGesture {
+                if !isEditingTags {
+                    withAnimation(AppTheme.Animations.editingSpring) {
+                        isEditingTags = true
                     }
                 }
             }
@@ -325,6 +411,84 @@ struct ProfileView: View {
                         .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                 )
         )
+    }
+    
+    // MARK: - 推荐标签区域
+    private var presetTagsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("推荐标签")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundColor(AppTheme.Colors.lightText)
+            
+            FlowLayout(spacing: 10) {
+                let presetTags = ["氛围感", "老字号", "二刷", "排队王", "性价比", "网红店", "隐藏菜单", "约会圣地"]
+                ForEach(presetTags.filter { !userTags.contains($0) }, id: \.self) { tag in
+                    Button {
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                            userTags.append(tag)
+                        }
+                    } label: {
+                        Text(tag)
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.darkText)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.5))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+        }
+    }
+    
+    // MARK: - 个人资料页标签贴纸（带删除按钮）
+    private func profileTagSticker(_ tag: String) -> some View {
+        HStack(spacing: 6) {
+            Text(tag)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
+            
+            if isEditingTags {
+                // 删除按钮
+                Button {
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                        userTags.removeAll { $0 == tag }
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.lightText)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(AppTheme.Colors.warmGray.opacity(0.6))
+        )
+    }
+    
+    // MARK: - 添加新标签
+    private func addNewTag() {
+        let trimmed = newTagInput.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty && !userTags.contains(trimmed) else { return }
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+            userTags.append(trimmed)
+            newTagInput = ""
+        }
+    }
+    
+    // MARK: - 保存标签
+    private func saveTags() {
+        UserDefaults.standard.set(userTags, forKey: "userCustomTags")
     }
     
     // MARK: - Phase 2: TOP 5 Restaurants (年度回顾预热)
@@ -1066,231 +1230,6 @@ struct EditProfileView: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Tag Management View (标签管理页面)
-struct TagManagementView: View {
-    @Binding var userTags: [String]
-    @Binding var isEditingTags: Bool
-    @Binding var newTagInput: String
-    @FocusState var tagInputIsFocused: Bool
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationView {
-            ZStack {
-                // 奶脂扩散背景
-                AppTheme.Colors.softBackground
-                    .ignoresSafeArea()
-                
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        // 标签编辑区域
-                        tagsEditingSection
-                        
-                        // 使用统计
-                        tagsStatisticsSection
-                    }
-                    .padding(16)
-                    .padding(.bottom, 100)
-                }
-            }
-            .navigationTitle("管理标签")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("完成") {
-                        saveTags()
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .onAppear {
-            isEditingTags = true
-        }
-        .onDisappear {
-            isEditingTags = false
-            newTagInput = ""
-        }
-    }
-    
-    // MARK: - 标签编辑区域
-    private var tagsEditingSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("我的标签")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
-                
-                Spacer()
-                
-                Text("\(userTags.count) 个")
-                    .font(.system(size: 13, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.lightText)
-            }
-            
-            // 标签内容（可点击编辑）
-            ZStack(alignment: .bottomTrailing) {
-                VStack(spacing: 0) {
-                    FlowLayout(spacing: 10) {
-                        ForEach(userTags, id: \.self) { tag in
-                            editableTagSticker(tag)
-                        }
-                        
-                        // 新增标签输入框
-                        TextField("新标签...", text: $newTagInput)
-                            .font(.system(size: 14, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.darkText)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(Color.white.opacity(0.5))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 1)
-                            )
-                            .focused($tagInputIsFocused)
-                            .frame(minWidth: 80)
-                            .onSubmit {
-                                addNewTag()
-                            }
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color.white.opacity(0.5))
-                    )
-                }
-                
-                // 添加按钮（压在容器右下角）
-                if !newTagInput.isEmpty {
-                    Button {
-                        addNewTag()
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(AppTheme.Colors.babyBlue)
-                            .background(
-                                Circle()
-                                    .fill(Color.white)
-                            )
-                    }
-                    .offset(x: 8, y: 8)
-                    .transition(.scale.combined(with: .opacity))
-                }
-            }
-            
-            // 提示文字
-            Text("点击标签上的 × 删除，在输入框中输入新标签")
-                .font(.system(size: 12, design: .rounded))
-                .foregroundColor(AppTheme.Colors.lightText)
-                .padding(.horizontal, 4)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.75))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                )
-        )
-    }
-    
-    // MARK: - 标签统计区域
-    private var tagsStatisticsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("使用统计")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
-            
-            // 这里可以显示每个标签被使用的次数
-            VStack(spacing: 12) {
-                ForEach(userTags.prefix(5), id: \.self) { tag in
-                    HStack {
-                        Text(tag)
-                            .font(.system(size: 14, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.darkText)
-                        
-                        Spacer()
-                        
-                        Text("使用了 \(Int.random(in: 1...20)) 次")
-                            .font(.system(size: 12, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.lightText)
-                    }
-                    .padding(.vertical, 8)
-                    
-                    if tag != userTags.prefix(5).last {
-                        Divider()
-                            .background(Color.white.opacity(0.3))
-                    }
-                }
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.5))
-            )
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.75))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                )
-        )
-    }
-    
-    // MARK: - 可编辑标签贴纸
-    private func editableTagSticker(_ tag: String) -> some View {
-        HStack(spacing: 6) {
-            Text(tag)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
-            
-            // 删除按钮
-            Button {
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
-                    userTags.removeAll { $0 == tag }
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.lightText)
-                    .frame(width: 16, height: 16)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.5))
-                    )
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            Capsule()
-                .fill(AppTheme.Colors.warmGray.opacity(0.6))
-        )
-    }
-    
-    // MARK: - 添加新标签
-    private func addNewTag() {
-        let trimmed = newTagInput.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty && !userTags.contains(trimmed) else { return }
-        withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
-            userTags.append(trimmed)
-            newTagInput = ""
-        }
-    }
-    
-    // MARK: - 保存标签
-    private func saveTags() {
-        UserDefaults.standard.set(userTags, forKey: "userCustomTags")
     }
 }
 
