@@ -126,6 +126,16 @@ struct LibraryView: View {
         .sheet(isPresented: $showCityPicker) {
             CitySelectionView(selectedCity: $selectedCity)
         }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showImportSheet = true
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                        .foregroundColor(AppTheme.Colors.darkText)
+                }
+            }
+        }
         .onChange(of: selectedCity) {
             UserDefaults.standard.set($0, forKey: kSavedCityKey)
         }
