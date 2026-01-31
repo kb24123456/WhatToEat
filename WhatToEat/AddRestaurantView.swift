@@ -97,24 +97,6 @@ struct AddRestaurantView: View {
                             .padding(.horizontal, 20)
                             .padding(.bottom, 30)
                             .padding(.top, 10)
-                            .background(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0),
-                                        Color.white,
-                                        Color.white
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .ignoresSafeArea()
-                                .frame(height: 120)
-                            )
-                    }
-                    // 键盘规避：当键盘弹出时自动调整底部内边距（使用系统原生动画）
-                    .safeAreaInset(edge: .bottom) {
-                        Color.clear.frame(height: 0)
-                            .ignoresSafeArea(.keyboard)
                     }
                 
                 // Confetti 特效
@@ -241,7 +223,7 @@ struct AddRestaurantView: View {
                     Spacer().frame(height: 120)
                 }
                 .padding(.horizontal, 20)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .offset(y: isAppeared ? 0 : 50)
@@ -551,6 +533,7 @@ struct AddRestaurantView: View {
             unifiedTagsRow
                 .padding(.vertical, 20)
         }
+        .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
                 .fill(Color.white.opacity(0.35))
