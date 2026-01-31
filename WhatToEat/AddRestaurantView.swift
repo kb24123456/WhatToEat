@@ -214,9 +214,6 @@ struct AddRestaurantView: View {
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     
-                    // 智能搜索入口
-                    smartSearchButton
-                    
                     Spacer().frame(height: 120)
                 }
                 .padding(.horizontal, 20)
@@ -241,6 +238,11 @@ struct AddRestaurantView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(16)
+            
+            // 智能搜索入口（放在名片与评分之间）
+            smartSearchButton
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             
             // 分隔线
             Divider()
