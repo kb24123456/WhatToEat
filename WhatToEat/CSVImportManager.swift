@@ -279,8 +279,17 @@ class CSVImportManager: ObservableObject {
             self.errorMessage = nil
         }
         
-        // 读取文件内容
-        let content = try String(contentsOf: url, encoding: .utf8)
+        // 开始安全作用域访问
+        guard url.startAccessingSecurityScopedResource() else {
+            throw CSVImportError.permissionDenied
+        }
+        
+        defer {
+            url.stopAccessingSecurityScopedResource()
+        }
+        
+        // 读取文件内容（处理 UTF-8 BOM）
+        let content = try readCSVFileWithBOMHandling(url: url)
         
         // 解析 CSV
         let records = CSVParser.parse(content: content)
@@ -365,6 +374,7 @@ enum CSVImportError: Error, LocalizedError {
     case emptyFile
     case invalidFormat
     case saveFailed
+    case permissionDenied
     
     var errorDescription: String? {
         switch self {
@@ -374,8 +384,41 @@ enum CSVImportError: Error, LocalizedError {
             return "CSV 格式不正确"
         case .saveFailed:
             return "保存数据失败"
+        case .permissionDenied:
+            return "无法访问文件，请检查文件权限"
         }
     }
+}
+
+// MARK: - 文件读取辅助函数
+/// 读取 CSV 文件并处理 UTF-8 BOM
+private func readCSVFileWithBOMHandling(url: URL) throws -> String {
+    // 读取原始数据
+    let data = try Data(contentsOf: url)
+    
+    // 检查并移除 UTF-8 BOM (EF BB BF)
+    let bom: [UInt8] = [0xEF, 0xBB, 0xBF]
+    var processedData = data
+    
+    if data.count >= 3 {
+        let firstThreeBytes = [data[0], data[1], data[2]]
+        if firstThreeBytes == bom {
+            // 移除 BOM
+            processedData = data.subdata(in: 3..<data.count)
+            print("CSVImportManager: 检测到并移除了 UTF-8 BOM")
+        }
+    }
+    
+    // 转换为字符串
+    guard let content = String(data: processedData, encoding: .utf8) else {
+        // 如果 UTF-8 失败，尝试其他编码
+        if let content = String(data: processedData, encoding: .ascii) {
+            return content
+        }
+        throw CSVImportError.invalidFormat
+    }
+    
+    return content
 }
 
 // MARK: - Combine 支持

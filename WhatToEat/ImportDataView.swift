@@ -391,18 +391,6 @@ struct ImportDataView: View {
                 return
             }
             
-            // 获取文件访问权限（关键！）
-            guard url.startAccessingSecurityScopedResource() else {
-                importManager.errorMessage = "无法访问文件，请重试"
-                importManager.importPhase = .error("文件访问权限被拒绝")
-                return
-            }
-            
-            // 确保在完成后停止访问
-            defer {
-                url.stopAccessingSecurityScopedResource()
-            }
-            
             selectedFileURL = url
             
             // 开始导入
