@@ -4,112 +4,57 @@ import Charts
 import PhotosUI
 import LocalAuthentication
 
-// MARK: - Profile View
+// MARK: - Profile View (重构版)
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-    
     @Query(sort: \Restaurant.createdAt, order: .reverse) private var restaurants: [Restaurant]
     
     @State private var showingEditProfile = false
-    @State private var showingPrivacyLock = false
-    @State private var isUnlocked = false
     @State private var userProfile = UserProfile.load()
+    @State private var privacyEnabled = UserDefaults.standard.bool(forKey: "privacyEnabled")
     
-    // 统计数据
+    // MARK: - 统计数据
     private var totalRestaurants: Int { restaurants.count }
     private var totalCheckIns: Int { restaurants.reduce(0) { $0 + $1.logs.count } }
     private var totalExpense: Double { restaurants.reduce(0) { $0 + $1.logs.reduce(0) { $0 + $1.expense } } }
     private var uniqueCities: Int { Set(restaurants.map { $0.city }).count }
     
-    // 加入天数
     private var joinDays: Int {
         guard let firstRestaurant = restaurants.min(by: { $0.createdAt < $1.createdAt }) else { return 0 }
         return Calendar.current.dateComponents([.day], from: firstRestaurant.createdAt, to: Date()).day ?? 0
     }
     
     var body: some View {
-        ZStack {
-            // 背景
-            AppTheme.Colors.background
-                .ignoresSafeArea()
-            
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: AppTheme.Spacing.lg) {
-                    // 隐私锁按钮（右上角）
-                    privacyLockButton
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                    
-                    // 头部名片
-                    profileHeaderCard
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                    
-                    // 等级/称号
-                    levelSection
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                    
-                    // 全局仪表盘
-                    statsDashboard
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                    
-                    // 年度回顾
-                    yearlyReviewCard
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                    
-                    // 消费分析
-                    consumptionAnalysis
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                    
-                    // 标签管理
-                    tagsManagementSection
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                    
-                    // 历史记录
-                    historySection
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                    
-                    // 系统工具
-                    toolsSection
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                    
-                    Spacer().frame(height: 40)
-                }
-                .padding(.top, AppTheme.Spacing.md)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 20) {
+                // Phase 1: 身份识别与全局勋章
+                glassProfileCard
+                grandStatsDashboard
+                
+                // Phase 2: 数据可视化与偏好分析
+                consumptionAnalysisCard
+                tagsCloudSection
+                top5RestaurantsSection
+                
+                // Phase 3: 打卡时间轴
+                timelineSection
+                
+                // Phase 4: 工具箱、安全与隐私
+                milkyToolList
+                bottomInfo
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 40)
         }
+        .useMilkyDiffuseBackground()
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
         }
-        .sheet(isPresented: $showingPrivacyLock) {
-            PrivacyLockView(isUnlocked: $isUnlocked)
-        }
     }
     
-    // MARK: - 隐私锁按钮
-    private var privacyLockButton: some View {
-        Button {
-            showingPrivacyLock = true
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: isUnlocked ? "lock.open.fill" : "lock.fill")
-                    .font(.system(size: 12))
-                Text(isUnlocked ? "已解锁" : "隐私锁")
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .foregroundColor(isUnlocked ? AppTheme.Colors.success : AppTheme.Colors.mediumGray)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(AppTheme.Colors.card)
-                    .shadow(color: AppTheme.Colors.shadowColor, radius: 4, x: 0, y: 2)
-            )
-        }
-    }
-    
-    // MARK: - 头部名片（磨砂卡片）
-    private var profileHeaderCard: some View {
+    // MARK: - Phase 1: Glass Profile Card (磨砂名片)
+    private var glassProfileCard: some View {
         Button {
             showingEditProfile = true
         } label: {
@@ -117,7 +62,7 @@ struct ProfileView: View {
                 // 头像
                 ZStack {
                     Circle()
-                        .fill(AppTheme.Colors.babyBlue.opacity(0.2))
+                        .fill(.ultraThinMaterial)
                         .frame(width: 72, height: 72)
                     
                     if let avatarData = userProfile.avatarData,
@@ -135,29 +80,26 @@ struct ProfileView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 6) {
+                    // 昵称
                     Text(userProfile.nickname)
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.Colors.darkText)
                     
-                    Text(userProfile.bio)
-                        .font(.system(size: 13, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.mediumGray)
-                        .lineLimit(1)
+                    // 等级勋章 - Baby Blue 渐变边框
+                    LevelBadgeView(level: calculateLevel(), checkIns: totalCheckIns)
                     
-                    // 加入天数 - 呼吸感动画
+                    // 加入天数
                     HStack(spacing: 4) {
                         Text("加入第")
                             .font(.system(size: 12, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.lightText)
-                        
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                         Text("\(joinDays)")
                             .font(.system(size: 14, weight: .bold, design: .rounded))
                             .foregroundColor(AppTheme.Colors.accent)
                             .contentTransition(.numericText())
-                        
                         Text("天")
                             .font(.system(size: 12, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.lightText)
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                     }
                     .padding(.top, 2)
                 }
@@ -170,11 +112,11 @@ struct ProfileView: View {
             }
             .padding(20)
             .background(
-                RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color.white.opacity(0.4), lineWidth: 1)
                     )
             )
         }
@@ -182,257 +124,134 @@ struct ProfileView: View {
         .pressableButton(scale: 0.98)
     }
     
-    // MARK: - 等级/称号
-    private var levelSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("我的等级")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
-                
-                Spacer()
-                
-                LevelBadge(level: calculateLevel(), checkIns: totalCheckIns)
-            }
-            
-            // 趣味称号
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(unlockedTitles, id: \.self) { title in
-                        TitleBadge(title: title)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                .fill(AppTheme.Colors.card)
-                .shadow(color: AppTheme.Colors.shadowColor, radius: 8, x: 0, y: 4)
-        )
-    }
-    
-    // MARK: - 全局仪表盘
-    private var statsDashboard: some View {
+    // MARK: - Phase 1: Grand Stats Dashboard (全局仪表盘)
+    private var grandStatsDashboard: some View {
         HStack(spacing: 0) {
-            ProfileStatItem(value: "\(totalRestaurants)", label: "餐厅", color: AppTheme.Colors.darkText)
-            
-            Divider()
-                .frame(height: 40)
-            
-            ProfileStatItem(value: "\(totalCheckIns)", label: "打卡", color: AppTheme.Colors.darkText)
-            
-            Divider()
-                .frame(height: 40)
-            
-            ProfileStatItem(value: formatCurrency(totalExpense), label: "总支出", color: AppTheme.Colors.babyBlue)
-            
-            Divider()
-                .frame(height: 40)
-            
-            ProfileStatItem(value: "\(uniqueCities)", label: "城市", color: AppTheme.Colors.accent)
+            StatCell(value: "\(totalRestaurants)", label: "餐厅", color: AppTheme.Colors.darkText)
+            Divider().frame(height: 40)
+            StatCell(value: "\(totalCheckIns)", label: "打卡", color: AppTheme.Colors.darkText)
+            Divider().frame(height: 40)
+            StatCell(value: formatCurrency(totalExpense), label: "总支出", color: AppTheme.Colors.babyBlue)
+            Divider().frame(height: 40)
+            StatCell(value: "\(uniqueCities)", label: "城市", color: AppTheme.Colors.accent)
         }
         .padding(.vertical, 16)
         .background(
-            RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                .fill(AppTheme.Colors.card)
-                .shadow(color: AppTheme.Colors.shadowColor, radius: 8, x: 0, y: 4)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                )
         )
     }
     
-    // MARK: - 年度回顾
-    private var yearlyReviewCard: some View {
-        Button {
-            // 进入年度回顾
-        } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("2025 年度美食报告")
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.darkText)
-                        
-                        Text("回顾你的美食足迹")
-                            .font(.system(size: 13, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.mediumGray)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(AppTheme.Colors.lighterGray)
-                }
-                
-                // 预览数据
-                HStack(spacing: 16) {
-                    MiniStat(icon: "fork.knife", value: "\(totalRestaurants)", label: "家餐厅")
-                    MiniStat(icon: "creditcard", value: formatCurrency(totalExpense), label: "总消费")
-                    MiniStat(icon: "crown.fill", value: "海底捞", label: "最常去")
-                }
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                AppTheme.Colors.lightRed.opacity(0.3),
-                                AppTheme.Colors.lightBlue.opacity(0.3)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-        .pressableButton(scale: 0.98)
-    }
-    
-    // MARK: - 消费分析
-    private var consumptionAnalysis: some View {
+    // MARK: - Phase 2: Consumption Analysis (消费分析)
+    private var consumptionAnalysisCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("消费分析")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+            Text("消费洞察")
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.darkText)
             
-            // 消费趋势图
+            // 月度消费趋势图
             consumptionTrendChart
             
             Divider()
-                .padding(.vertical, 8)
+                .background(AppTheme.Colors.divider)
             
-            // 餐饮类型占比
-            cuisineTypeChart
-            
-            Divider()
-                .padding(.vertical, 8)
-            
-            // 人均消费分布
-            perPersonDistribution
+            // 餐饮类型占比分段进度条
+            cuisineTypeBars
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                .fill(AppTheme.Colors.card)
-                .shadow(color: AppTheme.Colors.shadowColor, radius: 8, x: 0, y: 4)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                )
         )
     }
     
-    // MARK: - 消费趋势图
+    // 月度消费趋势折线图
     private var consumptionTrendChart: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("消费趋势（近6个月）")
+            Text("近6个月消费趋势")
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.mediumGray)
             
-            // 模拟数据
-            let data = [
-                (month: "8月", amount: 1200.0),
-                (month: "9月", amount: 2800.0),
-                (month: "10月", amount: 1900.0),
-                (month: "11月", amount: 3500.0),
-                (month: "12月", amount: 4200.0),
-                (month: "1月", amount: 3100.0)
-            ]
+            let data = getMonthlyExpenses()
             
             Chart(data, id: \.month) { item in
-                BarMark(
+                LineMark(
                     x: .value("月份", item.month),
                     y: .value("金额", item.amount)
                 )
-                .foregroundStyle(AppTheme.Colors.babyBlue.gradient)
-                .cornerRadius(4)
-            }
-            .frame(height: 120)
-            .chartYAxis {
-                AxisMarks(position: .leading)
-            }
-        }
-    }
-    
-    // MARK: - 餐饮类型占比
-    private var cuisineTypeChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("餐饮类型占比")
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundColor(AppTheme.Colors.mediumGray)
-            
-            // 模拟数据
-            let data = [
-                (type: "火锅", count: 28, color: Color.red),
-                (type: "日料", count: 15, color: Color.orange),
-                (type: "烧烤", count: 12, color: Color.yellow),
-                (type: "西餐", count: 8, color: Color.blue),
-                (type: "其他", count: 20, color: Color.gray)
-            ]
-            
-            HStack(spacing: 16) {
-                // 环形图
-                Chart(data, id: \.type) { item in
-                    SectorMark(
-                        angle: .value("数量", item.count),
-                        innerRadius: .ratio(0.6)
-                    )
-                    .foregroundStyle(item.color)
-                }
-                .frame(width: 100, height: 100)
+                .foregroundStyle(AppTheme.Colors.babyBlue)
+                .lineStyle(StrokeStyle(lineWidth: 2))
                 
-                // 图例
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(data.prefix(4), id: \.type) { item in
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(item.color)
-                                .frame(width: 8, height: 8)
-                            Text(item.type)
-                                .font(.system(size: 11, design: .rounded))
-                                .foregroundColor(AppTheme.Colors.mediumGray)
-                            Text("\(item.count)%")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundColor(AppTheme.Colors.darkText)
+                AreaMark(
+                    x: .value("月份", item.month),
+                    y: .value("金额", item.amount)
+                )
+                .foregroundStyle(AppTheme.Colors.babyBlue.opacity(0.1))
+            }
+            .frame(height: 100)
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let intValue = value.as(Int.self) {
+                            Text("¥\(intValue)")
+                                .font(.system(size: 9))
+                                .foregroundColor(AppTheme.Colors.lightText)
                         }
                     }
                 }
-                
-                Spacer()
+            }
+            .chartXAxis {
+                AxisMarks { value in
+                    AxisValueLabel {
+                        if let stringValue = value.as(String.self) {
+                            Text(stringValue)
+                                .font(.system(size: 9))
+                                .foregroundColor(AppTheme.Colors.lightText)
+                        }
+                    }
+                }
             }
         }
     }
     
-    // MARK: - 人均消费分布
-    private var perPersonDistribution: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("人均消费分布")
+    // 餐饮类型占比分段进度条
+    private var cuisineTypeBars: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("餐饮偏好")
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.mediumGray)
             
-            let ranges = [
-                (range: "¥0-50", count: 20, percent: 0.2),
-                (range: "¥50-100", count: 45, percent: 0.45),
-                (range: "¥100-200", count: 28, percent: 0.28),
-                (range: "¥200+", count: 7, percent: 0.07)
-            ]
+            let typeData = getCuisineTypeDistribution()
             
             VStack(spacing: 8) {
-                ForEach(ranges, id: \.range) { item in
+                ForEach(typeData.prefix(4), id: \.type) { item in
                     HStack(spacing: 8) {
-                        Text(item.range)
-                            .font(.system(size: 11, design: .rounded))
+                        Text(item.type)
+                            .font(.system(size: 12, design: .rounded))
                             .foregroundColor(AppTheme.Colors.mediumGray)
                             .frame(width: 50, alignment: .leading)
                         
                         GeometryReader { geo in
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(AppTheme.Colors.babyBlue)
-                                .frame(width: geo.size.width * item.percent, height: 8)
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(AppTheme.Colors.warmGray)
+                                    .frame(height: 6)
+                                
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(item.color)
+                                    .frame(width: geo.size.width * item.percent, height: 6)
+                            }
                         }
-                        .frame(height: 8)
+                        .frame(height: 6)
                         
                         Text("\(Int(item.percent * 100))%")
                             .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -444,52 +263,97 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - 标签管理
-    private var tagsManagementSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+    // MARK: - Phase 2: Tags Cloud (标签云)
+    private var tagsCloudSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("我的标签")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                Text("常用标签")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.darkText)
                 
                 Spacer()
                 
                 Button {
-                    // 新建标签
+                    // 管理标签
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12))
-                        Text("新建")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(AppTheme.Colors.babyBlue)
+                    Text("管理")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
                 }
             }
             
-            // 标签云
-            let allTags = extractAllTags()
-            FlowLayout(spacing: 8) {
-                ForEach(0..<min(allTags.count, 15), id: \.self) { index in
-                    let tag = allTags[index]
-                    TagItem(name: tag.name, count: tag.count)
+            // 横向滑动标签云
+            let topTags = getTopTags(limit: 8)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(0..<topTags.count, id: \.self) { index in
+                        let tag = topTags[index]
+                        TagCloudItem(name: tag.name, count: tag.count, index: index)
+                    }
                 }
             }
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                .fill(AppTheme.Colors.card)
-                .shadow(color: AppTheme.Colors.shadowColor, radius: 8, x: 0, y: 4)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                )
         )
     }
     
-    // MARK: - 历史记录
-    private var historySection: some View {
+    // MARK: - Phase 2: TOP 5 Restaurants (年度回顾预热)
+    private var top5RestaurantsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("最常去的餐厅 TOP 5")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                
+                Spacer()
+                
+                Button {
+                    // 查看完整年度回顾
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("年度回顾")
+                            .font(.system(size: 12, weight: .medium))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(AppTheme.Colors.babyBlue)
+                }
+            }
+            
+            let topRestaurants = getTopRestaurants(limit: 5)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(0..<topRestaurants.count, id: \.self) { index in
+                        let restaurant = topRestaurants[index]
+                        TopRestaurantCard(restaurant: restaurant, rank: index + 1)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                )
+        )
+    }
+    
+    // MARK: - Phase 3: Timeline (美食足迹时间轴)
+    private var timelineSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("历史记录")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                Text("美食足迹")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.darkText)
                 
                 Spacer()
@@ -506,91 +370,115 @@ struct ProfileView: View {
             // 时间轴
             let recentLogs = getRecentLogs(limit: 5)
             VStack(spacing: 0) {
-                ForEach(Array(recentLogs.enumerated()), id: \.element.id) { index, log in
-                    TimelineItem(
+                ForEach(0..<recentLogs.count, id: \.self) { index in
+                    let log = recentLogs[index]
+                    TimelineItemView(
                         log: log,
-                        isLast: index == recentLogs.count - 1
+                        isLast: index == recentLogs.count - 1,
+                        isToday: Calendar.current.isDateInToday(log.date)
                     )
                 }
             }
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                .fill(AppTheme.Colors.card)
-                .shadow(color: AppTheme.Colors.shadowColor, radius: 8, x: 0, y: 4)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                )
         )
     }
     
-    // MARK: - 系统工具
-    private var toolsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("系统工具")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 4)
+    // MARK: - Phase 4: Milky Tool List (奶脂风格工具列表)
+    private var milkyToolList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 隐私锁开关
+            PrivacyToggleView(privacyEnabled: $privacyEnabled)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             
-            VStack(spacing: 0) {
-                ToolItem(icon: "icloud.and.arrow.up", title: "iCloud 同步", subtitle: "上次同步：刚刚", color: .blue)
-                ToolDivider()
-                ToolItem(icon: "doc.text", title: "导出美食报告", subtitle: "PDF / 长图 / 数据", color: .green)
-                ToolDivider()
-                ToolItem(icon: "square.and.arrow.up", title: "分享美食地图", subtitle: "生成专属分享卡片", color: .orange)
-                ToolDivider()
-                ToolItem(icon: "externaldrive", title: "存储空间", subtitle: "已用 45MB / 100MB", color: .purple)
-                ToolDivider()
-                ToolItem(icon: "info.circle", title: "关于吃啥呢", subtitle: "版本 1.2.0", color: .gray)
-            }
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                    .fill(AppTheme.Colors.card)
-                    .shadow(color: AppTheme.Colors.shadowColor, radius: 8, x: 0, y: 4)
+            Divider()
+                .background(AppTheme.Colors.divider)
+                .padding(.leading, 60)
+            
+            // iCloud 同步
+            MilkyToolRow(
+                icon: "icloud.and.arrow.up",
+                title: "iCloud 同步",
+                subtitle: "上次同步：刚刚",
+                color: .blue
+            )
+            
+            Divider()
+                .background(AppTheme.Colors.divider)
+                .padding(.leading, 60)
+            
+            // 导出 PDF 报告
+            MilkyToolRow(
+                icon: "doc.text",
+                title: "导出美食报告",
+                subtitle: "生成精美 PDF 长图",
+                color: .green
+            )
+            
+            Divider()
+                .background(AppTheme.Colors.divider)
+                .padding(.leading, 60)
+            
+            // 分享美食地图
+            MilkyToolRow(
+                icon: "square.and.arrow.up",
+                title: "分享美食地图",
+                subtitle: "生成专属分享卡片",
+                color: .orange
+            )
+            
+            Divider()
+                .background(AppTheme.Colors.divider)
+                .padding(.leading, 60)
+            
+            // 清理存储
+            MilkyToolRow(
+                icon: "externaldrive",
+                title: "存储空间",
+                subtitle: "已用 45MB / 100MB",
+                color: .purple
             )
         }
-        .padding(.horizontal, AppTheme.Spacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(AppTheme.Colors.separatorGray.opacity(0.3), lineWidth: 0.5)
+                )
+        )
     }
     
-    // MARK: - 辅助方法
+    // MARK: - Phase 4: Bottom Info (底部信息)
+    private var bottomInfo: some View {
+        VStack(spacing: 4) {
+            Text("让每一餐都值得被记录")
+                .font(.system(size: 12, design: .rounded))
+                .foregroundColor(AppTheme.Colors.lightText)
+            
+            Text("版本 1.2.0")
+                .font(.system(size: 10, design: .rounded))
+                .foregroundColor(AppTheme.Colors.lighterGray)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 8)
+    }
+    
+    // MARK: - Helper Methods
     private func calculateLevel() -> Int {
         if totalCheckIns >= 500 { return 5 }
         if totalCheckIns >= 100 { return 4 }
         if totalCheckIns >= 50 { return 3 }
         if totalCheckIns >= 10 { return 2 }
         return 1
-    }
-    
-    private var unlockedTitles: [String] {
-        var titles: [String] = []
-        let hotpotCount = restaurants.filter { $0.tags.contains("火锅") }.reduce(0) { $0 + $1.logs.count }
-        let japaneseCount = restaurants.filter { $0.tags.contains("日料") || $0.tags.contains("日本料理") }.reduce(0) { $0 + $1.logs.count }
-        let coffeeCount = restaurants.filter { $0.tags.contains("咖啡") || $0.tags.contains("咖啡厅") }.reduce(0) { $0 + $1.logs.count }
-
-        if hotpotCount >= 20 { titles.append("火锅达人") }
-        if japaneseCount >= 15 { titles.append("日料探索者") }
-        if coffeeCount >= 30 { titles.append("咖啡续命") }
-        if totalCheckIns >= 100 { titles.append("美食家") }
-
-        return titles.isEmpty ? ["美食新手"] : titles
-    }
-
-    private func extractAllTags() -> [(name: String, count: Int)] {
-        var tagCounts: [String: Int] = [:]
-        for restaurant in restaurants {
-            for tag in restaurant.tags {
-                tagCounts[tag, default: 0] += restaurant.logs.count
-            }
-        }
-        return tagCounts.sorted { $0.value > $1.value }.map { (name: $0.key, count: $0.value) }
-    }
-
-    private func getRecentLogs(limit: Int) -> [VisitLog] {
-        var allLogs: [VisitLog] = []
-        for restaurant in restaurants {
-            for log in restaurant.logs {
-                allLogs.append(log)
-            }
-        }
-        return allLogs.sorted { $0.date > $1.date }.prefix(limit).map { $0 }
     }
     
     private func formatCurrency(_ value: Double) -> String {
@@ -602,10 +490,65 @@ struct ProfileView: View {
             return String(format: "¥%.0f", value)
         }
     }
+    
+    private func getMonthlyExpenses() -> [(month: String, amount: Double)] {
+        let calendar = Calendar.current
+        let now = Date()
+        var result: [(month: String, amount: Double)] = []
+        
+        for i in (0..<6).reversed() {
+            if let date = calendar.date(byAdding: .month, value: -i, to: now) {
+                let monthStr = String(format: "%d月", calendar.component(.month, from: date))
+                let amount = Double.random(in: 800...4000) // 模拟数据
+                result.append((month: monthStr, amount: amount))
+            }
+        }
+        return result
+    }
+    
+    private func getCuisineTypeDistribution() -> [(type: String, count: Int, percent: Double, color: Color)] {
+        let colors: [Color] = [AppTheme.Colors.accent, AppTheme.Colors.babyBlue, AppTheme.Colors.mediumGray, AppTheme.Colors.secondary]
+        let types = ["火锅", "日料", "烧烤", "西餐", "其他"]
+        let counts = [28, 15, 12, 8, 20]
+        let total = counts.reduce(0, +)
+        
+        return types.enumerated().map { index, type in
+            let percent = Double(counts[index]) / Double(total)
+            return (type: type, count: counts[index], percent: percent, color: colors[index % colors.count])
+        }
+    }
+    
+    private func getTopTags(limit: Int) -> [(name: String, count: Int)] {
+        var tagCounts: [String: Int] = [:]
+        for restaurant in restaurants {
+            for tag in restaurant.tags {
+                tagCounts[tag, default: 0] += restaurant.logs.count
+            }
+        }
+        return tagCounts.sorted { $0.value > $1.value }.prefix(limit).map { (name: $0.key, count: $0.value) }
+    }
+    
+    private func getTopRestaurants(limit: Int) -> [(name: String, count: Int, image: String?)] {
+        return restaurants
+            .map { (name: $0.name, count: $0.logs.count, image: $0.coverPhotoFilename) }
+            .sorted { $0.count > $1.count }
+            .prefix(limit)
+            .map { $0 }
+    }
+    
+    private func getRecentLogs(limit: Int) -> [VisitLog] {
+        var allLogs: [VisitLog] = []
+        for restaurant in restaurants {
+            for log in restaurant.logs {
+                allLogs.append(log)
+            }
+        }
+        return allLogs.sorted { $0.date > $1.date }.prefix(limit).map { $0 }
+    }
 }
 
-// MARK: - 统计项组件
-struct ProfileStatItem: View {
+// MARK: - Stat Cell (仪表盘单元)
+struct StatCell: View {
     let value: String
     let label: String
     let color: Color
@@ -625,116 +568,141 @@ struct ProfileStatItem: View {
     }
 }
 
-// MARK: - 迷你统计
-struct MiniStat: View {
-    let icon: String
-    let value: String
-    let label: String
-    
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundColor(AppTheme.Colors.mediumGray)
-            
-            VStack(alignment: .leading, spacing: 0) {
-                Text(value)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
-                
-                Text(label)
-                    .font(.system(size: 10, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.lightText)
-            }
-        }
-    }
-}
-
-// MARK: - 等级徽章
-struct LevelBadge: View {
+// MARK: - Level Badge View (等级勋章)
+struct LevelBadgeView: View {
     let level: Int
     let checkIns: Int
     
-    var levelInfo: (name: String, color: Color) {
+    var levelInfo: (name: String, color: Color, hasGoldRim: Bool) {
         switch level {
-        case 5: return ("米其林猎手", Color.purple)
-        case 4: return ("美食家", Color.orange)
-        case 3: return ("资深吃货", Color.blue)
-        case 2: return ("吃货练习生", Color.green)
-        default: return ("美食新手", Color.gray)
+        case 5: return ("米其林猎手", Color.purple, true)
+        case 4: return ("美食家", Color.orange, true)
+        case 3: return ("资深吃货", Color.blue, false)
+        case 2: return ("吃货练习生", Color.green, false)
+        default: return ("美食新手", Color.gray, false)
         }
     }
     
     var body: some View {
+        let info = levelInfo
+        
         HStack(spacing: 4) {
-            Text("Lv.\(level)")
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-            
-            Text(levelInfo.name)
+            Text(info.name)
                 .font(.system(size: 11, weight: .medium, design: .rounded))
         }
-        .foregroundColor(.white)
+        .foregroundColor(info.color)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .background(
             Capsule()
-                .fill(levelInfo.color)
+                .fill(info.color.opacity(0.1))
+        )
+        .overlay(
+            Capsule()
+                .stroke(
+                    info.hasGoldRim ? Color.yellow.opacity(0.6) : info.color.opacity(0.3),
+                    lineWidth: info.hasGoldRim ? 1.5 : 1
+                )
         )
     }
 }
 
-// MARK: - 称号徽章
-struct TitleBadge: View {
-    let title: String
-    
-    var body: some View {
-        Text(title)
-            .font(.system(size: 12, weight: .medium, design: .rounded))
-            .foregroundColor(AppTheme.Colors.darkText)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(AppTheme.Colors.lightBlue)
-            )
-    }
-}
-
-// MARK: - 标签项
-struct TagItem: View {
+// MARK: - Tag Cloud Item (标签云项)
+struct TagCloudItem: View {
     let name: String
     let count: Int
+    let index: Int
+    
+    var colors: [Color] {
+        [AppTheme.Colors.lightRed, AppTheme.Colors.lightBlue, AppTheme.Colors.lightGreen, AppTheme.Colors.warmGray]
+    }
     
     var body: some View {
         HStack(spacing: 4) {
             Text(name)
-                .font(.system(size: 12, design: .rounded))
+                .font(.system(size: 13, weight: .medium, design: .rounded))
             
             Text("\(count)")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundColor(AppTheme.Colors.lightText)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundColor(AppTheme.Colors.mediumGray)
         }
         .foregroundColor(AppTheme.Colors.darkText)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(AppTheme.Colors.warmGray)
+            Capsule()
+                .fill(colors[index % colors.count].opacity(0.5))
         )
     }
 }
 
-// MARK: - 时间轴项目
-struct TimelineItem: View {
+// MARK: - Top Restaurant Card (TOP 5 餐厅卡片)
+struct TopRestaurantCard: View {
+    let restaurant: (name: String, count: Int, image: String?)
+    let rank: Int
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            // 排名徽章
+            ZStack {
+                Circle()
+                    .fill(rank <= 3 ? AppTheme.Colors.accent.opacity(0.1) : AppTheme.Colors.warmGray)
+                    .frame(width: 32, height: 32)
+                
+                Text("\(rank)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundColor(rank <= 3 ? AppTheme.Colors.accent : AppTheme.Colors.mediumGray)
+            }
+            
+            // 餐厅头像
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(AppTheme.Colors.warmGray)
+                    .frame(width: 60, height: 60)
+                
+                if let imageName = restaurant.image,
+                   let uiImage = ImageManager.shared.loadImage(filename: imageName) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 56, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                } else {
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 24))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
+                }
+            }
+            
+            // 餐厅名
+            Text(restaurant.name)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
+                .lineLimit(1)
+                .frame(width: 70)
+            
+            // 打卡次数
+            Text("\(restaurant.count)次")
+                .font(.system(size: 11, design: .rounded))
+                .foregroundColor(AppTheme.Colors.lightText)
+        }
+        .frame(width: 80)
+        .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Timeline Item View (时间轴项)
+struct TimelineItemView: View {
     let log: VisitLog
     let isLast: Bool
+    let isToday: Bool
     
     var body: some View {
         HStack(spacing: 12) {
             // 时间线
             VStack(spacing: 0) {
                 Circle()
-                    .fill(AppTheme.Colors.babyBlue)
+                    .fill(isToday ? AppTheme.Colors.babyBlue : AppTheme.Colors.accent)
                     .frame(width: 8, height: 8)
                 
                 if !isLast {
@@ -764,14 +732,164 @@ struct TimelineItem: View {
                         .foregroundColor(AppTheme.Colors.accent)
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
         }
-        .frame(height: 60)
+        .frame(height: isLast ? 50 : 70)
     }
 }
 
-// MARK: - 工具项
-struct ToolItem: View {
+// MARK: - Privacy Toggle View (隐私锁开关)
+struct PrivacyToggleView: View {
+    @Binding var privacyEnabled: Bool
+    @State private var showingAuthSheet = false
+    
+    var body: some View {
+        Button {
+            if !privacyEnabled {
+                showingAuthSheet = true
+            } else {
+                privacyEnabled = false
+                UserDefaults.standard.set(false, forKey: "privacyEnabled")
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: privacyEnabled ? "lock.fill" : "lock.open")
+                    .font(.system(size: 20))
+                    .foregroundColor(privacyEnabled ? AppTheme.Colors.accent : AppTheme.Colors.mediumGray)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill((privacyEnabled ? AppTheme.Colors.accent : AppTheme.Colors.mediumGray).opacity(0.1))
+                    )
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("隐私锁定")
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                    
+                    Text(privacyEnabled ? "已开启 Face ID 保护" : "开启后需要验证才能访问")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.lightText)
+                }
+                
+                Spacer()
+                
+                Toggle("", isOn: $privacyEnabled)
+                    .labelsHidden()
+                    .disabled(true)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .sheet(isPresented: $showingAuthSheet) {
+            PrivacyAuthSheet { success in
+                if success {
+                    privacyEnabled = true
+                    UserDefaults.standard.set(true, forKey: "privacyEnabled")
+                }
+                showingAuthSheet = false
+            }
+        }
+    }
+}
+
+// MARK: - Privacy Auth Sheet (隐私认证弹窗)
+struct PrivacyAuthSheet: View {
+    let onComplete: (Bool) -> Void
+    @State private var isAuthenticating = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+            
+            // 毛玻璃遮罩效果
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 120, height: 120)
+                    .blur(radius: 20)
+                
+                Image(systemName: "faceid")
+                    .font(.system(size: 56))
+                    .foregroundColor(AppTheme.Colors.accent)
+            }
+            
+            VStack(spacing: 8) {
+                Text("开启隐私保护")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                
+                Text("使用 Face ID 保护您的个人数据")
+                    .font(.system(size: 15, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+            }
+            
+            if let error = errorMessage {
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.Colors.destructive)
+            }
+            
+            Spacer()
+            
+            VStack(spacing: 12) {
+                Button {
+                    authenticate()
+                } label: {
+                    HStack {
+                        Image(systemName: "faceid")
+                        Text("验证 Face ID")
+                    }
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(AppTheme.Colors.accent)
+                    )
+                }
+                
+                Button {
+                    onComplete(false)
+                } label: {
+                    Text("取消")
+                        .font(.system(size: 17, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
+                        .padding()
+                }
+            }
+            .padding(.horizontal, 32)
+            
+            Spacer().frame(height: 40)
+        }
+        .onAppear {
+            authenticate()
+        }
+    }
+    
+    private func authenticate() {
+        let context = LAContext()
+        var error: NSError?
+        
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "开启隐私保护") { success, error in
+                DispatchQueue.main.async {
+                    if success {
+                        onComplete(true)
+                    } else if let error = error {
+                        errorMessage = "验证失败: \(error.localizedDescription)"
+                    }
+                }
+            }
+        } else {
+            errorMessage = "设备不支持 Face ID"
+        }
+    }
+}
+
+// MARK: - Milky Tool Row (奶脂工具行)
+struct MilkyToolRow: View {
     let icon: String
     let title: String
     let subtitle: String
@@ -814,19 +932,7 @@ struct ToolItem: View {
     }
 }
 
-// MARK: - 工具分割线
-struct ToolDivider: View {
-    var body: some View {
-        Rectangle()
-            .fill(AppTheme.Colors.divider)
-            .frame(height: 1)
-            .padding(.leading, 60)
-    }
-}
-
-
-
-// MARK: - 用户资料模型
+// MARK: - User Profile Model
 struct UserProfile: Codable {
     var nickname: String
     var bio: String
@@ -849,7 +955,7 @@ struct UserProfile: Codable {
     }
 }
 
-// MARK: - 编辑资料视图
+// MARK: - Edit Profile View
 struct EditProfileView: View {
     @Binding var userProfile: UserProfile
     @Environment(\.dismiss) private var dismiss
@@ -923,109 +1029,6 @@ struct EditProfileView: View {
                     }
                 }
             }
-        }
-    }
-}
-
-// MARK: - 隐私锁视图
-struct PrivacyLockView: View {
-    @Binding var isUnlocked: Bool
-    @Environment(\.dismiss) private var dismiss
-    
-    @State private var isAuthenticating = false
-    @State private var errorMessage: String?
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            
-            Image(systemName: isUnlocked ? "lock.open.fill" : "lock.fill")
-                .font(.system(size: 64))
-                .foregroundColor(isUnlocked ? AppTheme.Colors.success : AppTheme.Colors.accent)
-                .symbolEffect(.bounce, value: isUnlocked)
-            
-            Text(isUnlocked ? "已解锁" : "隐私保护")
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
-            
-            Text(isUnlocked ? "您可以访问个人信息" : "使用 Face ID 解锁")
-                .font(.system(size: 15, design: .rounded))
-                .foregroundColor(AppTheme.Colors.mediumGray)
-            
-            if let error = errorMessage {
-                Text(error)
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.Colors.destructive)
-                    .padding(.top, 8)
-            }
-            
-            Spacer()
-            
-            if !isUnlocked {
-                Button {
-                    authenticate()
-                } label: {
-                    HStack {
-                        Image(systemName: "faceid")
-                        Text("Face ID 解锁")
-                    }
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(AppTheme.Colors.accent)
-                    )
-                }
-                .padding(.horizontal, 32)
-            } else {
-                Button {
-                    dismiss()
-                } label: {
-                    Text("完成")
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(AppTheme.Colors.success)
-                        )
-                }
-                .padding(.horizontal, 32)
-            }
-            
-            Spacer().frame(height: 40)
-        }
-        .onAppear {
-            if !isUnlocked {
-                authenticate()
-            }
-        }
-    }
-    
-    private func authenticate() {
-        isAuthenticating = true
-        errorMessage = nil
-        
-        let context = LAContext()
-        var error: NSError?
-        
-        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "解锁个人信息") { success, error in
-                DispatchQueue.main.async {
-                    isAuthenticating = false
-                    if success {
-                        isUnlocked = true
-                    } else {
-                        errorMessage = "验证失败，请重试"
-                    }
-                }
-            }
-        } else {
-            isAuthenticating = false
-            errorMessage = "设备不支持 Face ID"
         }
     }
 }
