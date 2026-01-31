@@ -533,7 +533,6 @@ struct AddRestaurantView: View {
             unifiedTagsRow
                 .padding(.vertical, 20)
         }
-        .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
                 .fill(Color.white.opacity(0.35))
