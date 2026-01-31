@@ -303,13 +303,14 @@ struct ProfileView: View {
             // 标签编辑区域（参考添加页面样式）
             ZStack(alignment: .bottomTrailing) {
                 VStack(spacing: 0) {
-                    // 标签 FlowLayout
-                    FlowLayout(spacing: 10) {
-                        ForEach(userTags, id: \.self) { tag in
-                            profileTagSticker(tag)
-                        }
-                        
-                        if isEditingTags {
+                    // 标签 FlowLayout - 非编辑模式最多2行
+                    if isEditingTags {
+                        // 编辑模式：显示所有标签
+                        FlowLayout(spacing: 10) {
+                            ForEach(userTags, id: \.self) { tag in
+                                profileTagSticker(tag)
+                            }
+                            
                             // 新增标签输入框
                             TextField("新标签...", text: $newTagInput)
                                 .font(.system(size: 14, design: .rounded))
@@ -333,8 +334,16 @@ struct ProfileView: View {
                                     tagInputIsFocused = true
                                 }
                         }
+                        .padding(16)
+                    } else {
+                        // 非编辑模式：最多显示2行
+                        LimitedRowsFlowLayout(spacing: 10, maxRows: 2) {
+                            ForEach(userTags, id: \.self) { tag in
+                                profileTagSticker(tag)
+                            }
+                        }
+                        .padding(16)
                     }
-                    .padding(16)
                     .background(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .fill(Color.white.opacity(0.5))
@@ -1230,6 +1239,60 @@ struct EditProfileView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Limited Rows Flow Layout (限制行数的流式布局)
+struct LimitedRowsFlowLayout: Layout {
+    var spacing: CGFloat = 10
+    var maxRows: Int = 2
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 0
+        let result = calculateLayout(in: width, subviews: subviews)
+        return result.size
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = calculateLayout(in: bounds.width, subviews: subviews)
+        for (index, subview) in subviews.enumerated() {
+            if index < result.positions.count {
+                subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
+                                          y: bounds.minY + result.positions[index].y),
+                             proposal: .unspecified)
+            }
+        }
+    }
+    
+    private func calculateLayout(in width: CGFloat, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var currentRow = 1
+        
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            
+            // 检查是否需要换行
+            if x + size.width > width && x > 0 {
+                if currentRow >= maxRows {
+                    // 已达到最大行数，停止添加
+                    break
+                }
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+                currentRow += 1
+            }
+            
+            positions.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        
+        let totalHeight = y + rowHeight
+        return (CGSize(width: width, height: totalHeight), positions)
     }
 }
 
