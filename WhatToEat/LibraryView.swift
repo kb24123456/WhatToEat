@@ -117,7 +117,18 @@ struct LibraryView: View {
             if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity") {
                 selectedCity = savedCity
             }
-            print("RestaurantListRefresh: 收到刷新通知, selectedCity=\(selectedCity)")
+            print("[LibraryView] 收到刷新通知, selectedCity=\(selectedCity), 当前餐厅数=\(restaurants.count)")
+            // 强制刷新查询
+            let descriptor = FetchDescriptor<Restaurant>()
+            do {
+                let allRestaurants = try modelContext.fetch(descriptor)
+                print("[LibraryView] 强制刷新查询结果: \(allRestaurants.count) 家餐厅")
+                for r in allRestaurants {
+                    print("[LibraryView] 查询结果: \(r.name), city='\(r.city)'")
+                }
+            } catch {
+                print("[LibraryView] 查询失败: \(error)")
+            }
         }
         .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
         .sheet(isPresented: $showImportSheet) { ImportDataView() }
@@ -383,14 +394,23 @@ private struct FilterBarView: View {
         print("[LibraryView] 总餐厅数: \(restaurants.count), 选中城市: \(selectedCity)")
         print("[LibraryView] 餐厅城市分布: \(Dictionary(grouping: restaurants, by: { $0.city }).mapValues { $0.count })")
         
+        // 打印所有餐厅详情用于调试
+        for restaurant in restaurants {
+            print("[LibraryView] 餐厅: name=\(restaurant.name), city=\(restaurant.city), id=\(restaurant.id)")
+        }
+        
         var result = restaurants.filter { restaurant in
             guard restaurant.modelContext != nil else {
                 print("[LibraryView] 过滤掉无context的餐厅: \(restaurant.name)")
                 return false
             }
             
-            guard restaurant.city == selectedCity else {
-                print("[LibraryView] 过滤掉城市不匹配的餐厅: \(restaurant.name), city=\(restaurant.city), selectedCity=\(selectedCity)")
+            // 城市匹配检查 - 添加更详细的日志
+            let cityMatch = restaurant.city == selectedCity
+            if !cityMatch {
+                print("[LibraryView] 过滤掉城市不匹配的餐厅: \(restaurant.name), restaurant.city='\(restaurant.city)', selectedCity='\(selectedCity)', match=\(cityMatch)")
+            }
+            guard cityMatch else {
                 return false
             }
             
