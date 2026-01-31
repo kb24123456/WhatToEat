@@ -16,8 +16,8 @@ struct ProfileView: View {
     // MARK: - 打卡记录视图状态
     @State private var showCheckInHistory = false
     
-    // MARK: - 年度回顾视图状态
-    @State private var showAnnualReport = false
+    // MARK: - 餐厅详情状态
+    @State private var selectedRestaurantForDetail: Restaurant? = nil
     
     // MARK: - 标签管理状态
     @State private var userTags: [String] = UserDefaults.standard.stringArray(forKey: "userCustomTags") ?? ["氛围感", "老字号", "二刷", "排队王", "性价比"]
@@ -69,8 +69,16 @@ struct ProfileView: View {
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
         }
-        .fullScreenCover(isPresented: $showAnnualReport) {
-            AnnualReportOverlay()
+        // 餐厅详情 Sheet
+        .sheet(item: $selectedRestaurantForDetail) { restaurant in
+            RestaurantDetailView(
+                restaurant: restaurant,
+                locationManager: LocationManager(),
+                isPresented: Binding(
+                    get: { selectedRestaurantForDetail != nil },
+                    set: { if !$0 { selectedRestaurantForDetail = nil } }
+                )
+            )
         }
         // 键盘避让：点击空白处收起键盘
         .scrollDismissesKeyboard(.interactively)
@@ -591,7 +599,13 @@ struct ProfileView: View {
                 HStack(spacing: 12) {
                     ForEach(0..<topRestaurants.count, id: \.self) { index in
                         let restaurant = topRestaurants[index]
-                        TopRestaurantCard(restaurant: restaurant, rank: index + 1)
+                        TopRestaurantCard(
+                            restaurant: restaurant,
+                            rank: index + 1,
+                            onTap: {
+                                selectedRestaurantForDetail = restaurant
+                            }
+                        )
                     }
                 }
             }
@@ -678,17 +692,13 @@ struct ProfileView: View {
                 .background(AppTheme.Colors.divider)
                 .padding(.leading, 60)
             
-            // 年度回顾
-            Button {
-                showAnnualReport = true
-            } label: {
-                MilkyToolRow(
-                    icon: "sparkles",
-                    title: "年度美食回顾",
-                    subtitle: "查看你的美食印记",
-                    color: .orange
-                )
-            }
+            // 导出 PDF 报告
+            MilkyToolRow(
+                icon: "doc.text",
+                title: "导出美食报告",
+                subtitle: "生成精美 PDF 长图",
+                color: .green
+            )
             
             Divider()
                 .background(AppTheme.Colors.divider)
@@ -795,10 +805,9 @@ struct ProfileView: View {
         return tagCounts.sorted { $0.value > $1.value }.prefix(limit).map { (name: $0.key, count: $0.value) }
     }
     
-    private func getTopRestaurants(limit: Int) -> [(name: String, count: Int, image: String?)] {
+    private func getTopRestaurants(limit: Int) -> [Restaurant] {
         return restaurants
-            .map { (name: $0.name, count: $0.logs.count, image: $0.coverPhotoFilename) }
-            .sorted { $0.count > $1.count }
+            .sorted { $0.logs.count > $1.logs.count }
             .prefix(limit)
             .map { $0 }
     }
@@ -915,57 +924,61 @@ struct TagCloudItem: View {
 
 // MARK: - Top Restaurant Card (TOP 5 餐厅卡片)
 struct TopRestaurantCard: View {
-    let restaurant: (name: String, count: Int, image: String?)
+    let restaurant: Restaurant
     let rank: Int
+    var onTap: () -> Void = {}
     
     var body: some View {
-        VStack(spacing: 8) {
-            // 餐厅头像（左上角叠加排名徽章）
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.Colors.warmGray)
-                    .frame(width: 60, height: 60)
-                
-                if let imageName = restaurant.image,
-                   let uiImage = ImageManager.shared.loadImage(filename: imageName) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 56, height: 56)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                } else {
-                    Image(systemName: "fork.knife")
-                        .font(.system(size: 24))
-                        .foregroundColor(AppTheme.Colors.babyBlue)
-                }
-                
-                // 排名徽章 - 移至左上角，缩小20%（原32pt -> 25.6pt ≈ 26pt）
-                ZStack {
-                    Circle()
-                        .fill(rank <= 3 ? AppTheme.Colors.accent : AppTheme.Colors.warmGray)
-                        .frame(width: 26, height: 26)
+        Button(action: onTap) {
+            VStack(spacing: 8) {
+                // 餐厅头像（左上角叠加排名徽章）
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppTheme.Colors.warmGray)
+                        .frame(width: 60, height: 60)
                     
-                    Text("\(rank)")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundColor(rank <= 3 ? .white : AppTheme.Colors.mediumGray)
+                    if let imageName = restaurant.coverPhotoFilename,
+                       let uiImage = ImageManager.shared.loadImage(filename: imageName) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    } else {
+                        Image(systemName: "fork.knife")
+                            .font(.system(size: 24))
+                            .foregroundColor(AppTheme.Colors.babyBlue)
+                    }
+                    
+                    // 排名徽章 - 移至左上角，缩小20%（原32pt -> 25.6pt ≈ 26pt）
+                    ZStack {
+                        Circle()
+                            .fill(rank <= 3 ? AppTheme.Colors.accent : AppTheme.Colors.warmGray)
+                            .frame(width: 26, height: 26)
+                        
+                        Text("\(rank)")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundColor(rank <= 3 ? .white : AppTheme.Colors.mediumGray)
+                    }
+                    .offset(x: -4, y: -4) // 向左上偏移，使徽章一半在图片内
                 }
-                .offset(x: -4, y: -4) // 向左上偏移，使徽章一半在图片内
+                
+                // 餐厅名
+                Text(restaurant.name)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                    .lineLimit(1)
+                    .frame(width: 70)
+                
+                // 打卡次数
+                Text("\(restaurant.logs.count)次")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.lightText)
             }
-            
-            // 餐厅名
-            Text(restaurant.name)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .lineLimit(1)
-                .frame(width: 70)
-            
-            // 打卡次数
-            Text("\(restaurant.count)次")
-                .font(.system(size: 11, design: .rounded))
-                .foregroundColor(AppTheme.Colors.lightText)
+            .frame(width: 80)
+            .padding(.vertical, 8)
         }
-        .frame(width: 80)
-        .padding(.vertical, 8)
+        .buttonStyle(PlainButtonStyle())
         .pressableButton(scale: 0.95) // 添加缩放反馈
     }
 }
