@@ -1008,6 +1008,9 @@ struct RestaurantDetailView: View {
     
     private let presetTags = ["网红店", "性价比", "环境好", "服务好", "排队久", "踩雷", "常客", "回头客"]
     
+    // MARK: - 显示打卡记录详情的状态
+    @State private var showCheckInHistory = false
+    
     private var checkInHistorySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -1020,6 +1023,21 @@ struct RestaurantDetailView: View {
                     .foregroundColor(AppTheme.Colors.mediumGray)
 
                 Spacer()
+                
+                // 查看更多按钮（当记录超过3条时显示）
+                if restaurant.logs.count > 3 {
+                    Button {
+                        showCheckInHistory = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("查看更多")
+                                .font(.system(size: 13, weight: .medium))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12))
+                        }
+                        .foregroundColor(AppTheme.Colors.babyBlue)
+                    }
+                }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 4)
@@ -1027,12 +1045,17 @@ struct RestaurantDetailView: View {
             if restaurant.logs.isEmpty {
                 emptyCheckInState
             } else {
-                ForEach(restaurant.logs.sorted(by: { $0.date > $1.date })) { log in
+                // 只显示最近3条打卡记录
+                let recentLogs = restaurant.logs.sorted(by: { $0.date > $1.date }).prefix(3)
+                ForEach(Array(recentLogs)) { log in
                     checkInLogCard(log: log)
                 }
             }
 
             deleteRestaurantButton
+        }
+        .sheet(isPresented: $showCheckInHistory) {
+            CheckInHistoryView(restaurant: restaurant)
         }
     }
 

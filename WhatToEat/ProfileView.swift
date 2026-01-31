@@ -13,6 +13,9 @@ struct ProfileView: View {
     @State private var userProfile = UserProfile.load()
     @State private var privacyEnabled = UserDefaults.standard.bool(forKey: "privacyEnabled")
     
+    // MARK: - 打卡记录视图状态
+    @State private var showCheckInHistory = false
+    
     // MARK: - 标签管理状态
     @State private var userTags: [String] = UserDefaults.standard.stringArray(forKey: "userCustomTags") ?? ["氛围感", "老字号", "二刷", "排队王", "性价比"]
     @State private var isEditingTags = false
@@ -605,7 +608,7 @@ struct ProfileView: View {
                 Spacer()
                 
                 Button {
-                    // 查看全部
+                    showCheckInHistory = true
                 } label: {
                     Text("查看全部")
                         .font(.system(size: 12, weight: .medium))
@@ -636,6 +639,9 @@ struct ProfileView: View {
                         .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
                 )
         )
+        .sheet(isPresented: $showCheckInHistory) {
+            CheckInHistoryView()
+        }
     }
     
     // MARK: - Phase 4: Milky Tool List (奶脂风格工具列表)
