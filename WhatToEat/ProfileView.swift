@@ -19,6 +19,9 @@ struct ProfileView: View {
     // MARK: - 餐厅详情状态
     @State private var selectedRestaurantForDetail: Restaurant? = nil
     
+    // MARK: - 导入数据状态
+    @State private var showImportSheet = false
+    
     // MARK: - 标签管理状态
     @State private var userTags: [String] = UserDefaults.standard.stringArray(forKey: "userCustomTags") ?? ["氛围感", "老字号", "二刷", "排队王", "性价比"]
     @State private var isEditingTags = false
@@ -68,6 +71,10 @@ struct ProfileView: View {
         .useMilkyDiffuseBackground()
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
+        }
+        // 导入数据 Sheet
+        .sheet(isPresented: $showImportSheet) {
+            ImportDataView()
         }
         // 餐厅详情 Sheet
         .sheet(item: $selectedRestaurantForDetail) { restaurant in
@@ -675,6 +682,23 @@ struct ProfileView: View {
             PrivacyToggleView(privacyEnabled: $privacyEnabled)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
+            
+            Divider()
+                .background(AppTheme.Colors.divider)
+                .padding(.leading, 60)
+            
+            // 导入餐厅数据
+            Button {
+                showImportSheet = true
+            } label: {
+                MilkyToolRow(
+                    icon: "square.and.arrow.down",
+                    title: "导入餐厅数据",
+                    subtitle: "从 CSV 文件批量导入",
+                    color: .pink
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
             
             Divider()
                 .background(AppTheme.Colors.divider)
