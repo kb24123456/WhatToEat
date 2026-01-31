@@ -1159,8 +1159,14 @@ struct AddRestaurantView: View {
     }
     
     private func handleViewAppear() {
-        if let firstRestaurant = allRestaurants.first {
+        // 优先从 UserDefaults 获取用户当前选择的城市
+        if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity"), !savedCity.isEmpty {
+            city = savedCity
+            print("[AddRestaurant] handleViewAppear: 从 UserDefaults 获取城市=\(savedCity)")
+        } else if let firstRestaurant = allRestaurants.first {
+            // 如果没有保存的城市，从已有餐厅获取
             city = firstRestaurant.city
+            print("[AddRestaurant] handleViewAppear: 从已有餐厅获取城市=\(firstRestaurant.city)")
         }
     }
     

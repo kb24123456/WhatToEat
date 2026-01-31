@@ -127,7 +127,15 @@ struct LibraryView: View {
         .onChange(of: selectedCity) {
             UserDefaults.standard.set($0, forKey: kSavedCityKey)
         }
-        .presentationDetents([.fraction(0.65), .large])
+        // 每次视图出现时检查城市设置
+        .onAppear {
+            if let savedCity = UserDefaults.standard.string(forKey: kSavedCityKey) {
+                if selectedCity != savedCity {
+                    selectedCity = savedCity
+                    print("[LibraryView] onAppear: 同步城市设置, selectedCity=\(savedCity)")
+                }
+            }
+        }
     }
 
     // MARK: - 顶部 Header 子视图
