@@ -195,20 +195,8 @@ struct AddRestaurantView: View {
                 VStack(spacing: 24) {
                     Spacer().frame(height: 70)
                     
-                    // 餐厅名片模块（封面图+基础信息并排）
-                    restaurantCardSection
-                    
-                    // 地址信息行（一行式展示，未填时隐藏）
-                    if !address.isEmpty {
-                        addressSubline
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                    
-                    // 智能搜索入口（移动到评分组件上方）
-                    smartSearchButton
-                    
-                    // 评分、评价、标签一体化容器
-                    unifiedInputSection
+                    // 完整餐厅卡片（包含所有信息）
+                    completeRestaurantCard
                         .id("TagModule")
                         .onChange(of: isEditingTags) { _, newValue in
                             if newValue {
@@ -220,6 +208,15 @@ struct AddRestaurantView: View {
                             }
                         }
                     
+                    // 地址信息行（一行式展示，未填时隐藏）
+                    if !address.isEmpty {
+                        addressSubline
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    
+                    // 智能搜索入口
+                    smartSearchButton
+                    
                     Spacer().frame(height: 120)
                 }
                 .padding(.horizontal, 20)
@@ -230,7 +227,69 @@ struct AddRestaurantView: View {
         .opacity(isAppeared ? 1 : 0)
     }
     
-    // MARK: - 餐厅名片模块（Premium Soft UI）
+    // MARK: - 完整餐厅卡片（包含所有信息）
+    private var completeRestaurantCard: some View {
+        VStack(spacing: 0) {
+            // 第一部分：基础信息（照片 + 名称/区域/品类）
+            HStack(spacing: 12) {
+                // 左侧：缩略封面图
+                thumbnailImageView
+                    .frame(width: 120, height: 120)
+                
+                // 右侧：基础信息
+                infoPodContainer
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(16)
+            
+            // 分隔线
+            Divider()
+                .background(Color.white.opacity(0.5))
+                .padding(.horizontal, 16)
+            
+            // 第二部分：评分
+            unifiedRatingRow
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+            
+            // 分隔线
+            Divider()
+                .background(Color.white.opacity(0.5))
+                .padding(.horizontal, 16)
+            
+            // 第三部分：评价
+            unifiedReviewRow
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+            
+            // 分隔线
+            Divider()
+                .background(Color.white.opacity(0.5))
+                .padding(.horizontal, 16)
+            
+            // 第四部分：标签
+            unifiedTagsRow
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(Color.white.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .stroke(Color.white.opacity(0.6), lineWidth: 1)
+                )
+        )
+        .shadow(color: Color.black.opacity(0.04), radius: 20, x: 0, y: 8)
+        .shadow(color: Color.black.opacity(0.02), radius: 8, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .stroke(highlightName ? AppTheme.Colors.success.opacity(0.3) : Color.clear, lineWidth: 2)
+        )
+        .animation(AppTheme.Animations.quickSpring, value: highlightName)
+    }
+    
+    // MARK: - 餐厅名片模块（Premium Soft UI）- 已合并到 completeRestaurantCard
     private var restaurantCardSection: some View {
         HStack(spacing: 12) {
             // 左侧：缩略封面图（1:1正方形）
