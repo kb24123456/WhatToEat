@@ -16,6 +16,9 @@ struct ProfileView: View {
     // MARK: - 打卡记录视图状态
     @State private var showCheckInHistory = false
     
+    // MARK: - 年度回顾视图状态
+    @State private var showAnnualReport = false
+    
     // MARK: - 标签管理状态
     @State private var userTags: [String] = UserDefaults.standard.stringArray(forKey: "userCustomTags") ?? ["氛围感", "老字号", "二刷", "排队王", "性价比"]
     @State private var isEditingTags = false
@@ -65,6 +68,9 @@ struct ProfileView: View {
         .useMilkyDiffuseBackground()
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
+        }
+        .fullScreenCover(isPresented: $showAnnualReport) {
+            AnnualReportOverlay()
         }
         // 键盘避让：点击空白处收起键盘
         .scrollDismissesKeyboard(.interactively)
@@ -672,13 +678,17 @@ struct ProfileView: View {
                 .background(AppTheme.Colors.divider)
                 .padding(.leading, 60)
             
-            // 导出 PDF 报告
-            MilkyToolRow(
-                icon: "doc.text",
-                title: "导出美食报告",
-                subtitle: "生成精美 PDF 长图",
-                color: .green
-            )
+            // 年度回顾
+            Button {
+                showAnnualReport = true
+            } label: {
+                MilkyToolRow(
+                    icon: "sparkles",
+                    title: "年度美食回顾",
+                    subtitle: "查看你的美食印记",
+                    color: .orange
+                )
+            }
             
             Divider()
                 .background(AppTheme.Colors.divider)

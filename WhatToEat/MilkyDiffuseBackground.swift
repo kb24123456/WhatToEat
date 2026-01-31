@@ -10,6 +10,17 @@ struct MilkyDiffuseBackground: View {
     private let pink = Color(hex: "#FFD1DC")
     private let cream = Color(hex: "#FFFBEB") // 增加一点奶油黄过渡
     
+    // 动画速度倍数（默认1.0，越大越快）
+    var animationSpeed: Double = 1.0
+    
+    // 基础动画时长
+    private let baseDuration: Double = 12
+    
+    // 计算实际动画时长
+    private var animationDuration: Double {
+        baseDuration / animationSpeed
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -81,7 +92,7 @@ struct MilkyDiffuseBackground: View {
         }
         .ignoresSafeArea() // 确保背景铺满，不干扰安全区域布局计算
         .onAppear {
-            withAnimation(.easeInOut(duration: 12).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: animationDuration).repeatForever(autoreverses: true)) {
                 isAnimating = true
             }
         }
