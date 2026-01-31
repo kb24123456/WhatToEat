@@ -28,15 +28,17 @@ struct RestaurantMapView: View {
     // 地图缩放级别对应的聚类距离
     private var dynamicClusteringDistance: CLLocationDistance {
         // 根据地图缩放级别动态调整聚类距离
-        guard let region = visibleRegion else { return 100 }
+        guard let region = visibleRegion else { return 150 }
         // 缩放级别越小（地图越缩小），聚类距离越大
         let spanDelta = max(region.span.latitudeDelta, region.span.longitudeDelta)
         if spanDelta > 0.5 {
-            return 500 // 大范围视图：500米聚类
-        } else if spanDelta > 0.1 {
-            return 200 // 中等范围：200米聚类
+            return 1000 // 大范围视图：1000米聚类
+        } else if spanDelta > 0.2 {
+            return 500 // 中等范围：500米聚类
+        } else if spanDelta > 0.05 {
+            return 200 // 较小范围：200米聚类
         } else {
-            return 80 // 小范围：80米聚类
+            return 100 // 小范围：100米聚类
         }
     }
     
@@ -690,17 +692,28 @@ struct GourmetAnnotation: View {
         isCheckedIn ? AppTheme.Colors.accent : AppTheme.Colors.milkyWhite
     }
     
+    // 截断评论，限制最大字数
+    private var truncatedReview: String {
+        let maxLength = 12
+        if restaurant.review.count <= maxLength {
+            return restaurant.review
+        }
+        return String(restaurant.review.prefix(maxLength)) + "..."
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
-            // 优化：只在选中时显示点评气泡，减少视觉堆积
-            if isSelected && !restaurant.review.isEmpty {
-                Text(restaurant.review)
-                    .font(.system(size: 11, weight: .medium))
+            // 常驻评论气泡，限制最大字数与气泡长度
+            if !restaurant.review.isEmpty {
+                Text(truncatedReview)
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(AppTheme.Colors.darkText)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .lineLimit(1)
+                    .frame(maxWidth: 120)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
                     .background(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: 12)
                             .fill(
                                 AnyShapeStyle(
                                     LinearGradient(
@@ -714,9 +727,9 @@ struct GourmetAnnotation: View {
                                 )
                             )
                     )
-                    .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
-                    .offset(y: -10)
-                    .scaleEffect(1.05)
+                    .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+                    .offset(y: -8)
+                    .scaleEffect(isSelected ? 1.05 : 1.0)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
             }
             
