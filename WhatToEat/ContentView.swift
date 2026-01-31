@@ -55,7 +55,7 @@ struct ContentView: View {
                     // 将餐厅数据传入地图视图
                     RestaurantMapView(restaurants: restaurants)
                 case .profile:
-                    PlaceholderView(title: "我的", description: "个人设置功能即将上线")
+                    ProfileView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
