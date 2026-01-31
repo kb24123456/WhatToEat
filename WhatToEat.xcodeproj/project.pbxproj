@@ -257,6 +257,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "我们要访问您的相机以拍摄美食瞬间";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "使用 Face ID 保护您的美食手账隐私";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "我们需要获取您的位置以计算您与餐厅的距离";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "我们需要访问相册以选择您的美食记忆";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -293,6 +294,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "我们要访问您的相机以拍摄美食瞬间";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "使用 Face ID 保护您的美食手账隐私";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "我们需要获取您的位置以计算您与餐厅的距离";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "我们需要访问相册以选择您的美食记忆";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

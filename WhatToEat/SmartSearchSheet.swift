@@ -14,6 +14,7 @@ struct SmartSearchSheet: View {
     @Binding var selectedName: String
     @Binding var selectedAddress: String
     @Binding var selectedDistrict: String
+    @Binding var selectedCity: String
     @Binding var selectedCategory: String
     @Binding var selectedLatitude: Double
     @Binding var selectedLongitude: Double
@@ -457,6 +458,7 @@ struct SmartSearchSheet: View {
         selectedName = item.name ?? ""
         selectedAddress = formatFullAddress(from: item.placemark)
         selectedDistrict = extractDistrict(from: item.placemark)
+        selectedCity = extractCity(from: item.placemark)
         
         // 使用双重匹配逻辑确定品类
         let categoryResult = determineCategory(from: item)
@@ -469,6 +471,23 @@ struct SmartSearchSheet: View {
         
         // 关闭浮层
         dismiss()
+    }
+    
+    // MARK: - 提取城市
+    private func extractCity(from placemark: CLPlacemark) -> String {
+        // 优先使用 locality（城市级别）
+        if let locality = placemark.locality {
+            return locality
+        }
+        // 其次使用 administrativeArea（省级）
+        if let administrativeArea = placemark.administrativeArea {
+            return administrativeArea
+        }
+        // 兜底使用 subLocality（区县级）
+        if let subLocality = placemark.subLocality {
+            return subLocality
+        }
+        return ""
     }
     
     // MARK: - 辅助方法

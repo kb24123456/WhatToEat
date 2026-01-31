@@ -146,6 +146,7 @@ struct AddRestaurantView: View {
                 selectedName: $name,
                 selectedAddress: $address,
                 selectedDistrict: $district,
+                selectedCity: $city,
                 selectedCategory: $category,
                 selectedLatitude: $latitude,
                 selectedLongitude: $longitude,
@@ -1245,12 +1246,15 @@ struct AddRestaurantView: View {
             coverFilename = ImageManager.shared.saveImage(coverImage)
         }
         
+        // 确保城市字段有值（如果为空，使用用户选择的城市或默认城市）
+        let finalCity = city.isEmpty ? (UserDefaults.standard.string(forKey: "UserSelectedCity") ?? "重庆") : city
+        
         // 保存数据
         let newRestaurant = Restaurant(
             name: name,
             type: category,
             district: district,
-            city: city,
+            city: finalCity,
             rating: rating,
             address: address,
             latitude: latitude,
