@@ -111,9 +111,10 @@ struct AddRestaurantView: View {
                                 .frame(height: 120)
                             )
                     }
-                    // 键盘规避：当键盘弹出时自动调整底部内边距
+                    // 键盘规避：当键盘弹出时自动调整底部内边距（使用系统原生动画）
                     .safeAreaInset(edge: .bottom) {
                         Color.clear.frame(height: 0)
+                            .ignoresSafeArea(.keyboard)
                     }
                 
                 // Confetti 特效
@@ -128,6 +129,15 @@ struct AddRestaurantView: View {
                     .padding(.leading, 20)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+            // 添加下滑返回手势
+            .gesture(
+                DragGesture()
+                    .onEnded { value in
+                        if value.translation.height > 100 {
+                            closeAction()
+                        }
+                    }
+            )
         }
         .confirmationDialog("选择封面图来源", isPresented: $showActionSheet) {
             Button("拍照") { showCamera = true }
@@ -539,7 +549,6 @@ struct AddRestaurantView: View {
             unifiedTagsRow
                 .padding(.vertical, 20)
         }
-        .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
                 .fill(Color.white.opacity(0.35))
