@@ -610,7 +610,12 @@ struct SearchResultButton: View {
     @ObservedObject private var locationManager = LocationManager.shared
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            // 添加触觉反馈
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+            action()
+        }) {
             HStack(spacing: 12) {
                 // 图标
                 ZStack {
@@ -668,10 +673,6 @@ struct SearchResultButton: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
-        .contentShape(Rectangle())
-        .onTapGesture {
-            action()
-        }
     }
     
     private var categoryIcon: String {

@@ -37,6 +37,11 @@ struct ContentView: View {
     // 从数据库查询所有餐厅数据，供子视图使用
     @Query private var restaurants: [Restaurant]
     
+    // 缓存餐厅数据，避免频繁重建
+    @State private var cachedRestaurants: [Restaurant] = []
+    @State private var lastRestaurantCount: Int = 0
+    @State private var lastRestaurantUpdate: Date = Date.distantPast
+    
     var body: some View {
         ZStack {
             // 背景层：弥散背景铺满整个屏幕（包括安全区域）
@@ -52,19 +57,22 @@ struct ContentView: View {
                 case .add:
                     EmptyView()
                 case .friends:
-                    // 将餐厅数据传入地图视图
-                    RestaurantMapView(restaurants: restaurants)
+                    // 将缓存的餐厅数据传入地图视图
+                    RestaurantMapView(restaurants: cachedRestaurants)
                 case .profile:
                     ProfileView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .fullScreenCover(isPresented: $isAdding) {
+            .sheet(isPresented: $isAdding) {
                 AddRestaurantView(onClose: {
                     withAnimation {
                         isAdding = false
                     }
                 })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.white)
             }
 
             if !isTabBarHidden {
@@ -74,7 +82,7 @@ struct ContentView: View {
                 }
             }
         }
-        .ignoresSafeArea(.keyboard)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .onReceive(NotificationCenter.default.publisher(for: .hideTabBar)) { _ in
             withAnimation {
                 isTabBarHidden = true
@@ -84,6 +92,23 @@ struct ContentView: View {
             withAnimation {
                 isTabBarHidden = false
             }
+        }
+        .onChange(of: restaurants) { _, newRestaurants in
+            // 只有当餐厅数量变化或超过5秒未更新时才刷新缓存
+            let shouldUpdate = newRestaurants.count != lastRestaurantCount ||
+                              Date().timeIntervalSince(lastRestaurantUpdate) > 5.0
+            
+            if shouldUpdate {
+                cachedRestaurants = newRestaurants
+                lastRestaurantCount = newRestaurants.count
+                lastRestaurantUpdate = Date()
+            }
+        }
+        .onAppear {
+            // 初始化缓存
+            cachedRestaurants = restaurants
+            lastRestaurantCount = restaurants.count
+            lastRestaurantUpdate = Date()
         }
     }
     

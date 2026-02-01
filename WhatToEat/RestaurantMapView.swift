@@ -3,6 +3,175 @@ import SwiftData
 import MapKit
 import CoreLocation
 
+// MARK: - 任务队列（用于串行化后台计算）
+private actor TaskQueue {
+    private var currentTask: Task<Void, Never>?
+    
+    func enqueue(_ operation: @escaping () async -> Void) {
+        // 取消之前的任务
+        currentTask?.cancel()
+        
+        // 创建新任务
+        currentTask = Task {
+            await operation()
+        }
+    }
+    
+    func cancel() {
+        currentTask?.cancel()
+        currentTask = nil
+    }
+}
+
+// MARK: - 空间索引节点
+private class SpatialIndexNode {
+    let minLat: Double
+    let maxLat: Double
+    let minLon: Double
+    let maxLon: Double
+    var restaurants: [Restaurant] = []
+    var children: [SpatialIndexNode]?
+    
+    init(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) {
+        self.minLat = minLat
+        self.maxLat = maxLat
+        self.minLon = minLon
+        self.maxLon = maxLon
+    }
+    
+    var isLeaf: Bool { children == nil }
+    func contains(lat: Double, lon: Double) -> Bool {
+        return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon
+    }
+    
+    func intersects(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) -> Bool {
+        return !(maxLat < self.minLat || minLat > self.maxLat || maxLon < self.minLon || minLon > self.maxLon)
+    }
+}
+
+// MARK: - 餐厅空间索引
+private class RestaurantSpatialIndex {
+    private let root: SpatialIndexNode
+    private let maxDepth = 8
+    private let maxItemsPerNode = 10
+    
+    init(restaurants: [Restaurant]) {
+        // 计算边界
+        let lats = restaurants.map { $0.latitude }
+        let lons = restaurants.map { $0.longitude }
+        let minLat = lats.min() ?? -90
+        let maxLat = lats.max() ?? 90
+        let minLon = lons.min() ?? -180
+        let maxLon = lons.max() ?? 180
+        
+        root = SpatialIndexNode(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
+        
+        // 构建索引
+        for restaurant in restaurants {
+            insert(restaurant, into: root, depth: 0)
+        }
+    }
+    
+    private func insert(_ restaurant: Restaurant, into node: SpatialIndexNode, depth: Int) {
+        // 如果节点不包含该餐厅，返回
+        if !node.contains(lat: restaurant.latitude, lon: restaurant.longitude) {
+            return
+        }
+        
+        // 如果是叶子节点
+        if node.isLeaf {
+            node.restaurants.append(restaurant)
+            
+            // 如果超过容量且未达到最大深度，分裂节点
+            if node.restaurants.count > maxItemsPerNode && depth < maxDepth {
+                subdivide(node, depth: depth)
+            }
+        } else {
+            // 插入到子节点
+            for child in node.children! {
+                if child.contains(lat: restaurant.latitude, lon: restaurant.longitude) {
+                    insert(restaurant, into: child, depth: depth + 1)
+                    break
+                }
+            }
+        }
+    }
+    
+    private func subdivide(_ node: SpatialIndexNode, depth: Int) {
+        let midLat = (node.minLat + node.maxLat) / 2
+        let midLon = (node.minLon + node.maxLon) / 2
+        
+        // 创建四个子象限
+        node.children = [
+            SpatialIndexNode(minLat: node.minLat, maxLat: midLat, minLon: node.minLon, maxLon: midLon),
+            SpatialIndexNode(minLat: node.minLat, maxLat: midLat, minLon: midLon, maxLon: node.maxLon),
+            SpatialIndexNode(minLat: midLat, maxLat: node.maxLat, minLon: node.minLon, maxLon: midLon),
+            SpatialIndexNode(minLat: midLat, maxLat: node.maxLat, minLon: midLon, maxLon: node.maxLon)
+        ]
+        
+        // 重新分配餐厅到子节点
+        for restaurant in node.restaurants {
+            for child in node.children! {
+                if child.contains(lat: restaurant.latitude, lon: restaurant.longitude) {
+                    child.restaurants.append(restaurant)
+                    break
+                }
+            }
+        }
+        
+        // 清空当前节点的餐厅列表（只保留在子节点中）
+        node.restaurants = []
+    }
+    
+    // 查询区域内的餐厅
+    func query(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) -> [Restaurant] {
+        var result: [Restaurant] = []
+        query(node: root, minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon, result: &result)
+        return result
+    }
+    
+    private func query(node: SpatialIndexNode, minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, result: inout [Restaurant]) {
+        // 如果节点与查询区域不相交，返回
+        if !node.intersects(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon) {
+            return
+        }
+        
+        // 如果是叶子节点，检查每个餐厅
+        if node.isLeaf {
+            for restaurant in node.restaurants {
+                if restaurant.latitude >= minLat && restaurant.latitude <= maxLat &&
+                   restaurant.longitude >= minLon && restaurant.longitude <= maxLon {
+                    result.append(restaurant)
+                }
+            }
+        } else {
+            // 递归查询子节点
+            for child in node.children! {
+                query(node: child, minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon, result: &result)
+            }
+        }
+    }
+}
+
+// MARK: - 聚类缓存键
+private struct ClusterCacheKey: Hashable {
+    let minLat: Double
+    let maxLat: Double
+    let minLon: Double
+    let maxLon: Double
+    let zoomLevel: MapZoomLevel
+    
+    init(region: MKCoordinateRegion, zoomLevel: MapZoomLevel) {
+        let halfLat = region.span.latitudeDelta / 2
+        let halfLon = region.span.longitudeDelta / 2
+        self.minLat = region.center.latitude - halfLat
+        self.maxLat = region.center.latitude + halfLat
+        self.minLon = region.center.longitude - halfLon
+        self.maxLon = region.center.longitude + halfLon
+        self.zoomLevel = zoomLevel
+    }
+}
+
 // MARK: - 餐厅地图视图 (食图页面)
 struct RestaurantMapView: View {
     // 从外部传入的餐厅数据（不直接查询数据库）
@@ -25,11 +194,23 @@ struct RestaurantMapView: View {
     @State private var hasUserInteractedWithMap: Bool = false
     private let regionChangeThreshold: CLLocationDistance = 500 // 移动超过500米后重置
     
-    // MARK: - 性能优化：聚类计算节流与缓存
+    // MARK: - 性能优化：空间索引与缓存
+    @State private var spatialIndex: RestaurantSpatialIndex?
+    @State private var clusterCache: [ClusterCacheKey: [RestaurantCluster]] = [:]
     @State private var cachedClusters: [RestaurantCluster] = []
     @State private var lastClusteringRegion: MKCoordinateRegion?
     @State private var clusteringThrottleTimer: Timer?
     @State private var isClusteringPending: Bool = false
+    
+    // MARK: - 滑动检测与延迟计算
+    @State private var isMapDragging: Bool = false
+    @State private var dragEndTimer: Timer?
+    @State private var settleTimer: Timer?
+    private let dragEndDelay: TimeInterval = 0.75  // 滑动停止后等待0.75秒再计算
+    
+    // MARK: - 后台计算任务管理
+    @State private var currentClusteringTask: Task<Void, Never>?
+    @State private var calculationQueue = TaskQueue()
     
     // 最大显示餐厅数量
     private let maxVisibleRestaurants = 10
@@ -92,30 +273,44 @@ struct RestaurantMapView: View {
         return cachedClusters
     }
     
-    // 筛选餐厅（搜索 + 可视区域 + 有效坐标）
+    // 筛选餐厅（搜索 + 可视区域 + 有效坐标）- 使用空间索引优化
     private func filterRestaurants() -> [Restaurant] {
-        // 搜索筛选
-        var result = restaurants
+        // 过滤无效坐标（latitude == 0 表示尚未获取坐标）
+        let validRestaurants = restaurants.filter { $0.latitude != 0 || $0.longitude != 0 }
+        
+        // 搜索筛选（如果有搜索文本，不使用空间索引）
         if !searchText.isEmpty {
-            result = result.filter { r in
+            return validRestaurants.filter { r in
                 r.name.localizedCaseInsensitiveContains(searchText) ||
                 r.type.localizedCaseInsensitiveContains(searchText)
             }
         }
         
-        // 区域筛选（只在中间可视区域显示）
+        // 区域筛选 - 使用空间索引加速
         if let region = visibleRegion {
-            result = result.filter { r in
-                self.isInVisibleCenterArea(lat: r.latitude, lon: r.longitude, region: region)
+            let halfLat = region.span.latitudeDelta / 2.0
+            let halfLon = region.span.longitudeDelta / 2.0
+            
+            // 计算中间可视区域的边界（排除上下 25% 的渐变区域）
+            let visibleHalfLat = halfLat * (1.0 - visibleAreaInsetRatio * 2)
+            let minLat = region.center.latitude - visibleHalfLat
+            let maxLat = region.center.latitude + visibleHalfLat
+            let minLon = region.center.longitude - halfLon
+            let maxLon = region.center.longitude + halfLon
+            
+            // 使用空间索引查询
+            if let index = spatialIndex {
+                return index.query(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
+            } else {
+                // 回退到普通筛选
+                return validRestaurants.filter { r in
+                    r.latitude >= minLat && r.latitude <= maxLat &&
+                    r.longitude >= minLon && r.longitude <= maxLon
+                }
             }
         }
         
-        // 过滤无效坐标（latitude == 0 表示尚未获取坐标）
-        result = result.filter { r in
-            r.latitude != 0 || r.longitude != 0
-        }
-        
-        return result
+        return validRestaurants
     }
     
     // 检查坐标是否在中间可视区域（排除上下渐变区域）
@@ -191,10 +386,43 @@ struct RestaurantMapView: View {
     // MARK: - 地图层
     private var mapLayer: some View {
         Map(position: $cameraPosition) {
-            // 简化：所有范围都显示普通大头针（不再区分聚类点）
-            // 每个聚类只显示一家代表餐厅
-            ForEach(clusteredRestaurants) { cluster in
-                mapAnnotation(for: cluster, simplified: currentZoomLevel != .close)
+            // 导航模式下只显示目的地餐厅
+            if isNavigating, let destination = navigatingRestaurant {
+                // 只显示目的地餐厅
+                Annotation("", coordinate: CLLocationCoordinate2D(latitude: destination.latitude, longitude: destination.longitude)) {
+                    GourmetAnnotation(
+                        restaurant: destination,
+                        isNavigating: true,
+                        isDestination: true,
+                        simplified: false,
+                        showBubble: true,
+                        onSelect: { _ in }
+                    )
+                }
+            } else {
+                // 分层渲染策略：根据缩放级别决定显示内容
+                let zoomLevel = currentZoomLevel
+                let clusters = clusteredRestaurants
+                
+                switch zoomLevel {
+                case .far:
+                    // 大范围：只显示城市级聚合点（最多5个）
+                    ForEach(Array(clusters.prefix(5))) { cluster in
+                        mapAnnotation(for: cluster, simplified: true, showBubble: false)
+                    }
+                    
+                case .medium:
+                    // 中等范围：显示简化的大头针（不显示气泡）
+                    ForEach(clusters) { cluster in
+                        mapAnnotation(for: cluster, simplified: true, showBubble: false)
+                    }
+                    
+                case .close:
+                    // 小范围：显示完整大头针（显示气泡）
+                    ForEach(clusters) { cluster in
+                        mapAnnotation(for: cluster, simplified: false, showBubble: true)
+                    }
+                }
             }
             
             // 用户当前位置
@@ -232,11 +460,30 @@ struct RestaurantMapView: View {
                 updateCameraToUserLocation(location)
             }
         }
+        // 检测地图滑动手势
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 10)
+                .onChanged { _ in
+                    handleMapDragStart()
+                }
+                .onEnded { _ in
+                    handleMapDragEnd()
+                }
+        )
+        .simultaneousGesture(
+            MagnificationGesture()
+                .onChanged { _ in
+                    handleMapDragStart()
+                }
+                .onEnded { _ in
+                    handleMapDragEnd()
+                }
+        )
     }
     
     // MARK: - 地图标注
     @MapContentBuilder
-    private func mapAnnotation(for cluster: RestaurantCluster, simplified: Bool = false) -> some MapContent {
+    private func mapAnnotation(for cluster: RestaurantCluster, simplified: Bool = false, showBubble: Bool = true) -> some MapContent {
         if cluster.isCluster {
             Annotation("", coordinate: cluster.coordinate) {
                 ClusterAnnotationView(count: cluster.restaurants.count)
@@ -249,6 +496,7 @@ struct RestaurantMapView: View {
                     isNavigating: isNavigating,
                     isDestination: isDest,
                     simplified: simplified,
+                    showBubble: showBubble,
                     onSelect: handleRestaurantSelection
                 )
             }
@@ -392,19 +640,38 @@ struct RestaurantMapView: View {
         }
     }
     
-    // MARK: - 退出导航
+    // MARK: - 退出导航（带流畅动画）
     private func exitNavigation() {
-        isNavigating = false
-        route = nil
-        showExitNavigationButton = false
-        navigatingRestaurant = nil
+        // 动画退出导航状态
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            isNavigating = false
+            route = nil
+            showExitNavigationButton = false
+        }
+        
+        // 延迟清除导航餐厅，让动画更流畅
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            navigatingRestaurant = nil
+        }
         
         // 停止定时器
         routeUpdateTimer?.invalidate()
         routeUpdateTimer = nil
         
-        // 恢复底部导航条
-        NotificationCenter.default.post(name: .restoreTabBar, object: nil)
+        // 恢复底部导航条（带延迟动画）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            NotificationCenter.default.post(name: .restoreTabBar, object: nil)
+        }
+        
+        // 恢复相机位置到用户当前位置
+        if let userLocation = locationManager.userLocation {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: userLocation.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                ))
+            }
+        }
     }
     
     // MARK: - 计算路线
@@ -473,29 +740,25 @@ struct RestaurantMapView: View {
         var clusters: [RestaurantCluster] = []
         var processed = Set<UUID>()
         
+        // 使用坐标差值近似计算距离，避免频繁的 CLLocation 计算
+        let clusteringDelta = dynamicClusteringDistance / 111000.0 // 粗略转换为度数（1度≈111km）
+        
         for restaurant in restaurants {
             guard !processed.contains(restaurant.id) else { continue }
             
-            let coordinate = CLLocationCoordinate2D(
-                latitude: restaurant.latitude,
-                longitude: restaurant.longitude
-            )
-            
-            // 找到附近的所有餐厅
+            // 找到附近的所有餐厅（使用简单的坐标差值比较）
             var nearbyRestaurants: [Restaurant] = [restaurant]
             processed.insert(restaurant.id)
             
             for other in restaurants {
                 guard !processed.contains(other.id) else { continue }
                 
-                let otherCoordinate = CLLocationCoordinate2D(
-                    latitude: other.latitude,
-                    longitude: other.longitude
-                )
+                // 简化的距离判断：使用坐标差值近似
+                let latDiff = abs(restaurant.latitude - other.latitude)
+                let lonDiff = abs(restaurant.longitude - other.longitude)
                 
-                let distance = calculateDistance(from: coordinate, to: otherCoordinate)
-                
-                if distance < dynamicClusteringDistance {
+                // 如果在聚类范围内（使用简单的矩形判断代替精确距离）
+                if latDiff < clusteringDelta && lonDiff < clusteringDelta {
                     nearbyRestaurants.append(other)
                     processed.insert(other.id)
                 }
@@ -667,6 +930,9 @@ struct RestaurantMapView: View {
     
     // MARK: - 设置初始相机位置
     private func setupInitialCameraPosition() {
+        // 构建空间索引
+        buildSpatialIndex()
+        
         if let userLocation = locationManager.userLocation {
             updateCameraToUserLocation(userLocation)
         } else if let firstRestaurant = restaurants.first {
@@ -705,6 +971,32 @@ struct RestaurantMapView: View {
         } else {
             initialCenterCoordinate = newCenter
         }
+        
+        // 如果正在滑动，不立即计算，等待滑动停止
+        if isMapDragging {
+            return
+        }
+    }
+    
+    // MARK: - 滑动检测处理
+    private func handleMapDragStart() {
+        isMapDragging = true
+        
+        // 取消之前的计时器
+        dragEndTimer?.invalidate()
+        settleTimer?.invalidate()
+    }
+    
+    private func handleMapDragEnd() {
+        // 延迟标记滑动结束（防止惯性滑动），等待0.75秒后重新开始计算
+        dragEndTimer?.invalidate()
+        dragEndTimer = Timer.scheduledTimer(withTimeInterval: dragEndDelay, repeats: false) { _ in
+            Task { @MainActor in
+                self.isMapDragging = false
+                // 直接触发聚类计算
+                self.scheduleClusteringUpdate()
+            }
+        }
     }
     
     // MARK: - 处理餐厅选择
@@ -724,6 +1016,11 @@ struct RestaurantMapView: View {
     
     // MARK: - 性能优化：聚类计算节流
     private func shouldRecalculateClusters() -> Bool {
+        // 滑动期间不重新计算
+        if isMapDragging {
+            return false
+        }
+        
         guard let currentRegion = visibleRegion,
               let lastRegion = lastClusteringRegion else {
             return true
@@ -741,6 +1038,11 @@ struct RestaurantMapView: View {
     }
     
     private func scheduleClusteringUpdate() {
+        // 如果正在滑动，不执行计算
+        if isMapDragging {
+            return
+        }
+        
         isClusteringPending = true
         
         // 取消之前的定时器
@@ -749,20 +1051,60 @@ struct RestaurantMapView: View {
         // 延迟 0.3 秒后执行聚类计算
         clusteringThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
             Task { @MainActor in
-                self.performClustering()
+                await self.performClusteringAsync()
             }
         }
     }
     
-    private func performClustering() {
-        // 性能优化：限制同时显示的餐厅数量
-        let filtered = filterRestaurants()
-        let limitedRestaurants = Array(filtered.prefix(maxVisibleRestaurants))
-        let clusters = calculateClusters(from: limitedRestaurants)
+    // 异步执行聚类计算，避免阻塞主线程
+    private func performClusteringAsync() async {
+        guard let region = visibleRegion else {
+            isClusteringPending = false
+            return
+        }
         
-        cachedClusters = clusters
-        lastClusteringRegion = visibleRegion
-        isClusteringPending = false
+        let zoomLevel = currentZoomLevel
+        let cacheKey = ClusterCacheKey(region: region, zoomLevel: zoomLevel)
+        
+        // 检查缓存
+        if let cached = clusterCache[cacheKey] {
+            await MainActor.run {
+                self.cachedClusters = cached
+                self.lastClusteringRegion = region
+                self.isClusteringPending = false
+            }
+            return
+        }
+        
+        // 在后台线程执行计算
+        let clusters = await Task.detached(priority: .userInitiated) { () -> [RestaurantCluster] in
+            let filtered = self.filterRestaurants()
+            let limitedRestaurants = Array(filtered.prefix(self.maxVisibleRestaurants))
+            return self.calculateClusters(from: limitedRestaurants)
+        }.value
+        
+        // 更新 UI
+        await MainActor.run {
+            self.cachedClusters = clusters
+            self.lastClusteringRegion = region
+            self.clusterCache[cacheKey] = clusters
+            self.isClusteringPending = false
+            
+            // 限制缓存大小，避免内存溢出
+            if self.clusterCache.count > 50 {
+                self.clusterCache.removeAll(keepingCapacity: true)
+            }
+        }
+    }
+    
+    // 初始化空间索引
+    private func buildSpatialIndex() {
+        Task.detached(priority: .background) {
+            let index = RestaurantSpatialIndex(restaurants: self.restaurants)
+            await MainActor.run {
+                self.spatialIndex = index
+            }
+        }
     }
 }
 
@@ -782,12 +1124,22 @@ struct RestaurantCluster: Identifiable {
 }
 
 // MARK: - 奶脂大头针组件 (GourmetAnnotation)
-struct GourmetAnnotation: View {
+struct GourmetAnnotation: View, Equatable {
+    static func == (lhs: GourmetAnnotation, rhs: GourmetAnnotation) -> Bool {
+        lhs.restaurant.id == rhs.restaurant.id &&
+        lhs.isNavigating == rhs.isNavigating &&
+        lhs.isDestination == rhs.isDestination &&
+        lhs.simplified == rhs.simplified &&
+        lhs.showBubble == rhs.showBubble
+    }
+
     let restaurant: Restaurant
     let isNavigating: Bool
     let isDestination: Bool
     let simplified: Bool  // 简化模式：不显示气泡和名称
-    @State private var isSelected: Bool = false
+    let showBubble: Bool  // 是否显示气泡
+    @State private var appearScale: CGFloat = 0.0
+    @State private var appearOffset: CGFloat = 20
     var onSelect: (Restaurant) -> Void
     
     // 判断是否已打卡
@@ -809,28 +1161,12 @@ struct GourmetAnnotation: View {
         return String(restaurant.review.prefix(maxLength)) + "..."
     }
     
-    // 气泡背景颜色：选中蓝色，未选中白色
-    private var bubbleBackground: some ShapeStyle {
-        if isSelected {
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color(hex: "#89CFF0").opacity(0.85),
-                        Color(hex: "#89CFF0").opacity(0.6)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-        } else {
-            return AnyShapeStyle(Color.white)
-        }
-    }
+
     
     var body: some View {
         VStack(spacing: 0) {
-            // 简化模式：不显示评论气泡
-            if !simplified && !restaurant.review.isEmpty {
+            // 所有餐厅都显示评论气泡（白色背景）
+            if showBubble && !simplified && !restaurant.review.isEmpty {
                 Text(truncatedReview)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(AppTheme.Colors.darkText)
@@ -840,14 +1176,14 @@ struct GourmetAnnotation: View {
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(bubbleBackground)
+                            .fill(Color.white)
                     )
                     .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
-                    .offset(y: -8)
-                    .scaleEffect(isSelected ? 1.05 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+                    .offset(y: -8 + appearOffset * 0.3)
+                    .scaleEffect(appearScale)
+                    .opacity(appearScale)
             }
-            
+
             // 头像层：简化模式下缩小尺寸
             ZStack {
                 // 外圈边框
@@ -855,7 +1191,7 @@ struct GourmetAnnotation: View {
                     .fill(borderColor)
                     .frame(width: simplified ? 36 : 46, height: simplified ? 36 : 46)
                     .shadow(color: Color.black.opacity(0.15), radius: simplified ? 4 : 6, x: 0, y: simplified ? 2 : 3)
-                
+
                 // 封面图 - 简化模式下不加载图片，使用占位符
                 if simplified {
                     // 简化模式：纯色背景 + 图标
@@ -884,22 +1220,24 @@ struct GourmetAnnotation: View {
                     )
                     .frame(width: 40, height: 40)
                     .clipShape(Circle())
-                    .scaleEffect(isSelected ? 1.15 : 1.0)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isSelected)
                 }
-                
+
                 // MARK: - 导航模式下的终点波纹动画
                 if isDestination && isNavigating {
                     RippleAnimation()
                 }
             }
-            
+            .scaleEffect(appearScale)
+            .offset(y: appearOffset)
+
             // 小三角形指针（简化模式下缩小）
             Triangle()
                 .fill(borderColor)
                 .frame(width: simplified ? 8 : 10, height: simplified ? 5 : 6)
-                .offset(y: -1)
-            
+                .offset(y: -1 + appearOffset * 0.5)
+                .scaleEffect(appearScale)
+                .opacity(appearScale)
+
             // 餐厅名称（简化模式下不显示）
             if !simplified {
                 Text(restaurant.name)
@@ -908,18 +1246,29 @@ struct GourmetAnnotation: View {
                     .lineLimit(1)
                     .shadow(color: Color.white, radius: 2, x: 0, y: 0)
                     .padding(.top, 2)
+                    .offset(y: appearOffset * 0.2)
+                    .opacity(appearScale)
+            }
+        }
+        .onAppear {
+            // 生长动画：从地图"生长"出来的效果
+            // 初始状态：缩小、向下偏移
+            appearScale = 0.0
+            appearOffset = 20
+
+            // 延迟执行动画，产生错落感
+            let delay = Double.random(in: 0.0...0.3)
+
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(delay)) {
+                appearScale = 1.0
+                appearOffset = 0
             }
         }
         .onTapGesture {
-            // 任务2：震动反馈
+            // 震动反馈
             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
             impactFeedback.impactOccurred()
-            
-            // 切换选中状态
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                isSelected.toggle()
-            }
-            
+
             // 触发选中回调
             onSelect(restaurant)
         }

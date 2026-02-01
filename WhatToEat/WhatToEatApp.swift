@@ -7,9 +7,21 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
+
+// MARK: - App Delegate (用于配置全局设置)
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        // 仅支持竖屏
+        return .portrait
+    }
+}
 
 @main
 struct WhatToEatApp: App {
+    // 注册 AppDelegate
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Restaurant.self,
@@ -35,7 +47,7 @@ struct WhatToEatApp: App {
         }
         let executableDirectory = (executablePath as NSString).deletingLastPathComponent
         let sourcePath = (executableDirectory as NSString).appendingPathComponent("regions.json")
-        
+
         guard let appSupportDir = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask

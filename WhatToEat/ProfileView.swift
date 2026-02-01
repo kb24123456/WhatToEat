@@ -28,6 +28,9 @@ struct ProfileView: View {
     @State private var newTagInput = ""
     @FocusState private var tagInputIsFocused: Bool
     
+    // MARK: - Keyboard Animation Delay
+    private let keyboardAnimationDelay: TimeInterval = 0.25  // 展开动画完成后再弹出键盘
+    
     // MARK: - 统计数据
     private var totalRestaurants: Int { restaurants.count }
     private var totalCheckIns: Int { restaurants.reduce(0) { $0 + $1.logs.count } }
@@ -40,35 +43,60 @@ struct ProfileView: View {
     }
     
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                // Phase 1: 身份识别与全局勋章
-                glassProfileCard
-                grandStatsDashboard
-                
-                // Phase 2: 数据可视化与偏好分析
-                consumptionAnalysisCard
-                tagsCloudSection
-                top5RestaurantsSection
-                
-                // Phase 3: 打卡时间轴
-                timelineSection
-                
-                // Phase 4: 工具箱、安全与隐私
-                milkyToolList
-                bottomInfo
-                
-                // 键盘避让：编辑标签时增加额外底部空间
-                if isEditingTags {
-                    Color.clear.frame(height: 300)
-                        .transition(.opacity)
+        ScrollViewReader { proxy in
+            ZStack(alignment: .top) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        // Phase 1: 身份识别与全局勋章
+                        glassProfileCard
+                            .padding(.top, 44) // 为顶部模糊条留出空间（安全区+4pt）
+                        grandStatsDashboard
+
+                        // Phase 2: 数据可视化与偏好分析
+                        consumptionAnalysisCard
+                        tagsCloudSection
+                            .id("tagsCloudSection")
+                        top5RestaurantsSection
+
+                        // Phase 3: 打卡时间轴
+                        timelineSection
+
+                        // Phase 4: 工具箱、安全与隐私
+                        milkyToolList
+                        bottomInfo
+
+                        // 键盘避让：标签输入框聚焦时增加额外底部空间
+                        if tagInputIsFocused {
+                            Color.clear.frame(height: 400)
+                                .transition(.opacity)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 40)
                 }
+                .useMilkyDiffuseBackground()
+                // 自动滚动到标签区域当键盘弹出时
+                .onChange(of: tagInputIsFocused) { _, isFocused in
+                    if isFocused {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                // 滚动到标签区域，使其位于键盘上方（使用center减少上移幅度）
+                                proxy.scrollTo("tagsCloudSection", anchor: .center)
+                            }
+                        }
+                    }
+                }
+
+                // 顶部模糊效果条（下边缘=灵动岛下边缘+4pt）
+                GeometryReader { geo in
+                    VisualEffectBlur(blurStyle: .systemMaterial)
+                        .frame(height: geo.safeAreaInsets.top + 4)
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(height: 0) // 不占用布局空间
+                .ignoresSafeArea(edges: .top)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 40)
         }
-        .useMilkyDiffuseBackground()
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView(userProfile: $userProfile)
         }
@@ -97,80 +125,81 @@ struct ProfileView: View {
         Button {
             showingEditProfile = true
         } label: {
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 // 头像
                 ZStack {
                     Circle()
                         .fill(Color.white.opacity(0.5))
-                        .frame(width: 72, height: 72)
-                    
+                        .frame(width: 64, height: 64)
+
                     if let avatarData = userProfile.avatarData,
                        let uiImage = UIImage(data: avatarData) {
                         Image(uiImage: uiImage)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 68, height: 68)
+                            .frame(width: 60, height: 60)
                             .clipShape(Circle())
                     } else {
                         Image(systemName: "person.fill")
-                            .font(.system(size: 32))
+                            .font(.system(size: 28))
                             .foregroundColor(AppTheme.Colors.babyBlue)
                     }
                 }
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    // 昵称
-                    Text(userProfile.nickname)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.darkText)
-                    
+
+                // 中间信息区域
+                VStack(alignment: .leading, spacing: 2) {
+                    // 昵称和箭头在一行
+                    HStack(spacing: 4) {
+                        Text(userProfile.nickname)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.darkText)
+                            .lineLimit(1)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.lighterGray)
+                    }
+
                     // 个性签名
                     if !userProfile.bio.isEmpty {
                         Text(userProfile.bio)
-                            .font(.system(size: 13, design: .rounded))
+                            .font(.system(size: 12, design: .rounded))
                             .foregroundColor(AppTheme.Colors.mediumGray)
                             .lineLimit(1)
                     }
-                    
-                    // 等级勋章 - Baby Blue 渐变边框
-                    LevelBadgeView(level: calculateLevel(), checkIns: totalCheckIns)
-                    
-                    // 加入天数
-                    HStack(spacing: 4) {
-                        Text("加入第")
-                            .font(.system(size: 12, design: .rounded))
+
+                    // 等级勋章和加入天数 - 限制单行
+                    HStack(spacing: 6) {
+                        LevelBadgeView(level: calculateLevel(), checkIns: totalCheckIns)
+                            .lineLimit(1)
+
+                        Text("·")
+                            .font(.system(size: 10))
+                            .foregroundColor(AppTheme.Colors.lightGray)
+
+                        Text("加入第\(joinDays)天")
+                            .font(.system(size: 11, design: .rounded))
                             .foregroundColor(AppTheme.Colors.mediumGray)
-                        Text("\(joinDays)")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.accent)
-                            .contentTransition(.numericText())
-                        Text("天")
-                            .font(.system(size: 12, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.mediumGray)
+                            .lineLimit(1)
                     }
-                    .padding(.top, 2)
                 }
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.lighterGray)
+
+                Spacer(minLength: 8)
+
+                // 右侧显示下一个称号进度
+                NextLevelProgressView(
+                    currentLevel: calculateLevel(),
+                    checkIns: totalCheckIns,
+                    nextLevelRequirement: getNextLevelRequirement()
+                )
             }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color.white.opacity(0.75))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                    )
-            )
+            .padding(16)
         }
+        .cardStyle()
         .buttonStyle(PlainButtonStyle())
         .pressableButton(scale: 0.98)
     }
-    
+
     // MARK: - Phase 1: Grand Stats Dashboard (全局仪表盘)
     private var grandStatsDashboard: some View {
         HStack(spacing: 0) {
@@ -183,16 +212,9 @@ struct ProfileView: View {
             StatCell(value: "\(uniqueCities)", label: "城市", color: AppTheme.Colors.darkText)
         }
         .padding(.vertical, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.75))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                )
-        )
+        .cardStyle()
     }
-    
+
     // MARK: - Phase 2: Consumption Analysis (消费分析)
     private var consumptionAnalysisCard: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -210,16 +232,9 @@ struct ProfileView: View {
             cuisineTypeBars
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.75))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                )
-        )
+        .cardStyle()
     }
-    
+
     // 月度消费趋势折线图
     private var consumptionTrendChart: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -318,16 +333,9 @@ struct ProfileView: View {
                 .padding(.bottom, isEditingTags ? 28 : 0) // 编辑模式下增加底部空间容纳按钮
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.75))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                )
-        )
+        .cardStyle()
     }
-    
+
     // MARK: - 标签区域头部
     private var tagsCloudHeader: some View {
         HStack {
@@ -425,11 +433,9 @@ struct ProfileView: View {
             .onSubmit {
                 addNewTag()
             }
-            .onAppear {
-                tagInputIsFocused = true
-            }
+            // 移除自动聚焦，避免键盘自动弹出
     }
-    
+
     // MARK: - 展示模式标签布局（最多2行）
     private var tagsDisplayLayout: some View {
         LimitedRowsFlowLayout(spacing: 10, maxRows: 2) {
@@ -444,59 +450,27 @@ struct ProfileView: View {
         )
     }
     
-    // MARK: - 标签区域操作按钮（勾叉）- 一半在容器内一半在容器外
+    // MARK: - 标签区域操作按钮（勾叉）- 使用统一组件
     @ViewBuilder
     private var tagsCloudActionButtons: some View {
         if isEditingTags {
-            HStack(spacing: 12) {
-                cancelTagEditButton
-                confirmTagEditButton
-            }
-            .padding(.trailing, 8)
-            .padding(.bottom, 8)
-            .offset(y: 26) // 向下偏移，使按钮一半在容器外
-            .transition(.scale.combined(with: .opacity))
-        }
-    }
-    
-    // MARK: - 取消编辑按钮
-    private var cancelTagEditButton: some View {
-        Button {
-            withAnimation(AppTheme.Animations.editingSpring) {
-                isEditingTags = false
-                newTagInput = ""
-            }
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(AppTheme.Colors.darkBackground)
-                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                )
-        }
-    }
-    
-    // MARK: - 确认编辑按钮
-    private var confirmTagEditButton: some View {
-        Button {
-            withAnimation(AppTheme.Animations.editingSpring) {
-                saveTags()
-                isEditingTags = false
-                newTagInput = ""
-            }
-        } label: {
-            Image(systemName: "checkmark")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(AppTheme.Colors.accent)
-                        .shadow(color: AppTheme.Shadows.elevated.color, radius: 8, x: 0, y: 4)
-                )
+            EditActionButtons(
+                onCancel: {
+                    withAnimation(AppTheme.Animations.editingSpring) {
+                        isEditingTags = false
+                        newTagInput = ""
+                    }
+                },
+                onConfirm: {
+                    withAnimation(AppTheme.Animations.editingSpring) {
+                        saveTags()
+                        isEditingTags = false
+                        newTagInput = ""
+                    }
+                }
+            )
+            .padding(.trailing, 12)
+            .padding(.bottom, 12)
         }
     }
     
@@ -618,16 +592,9 @@ struct ProfileView: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.75))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                )
-        )
+        .cardStyle()
     }
-    
+
     // MARK: - Phase 3: Timeline (美食足迹时间轴)
     private var timelineSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -662,14 +629,7 @@ struct ProfileView: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.75))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                )
-        )
+        .cardStyle()
         .sheet(isPresented: $showCheckInHistory) {
             CheckInHistoryView()
         }
@@ -779,7 +739,19 @@ struct ProfileView: View {
         if totalCheckIns >= 10 { return 2 }
         return 1
     }
-    
+
+    // 获取下一级所需打卡数
+    private func getNextLevelRequirement() -> Int {
+        let level = calculateLevel()
+        switch level {
+        case 1: return 10
+        case 2: return 50
+        case 3: return 100
+        case 4: return 500
+        default: return 500 // 已满级
+        }
+    }
+
     private func formatCurrency(_ value: Double) -> String {
         if value >= 10000 {
             return String(format: "¥%.1fk", value / 1000)
@@ -912,6 +884,90 @@ struct LevelBadgeView: View {
                     lineWidth: info.hasGoldRim ? 1.5 : 1
                 )
         )
+    }
+}
+
+// MARK: - Next Level Progress View (下一级进度视图)
+struct NextLevelProgressView: View {
+    let currentLevel: Int
+    let checkIns: Int
+    let nextLevelRequirement: Int
+
+    var progress: Double {
+        if currentLevel >= 5 { return 1.0 }
+        let prevLevelRequirement = getPrevLevelRequirement()
+        let progressInCurrentLevel = Double(checkIns - prevLevelRequirement)
+        let levelRange = Double(nextLevelRequirement - prevLevelRequirement)
+        return min(progressInCurrentLevel / levelRange, 1.0)
+    }
+
+    var nextLevelName: String {
+        switch currentLevel {
+        case 1: return "吃货练习生"
+        case 2: return "资深吃货"
+        case 3: return "美食家"
+        case 4: return "米其林猎手"
+        default: return "已满级"
+        }
+    }
+
+    private func getPrevLevelRequirement() -> Int {
+        switch currentLevel {
+        case 1: return 0
+        case 2: return 10
+        case 3: return 50
+        case 4: return 100
+        default: return 500
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            if currentLevel >= 5 {
+                // 已满级
+                HStack(spacing: 2) {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.yellow)
+                    Text("已满级")
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
+                }
+            } else {
+                // 显示下一级名称
+                Text(nextLevelName)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+
+                // 进度条
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        // 背景
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(AppTheme.Colors.warmGray)
+                            .frame(height: 4)
+
+                        // 进度
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(
+                                LinearGradient(
+                                    colors: [AppTheme.Colors.babyBlue, AppTheme.Colors.babyBlue.opacity(0.7)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: geo.size.width * progress, height: 4)
+                    }
+                }
+                .frame(width: 60, height: 4)
+
+                // 剩余打卡数
+                Text("还需 \(nextLevelRequirement - checkIns) 次打卡")
+                    .font(.system(size: 9, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.lightText)
+            }
+        }
+        .frame(width: 80)
     }
 }
 

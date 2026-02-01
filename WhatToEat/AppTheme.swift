@@ -134,20 +134,20 @@ struct AppTheme {
     struct Card {
         /// 卡片背景色：纯白实色
         static let background = Color.white
-        
+
         /// 卡片圆角：28pt (continuous 风格)
         static let cornerRadius: CGFloat = 28
-        
+
         /// 卡片内边距：16pt
         static let padding: CGFloat = 16
-        
+
         /// 卡片间距：12pt
         static let spacing: CGFloat = 12
-        
+
         /// 边缘高光：白色描边，增强物理厚度感
         static let rimLight = Color.white.opacity(0.8)
         static let rimLightWidth: CGFloat = 0.5
-        
+
         /// 双层阴影系统
         struct Shadow {
             /// 底层环境光：大范围柔和阴影
@@ -165,9 +165,43 @@ struct AppTheme {
                 y: CGFloat(2)
             )
         }
-        
+
         /// 内部输入框背景：极浅色，产生下陷感
         static let insetBackground = Color(hex: "#F0F2F5")
+
+        /// 轻量级立体感卡片样式 - 统一应用到所有卡片
+        static func standardStyle() -> some ViewModifier {
+            CardStandardStyle()
+        }
+    }
+
+    /// 标准卡片样式修饰符 - 轻量级立体感
+    struct CardStandardStyle: ViewModifier {
+        func body(content: Content) -> some View {
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: Card.cornerRadius, style: .continuous)
+                        .fill(Card.background)
+                        // 内阴影效果 - 增加厚度感
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Card.cornerRadius, style: .continuous)
+                                .stroke(Card.rimLight, lineWidth: Card.rimLightWidth)
+                        )
+                )
+                // 轻量级双层阴影
+                .shadow(
+                    color: Card.Shadow.ambient.color,
+                    radius: Card.Shadow.ambient.radius,
+                    x: Card.Shadow.ambient.x,
+                    y: Card.Shadow.ambient.y
+                )
+                .shadow(
+                    color: Card.Shadow.defining.color,
+                    radius: Card.Shadow.defining.radius,
+                    x: Card.Shadow.defining.x,
+                    y: Card.Shadow.defining.y
+                )
+        }
     }
     
     // MARK: - 2. 字体预设
@@ -325,9 +359,15 @@ extension View {
     func withFocusedInputEffects(isFocused: FocusState<Bool>.Binding) -> some View {
         self.modifier(FocusedInputEffectModifier(isFocused: isFocused))
     }
-    
+
     func withHapticFeedback() -> some View {
         self.modifier(HapticFeedbackModifier())
+    }
+
+    /// 应用标准卡片样式 - 轻量级立体感
+    /// 统一应用到所有卡片，保持全局一致性
+    func cardStyle() -> some View {
+        self.modifier(AppTheme.CardStandardStyle())
     }
     
     /// 强制收起键盘

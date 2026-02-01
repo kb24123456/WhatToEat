@@ -80,72 +80,76 @@ struct GourmetMatchView: View {
         }
     }
     
-    // MARK: - 顶部筛选器 (与 LibraryView 一致)
+    // MARK: - 顶部筛选器 (与 LibraryView 完全一致)
     private var filterBar: some View {
         HStack(spacing: 12) {
-            // 地区筛选器 - 使用 Button 触发 Menu
+            // 1. 地区筛选
             Menu {
-                ForEach(districts, id: \.self) { district in
-                    Button {
-                        selectedDistrict = district
-                    } label: {
-                        Text(district)
-                    }
+                // 全区选项
+                Button("全区") { selectedDistrict = "全部" }
+                Divider()
+                // 动态获取区列表
+                ForEach(districts.filter { $0 != "全部" }, id: \.self) { district in
+                    Button(district) { selectedDistrict = district }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(selectedDistrict)
-                        .font(.system(size: 13, weight: .medium))
+                HStack {
+                    Text(selectedDistrict == "全部" ? "地区" : selectedDistrict)
+                        .font(AppTheme.Fonts.footnote)
+                        .fontWeight(.medium)
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     Image(systemName: "chevron.down")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                        .symbolRenderingMode(.hierarchical)
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white.opacity(0.35))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                        .fill(AppTheme.Colors.card)
+                        .shadow(
+                            color: Color.black.opacity(0.05),
+                            radius: 5,
+                            x: 0,
+                            y: 2
                         )
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
             }
+            .buttonStyle(.plain)
             
-            // 品类筛选器 - 使用 Button 触发 Menu
+            // 2. 分类筛选
             Menu {
-                ForEach(types, id: \.self) { type in
-                    Button {
-                        selectedType = type
-                    } label: {
-                        Text(type)
-                    }
+                // 全部分类选项
+                Button("全部分类") { selectedType = "全部" }
+                Divider()
+                // 动态获取所有餐厅类型
+                ForEach(types.filter { $0 != "全部" }, id: \.self) { type in
+                    Button(type) { selectedType = type }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(selectedType)
-                        .font(.system(size: 13, weight: .medium))
+                HStack {
+                    Text(selectedType == "全部" ? "品类" : selectedType)
+                        .font(AppTheme.Fonts.footnote)
+                        .fontWeight(.medium)
                         .foregroundColor(AppTheme.Colors.textPrimary)
                     Image(systemName: "chevron.down")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                        .symbolRenderingMode(.hierarchical)
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white.opacity(0.35))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
+                        .fill(AppTheme.Colors.card)
+                        .shadow(
+                            color: Color.black.opacity(0.05),
+                            radius: 5,
+                            x: 0,
+                            y: 2
                         )
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
             }
+            .buttonStyle(.plain)
             
             Spacer()
         }

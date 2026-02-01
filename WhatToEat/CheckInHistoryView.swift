@@ -175,14 +175,7 @@ struct CheckInHistoryView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 80)
-        .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.35))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                )
-        )
+        .cardStyle()
     }
     
     // MARK: - Check In Log Card (优化版)
@@ -306,15 +299,7 @@ struct CheckInHistoryView: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.5))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.6), lineWidth: 1)
-                )
-        )
-        .shadow(color: Color.black.opacity(0.04), radius: 16, x: 0, y: 6)
+        .cardStyle()
         .contextMenu {
             Button {
                 logToEdit = item.log

@@ -37,6 +37,7 @@ enum MoodType: String, CaseIterable {
 
 struct CheckInView: View {
     @Environment(\.modelContext) private var modelContext
+    @FocusState private var expenseFieldIsFocused: Bool
     
     let restaurant: Restaurant
     var editingLog: VisitLog? = nil
@@ -364,6 +365,16 @@ struct CheckInView: View {
                     .foregroundColor(AppTheme.Colors.darkText)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.leading)
+                    .focused($expenseFieldIsFocused)
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("完成") {
+                                expenseFieldIsFocused = false
+                            }
+                            .foregroundColor(AppTheme.Colors.accent)
+                        }
+                    }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
@@ -457,6 +468,7 @@ struct CheckInView: View {
             TextField(placeholder, text: inputText)
                 .font(.system(size: 14))
                 .autocorrectionDisabled()
+                .submitLabel(.done)
                 .padding(.vertical, 8)
                 .onSubmit {
                     triggerHaptic()

@@ -60,6 +60,9 @@ struct AddRestaurantView: View {
     @FocusState private var reviewIsFocused: Bool
     @FocusState private var tagInputIsFocused: Bool
     
+    // MARK: - Keyboard Animation Delay
+    private let keyboardAnimationDelay: TimeInterval = 0.25  // 展开动画完成后再弹出键盘
+    
     // MARK: - Category Match Status
     enum MatchStatus: Equatable {
         case none
@@ -91,13 +94,6 @@ struct AddRestaurantView: View {
                 backgroundGradient
                 
                 scrollContent(geometry: geometry)
-                    .safeAreaInset(edge: .bottom) {
-                        // 保存按钮放入 safeAreaInset，ScrollView 会自动避开
-                        saveButton
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 30)
-                            .padding(.top, 10)
-                    }
                 
                 // Confetti 特效
                 if showConfetti {
@@ -110,6 +106,8 @@ struct AddRestaurantView: View {
                     .padding(.top, 20)
                     .padding(.leading, 20)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                
+
             }
             // 添加下滑返回手势
             .gesture(
@@ -208,7 +206,12 @@ struct AddRestaurantView: View {
                             }
                         }
                     
-                    Spacer().frame(height: 120)
+                    // 保存按钮放在标签栏下方
+                    saveButton
+                        .padding(.top, 20)
+                        .padding(.bottom, 40)
+
+                    Spacer().frame(height: 40)
                 }
                 .padding(.horizontal, 20)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -217,7 +220,7 @@ struct AddRestaurantView: View {
         .offset(y: isAppeared ? 0 : 50)
         .opacity(isAppeared ? 1 : 0)
     }
-    
+
     // MARK: - 完整餐厅卡片（包含所有信息）
     private var completeRestaurantCard: some View {
         VStack(spacing: 0) {
@@ -261,18 +264,9 @@ struct AddRestaurantView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white.opacity(0.5))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.white.opacity(0.6), lineWidth: 1)
-                )
-        )
-        .shadow(color: Color.black.opacity(0.04), radius: 20, x: 0, y: 8)
-        .shadow(color: Color.black.opacity(0.02), radius: 8, x: 0, y: 2)
+        .cardStyle()
         .overlay(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
                 .stroke(highlightName ? AppTheme.Colors.success.opacity(0.3) : Color.clear, lineWidth: 2)
         )
         .animation(AppTheme.Animations.quickSpring, value: highlightName)
@@ -532,39 +526,40 @@ struct AddRestaurantView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.accent)
-                
+
                 Text("智能搜索：输入店名，一键填充所有信息")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.Colors.moodTerrible)
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.ultraLightGray)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
-            .background(
-                Capsule()
-                    .fill(Color.white.opacity(0.35))
-                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
-                    .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
-            )
-            .overlay(
-                Capsule()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.8), Color.white.opacity(0.4)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
         }
         .buttonStyle(ScaleButtonStyle())
+        .cardStyle()
+        // 呼吸感高亮指示 - 引导用户输入
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
+                .stroke(
+                    AppTheme.Colors.accent.opacity(breathingOpacity),
+                    lineWidth: 2
+                )
+        )
+        .onAppear {
+            // 启动呼吸动画
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                breathingOpacity = 0.3
+            }
+        }
     }
+
+    // 呼吸动画状态
+    @State private var breathingOpacity: Double = 0.1
     
     // MARK: - 评分、评价、标签一体化容器
     private var unifiedInputSection: some View {
@@ -581,16 +576,9 @@ struct AddRestaurantView: View {
             unifiedTagsRow
                 .padding(.vertical, 20)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white.opacity(0.35))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                )
-        )
+        .cardStyle()
     }
-    
+
     // MARK: - 评分行（带立体质感星星）
     private var unifiedRatingRow: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -665,9 +653,7 @@ struct AddRestaurantView: View {
                                 .padding(20)
                                 .padding(.bottom, 10)
                                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                                .onAppear {
-                                    reviewIsFocused = true
-                                }
+                                // 移除自动聚焦，避免键盘自动弹出
                                 .onDisappear {
                                     reviewIsFocused = false
                                 }
@@ -687,29 +673,29 @@ struct AddRestaurantView: View {
                 .id(isEditingReview)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(AppTheme.Colors.softBackground.opacity(isEditingReview ? 0.5 : 0.3))
+                        .fill(Color.white)
+                        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+                        .shadow(color: Color.black.opacity(0.02), radius: 2, x: 0, y: 1)
                 )
                 
-                // 勾叉按钮（压在容器下边缘，一半在内一半在外）
+                // 勾叉按钮（使用统一组件）
                 if isEditingReview {
-                    HStack(spacing: 12) {
-                        cancelBubble {
+                    EditActionButtons(
+                        onCancel: {
                             withAnimation(AppTheme.Animations.editingSpring) {
                                 isEditingReview = false
                                 editedReview = review
                             }
-                        }
-                        
-                        saveBubble {
+                        },
+                        onConfirm: {
                             withAnimation(AppTheme.Animations.editingSpring) {
                                 review = editedReview
                                 isEditingReview = false
                             }
                         }
-                    }
+                    )
                     .padding(.trailing, 12)
-                    .offset(y: 24)
-                    .transition(.scale.combined(with: .opacity))
+                    .padding(.bottom, 12)
                 }
             }
             .animation(AppTheme.Animations.standardSpring, value: isEditingReview)
@@ -754,24 +740,24 @@ struct AddRestaurantView: View {
                                 .onSubmit {
                                     addNewTag()
                                 }
-                                .onAppear {
-                                    tagInputIsFocused = true
-                                }
-                        } else if selectedTags.isEmpty {
-                            Text("点击添加标签...")
-                                .font(.system(size: 14))
-                                .foregroundColor(Color(hex: "#BBBBBB"))
-                                .padding(.vertical, 8)
-                        }
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(AppTheme.Colors.softBackground.opacity(isEditingTags ? 0.5 : 0.3))
-                    )
-                    
-                    // 编辑状态下的推荐标签
-                    if isEditingTags {
+                                // 移除自动聚焦，避免键盘自动弹出
+                } else if selectedTags.isEmpty {
+                    Text("点击添加标签...")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "#BBBBBB"))
+                        .padding(.vertical, 8)
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+                    .shadow(color: Color.black.opacity(0.02), radius: 2, x: 0, y: 1)
+            )
+
+            // 编辑状态下的推荐标签
+            if isEditingTags {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("推荐标签")
                                 .font(.system(size: 12, weight: .medium))
@@ -789,26 +775,24 @@ struct AddRestaurantView: View {
                 }
                 .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
                 
-                // 勾叉按钮（压在容器下边缘，一半在内一半在外）
+                // 勾叉按钮（使用统一组件）
                 if isEditingTags {
-                    HStack(spacing: 12) {
-                        cancelBubble {
+                    EditActionButtons(
+                        onCancel: {
+                            withAnimation(AppTheme.Animations.editingSpring) {
+                                isEditingTags = false
+                                newTagInput = ""
+                            }
+                        },
+                        onConfirm: {
                             withAnimation(AppTheme.Animations.editingSpring) {
                                 isEditingTags = false
                                 newTagInput = ""
                             }
                         }
-                        
-                        saveBubble {
-                            withAnimation(AppTheme.Animations.editingSpring) {
-                                isEditingTags = false
-                                newTagInput = ""
-                            }
-                        }
-                    }
+                    )
                     .padding(.trailing, 12)
-                    .offset(y: 24)
-                    .transition(.scale.combined(with: .opacity))
+                    .padding(.bottom, 12)
                 }
             }
             .onTapGesture {
@@ -897,25 +881,22 @@ struct AddRestaurantView: View {
     }
 
     private var reviewBubbleButtons: some View {
-        HStack(spacing: 12) {
-            cancelBubble {
+        EditActionButtons(
+            onCancel: {
                 withAnimation(AppTheme.Animations.editingSpring) {
                     isEditingReview = false
                     editedReview = review
                 }
-            }
-
-            saveBubble {
+            },
+            onConfirm: {
                 withAnimation(AppTheme.Animations.editingSpring) {
                     review = editedReview
                     isEditingReview = false
                 }
             }
-        }
-        .padding(.trailing, 16)
-        .offset(y: 18)
-        .transition(.scale.combined(with: .opacity))
-        .animation(AppTheme.Animations.standardSpring, value: isEditingReview)
+        )
+        .padding(.trailing, 12)
+        .padding(.bottom, 12)
     }
     
     @ViewBuilder
@@ -932,9 +913,7 @@ struct AddRestaurantView: View {
                     .padding(20)
                     .padding(.bottom, 10)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    .onAppear {
-                        reviewIsFocused = true
-                    }
+                    // 移除自动聚焦，避免键盘自动弹出
                     .onDisappear {
                         reviewIsFocused = false
                     }
@@ -980,25 +959,22 @@ struct AddRestaurantView: View {
     }
 
     private var tagsBubbleButtons: some View {
-        HStack(spacing: 12) {
-            cancelBubble {
+        EditActionButtons(
+            onCancel: {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    isEditingTags = false
+                    newTagInput = ""
+                }
+            },
+            onConfirm: {
                 withAnimation(AppTheme.Animations.editingSpring) {
                     isEditingTags = false
                     newTagInput = ""
                 }
             }
-
-            saveBubble {
-                withAnimation(AppTheme.Animations.editingSpring) {
-                    isEditingTags = false
-                    newTagInput = ""
-                }
-            }
-        }
-        .padding(.trailing, 16)
-        .offset(y: 18)
-        .transition(.scale.combined(with: .opacity))
-        .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
+        )
+        .padding(.trailing, 12)
+        .padding(.bottom, 12)
     }
 
     private var tagsCardContent: some View {
@@ -1041,9 +1017,7 @@ struct AddRestaurantView: View {
                     .onSubmit {
                         addNewTag()
                     }
-                    .onAppear {
-                        tagInputIsFocused = true
-                    }
+                    // 移除自动聚焦，避免键盘自动弹出
             } else if selectedTags.isEmpty {
                 Text("点击添加标签...")
                     .font(.system(size: 14))
@@ -1052,7 +1026,7 @@ struct AddRestaurantView: View {
             }
         }
     }
-    
+
     private var presetTagsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("推荐标签")
@@ -1144,35 +1118,6 @@ struct AddRestaurantView: View {
         .buttonStyle(ScaleButtonStyle())
         .disabled(name.isEmpty)
         .opacity(name.isEmpty ? 0.6 : 1.0)
-    }
-    
-    // MARK: - Bubble Buttons
-    private func cancelBubble(action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(AppTheme.Colors.darkBackground)
-                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                )
-        }
-    }
-    
-    private func saveBubble(action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(AppTheme.Colors.accent)
-                        .shadow(color: AppTheme.Shadows.elevated.color, radius: 8, x: 0, y: 4)
-                )
-        }
     }
     
     // MARK: - Helper Methods

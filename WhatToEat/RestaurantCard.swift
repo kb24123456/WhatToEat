@@ -44,18 +44,7 @@ struct RestaurantCard: View {
         }
         .contentShape(Rectangle())
         .padding(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
-        .background(cardBackground)
-        .shadow(color: Color.black.opacity(0.04), radius: 20, x: 0, y: 10)
-        .shadow(color: Color.black.opacity(0.06), radius: 5, x: 0, y: 2)
-    }
-    
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .fill(Color.white.opacity(0.75))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
-            )
+        .cardStyle()
     }
     
     private var coverImage: some View {
@@ -85,17 +74,7 @@ struct RestaurantCard: View {
                     ))
             )
             .overlay(RoundedRectangle(cornerRadius: AppTheme.Radius.image).stroke(Color.white.opacity(0.8), lineWidth: 1.2))
-            
-            Rectangle()
-                .fill(.white.opacity(0.4))
-                .frame(width: 35, height: 10)
-                .rotationEffect(.degrees(-15))
-                .offset(x: -25, y: -18)
-                .blur(radius: 0.5)
-                .shadow(color: Color.black.opacity(0.03), radius: 1, x: 0, y: 1)
         }
-        .scaleEffect(1.02)
-        .rotationEffect(.degrees(-1.5))
         .shadow(color: Color.black.opacity(0.03), radius: 6, x: 4, y: 6)
     }
     
@@ -109,22 +88,21 @@ struct RestaurantCard: View {
     private var infoContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(restaurant.name)
-                .font(AppTheme.Fonts.title3)
-                .bold()
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .matchedGeometryEffect(id: "title-\(restaurant.id)", in: animation)
-            
-            Color.clear.frame(height: 14)
-            
+
+            Color.clear.frame(height: 12)
+
             metaInfo
-            
-            Color.clear.frame(height: 8)
-            
+
+            Color.clear.frame(height: 6)
+
             tagsRow
-            
-            Color.clear.frame(height: 8)
-            
+
+            Color.clear.frame(height: 6)
+
             if !restaurant.review.isEmpty {
                 reviewView
             }
@@ -133,31 +111,31 @@ struct RestaurantCard: View {
     }
     
     private var metaInfo: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
+        HStack(spacing: AppTheme.Spacing.sm) {
             Text(priceText)
-                .font(AppTheme.Fonts.subheadline)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.price)
                 .matchedGeometryEffect(id: "price-\(restaurant.id)", in: animation)
-            
+
             Text(restaurant.district)
-                .font(AppTheme.Fonts.subheadline)
-                .foregroundColor(AppTheme.Colors.textSecondary)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundColor(Color(hex: "#6B7280"))
                 .matchedGeometryEffect(id: "district-\(restaurant.id)", in: animation)
-            
+
             if let userLocation = locationManager.userLocation {
                 Text(distanceText(from: userLocation, to: restaurant))
-                    .font(AppTheme.Fonts.subheadline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(Color(hex: "#6B7280"))
                     .lineLimit(1)
             } else {
                 Text("未定位")
-                    .font(AppTheme.Fonts.subheadline)
-                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(Color(hex: "#6B7280"))
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
         .background(metaBackground)
         .matchedGeometryEffect(id: "meta-\(restaurant.id)", in: animation)
     }
@@ -177,8 +155,8 @@ struct RestaurantCard: View {
                 .matchedGeometryEffect(id: "rating-\(restaurant.id)", in: animation)
             
             Text(restaurant.type)
-                .font(AppTheme.Fonts.callout)
-                .foregroundColor(AppTheme.Colors.textSecondary)
+                .font(.system(size: 12, weight: .regular, design: .rounded))
+                .foregroundColor(Color(hex: "#6B7280"))
                 .matchedGeometryEffect(id: "type-\(restaurant.id)", in: animation)
             
             ForEach(restaurant.tags.prefix(2), id: \.self) { tag in
@@ -191,37 +169,33 @@ struct RestaurantCard: View {
     private var ratingView: some View {
         HStack(spacing: 2) {
             Image(systemName: "star.fill")
-                .font(.system(size: 16))
+                .font(.system(size: 11))
                 .foregroundColor(AppTheme.Colors.secondary)
                 .symbolRenderingMode(.hierarchical)
             Text("\(Int(restaurant.rating))")
-                .font(AppTheme.Fonts.callout)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.secondary)
-                .bold()
         }
     }
     
     private var reviewView: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Rectangle()
                 .fill(AppTheme.Colors.accent)
-                .frame(width: 1.5)
-                .cornerRadius(1)
-                .shadow(color: AppTheme.Colors.accent.opacity(0.2), radius: 1.5, x: 0, y: 0)
-            
+                .frame(width: 1.5, height: 12)
+                .cornerRadius(0.75)
+
             Text("\(restaurant.review)")
-                .font(AppTheme.Fonts.callout)
-                .foregroundColor(AppTheme.Colors.textSecondary)
+                .font(.system(size: 12, weight: .regular, design: .rounded))
+                .foregroundColor(Color(hex: "#6B7280"))
                 .lineLimit(1)
                 .multilineTextAlignment(.leading)
-                .fontWeight(.medium)
-                .tracking(0.5)
+                .tracking(0.3)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background(AppTheme.Colors.lightGray.opacity(0.5))
-        .cornerRadius(AppTheme.Radius.base)
-        .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
+        .cornerRadius(6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .matchedGeometryEffect(id: "review-\(restaurant.id)", in: animation)
     }
@@ -258,9 +232,10 @@ private struct TagView: View {
     
     var body: some View {
         Text(tag)
-            .font(AppTheme.Fonts.callout)
+            .font(.system(size: 11, weight: .medium, design: .rounded))
             .foregroundColor(Color(hex: "#89CFF0"))
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
             .background(
                 Capsule()
                     .fill(Color(hex: "#89CFF0").opacity(0.1))

@@ -89,14 +89,6 @@ extension View {
 }
 
 // MARK: - 自定义按钮样式
-struct ScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
 // MARK: - 主视图
 struct RestaurantDetailView: View {
     let restaurant: Restaurant
@@ -121,32 +113,48 @@ struct RestaurantDetailView: View {
     @State private var newTagInput = ""
     @FocusState private var tagInputIsFocused: Bool
     
+    // MARK: - Keyboard Animation Delay
+    private let keyboardAnimationDelay: TimeInterval = 0.25  // 展开动画完成后再弹出键盘
+    
     @State private var animateOffset: CGFloat = 500
     
     // MARK: - Animation States
     @State private var isAnimated = false
     @State private var cardScale: CGFloat = 1.0
-    
+
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
                 backgroundGradient
                     .ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        heroSection
-                            .padding(.horizontal, 20)
-                            .padding(.top, 8 + geometry.safeAreaInsets.top)
-                            .padding(.bottom, 16)
-                        
-                        // Bottom Lists with staggered slide-up animation
-                        bottomContentSection
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 100)
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            heroSection
+                                .padding(.horizontal, 20)
+                                .padding(.top, 20 + geometry.safeAreaInsets.top)
+                                .padding(.bottom, 16)
+
+                            // Bottom Lists with staggered slide-up animation
+                            bottomContentSection
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, isEditingTags ? 400 : 100)
+                        }
+                    }
+                    .ignoresSafeArea(edges: .top)
+                    // 标签编辑时自动滚动到标签区域
+                    .onChange(of: isEditingTags) { _, isEditing in
+                        if isEditing {
+                            // 延迟等待布局完成
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                withAnimation(.easeInOut(duration: 0.4)) {
+                                    proxy.scrollTo("tagsSection", anchor: .top)
+                                }
+                            }
+                        }
                     }
                 }
-                .ignoresSafeArea(edges: .top)
             }
             .offset(y: animateOffset)
             .animation(
@@ -162,14 +170,14 @@ struct RestaurantDetailView: View {
     private var bottomContentSection: some View {
         VStack(alignment: .leading, spacing: 32) {
             unifiedInfoSection
-                .offset(y: isAnimated ? 0 : 40)
-                .opacity(isAnimated ? 1 : 0)
-                .animation(AppTheme.Animations.staggeredEntrance(index: 3), value: isAnimated)
-            
+                .offset(y: animateOffset == 0 ? 0 : 40)
+                .opacity(animateOffset == 0 ? 1 : 0)
+                .animation(AppTheme.Animations.staggeredEntrance(index: 1), value: animateOffset)
+
             checkInHistorySection
-                .offset(y: isAnimated ? 0 : 40)
-                .opacity(isAnimated ? 1 : 0)
-                .animation(AppTheme.Animations.staggeredEntrance(index: 6), value: isAnimated)
+                .offset(y: animateOffset == 0 ? 0 : 40)
+                .opacity(animateOffset == 0 ? 1 : 0)
+                .animation(AppTheme.Animations.staggeredEntrance(index: 2), value: animateOffset)
         }
         .onAppear {
             animateOffset = 0
@@ -268,7 +276,7 @@ struct RestaurantDetailView: View {
                 RoundedRectangle(cornerRadius: 32, style: .continuous)
                     .stroke(AppTheme.Colors.rimLight, lineWidth: 1.5)
             )
-            .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 10)
+            .cardStyle()
         }
 
     // Hero Card Embedded Info
@@ -309,13 +317,9 @@ struct RestaurantDetailView: View {
         private var heroSection: some View {
             heroCardContent
                 .frame(height: 320)
-                .offset(y: isAnimated ? 0 : 50)
-                .opacity(isAnimated ? 1 : 0)
-                .onAppear {
-                    withAnimation(AppTheme.Animations.standardSpring) {
-                        isAnimated = true
-                    }
-                }
+                // 与页面整体动画同步，使用相同的 animateOffset
+                .opacity(animateOffset == 0 ? 1 : 0)
+                .scaleEffect(animateOffset == 0 ? 1.0 : 0.95)
                 .onTapGesture {
                     showActionSheet = true
                 }
@@ -360,15 +364,9 @@ struct RestaurantDetailView: View {
             // 3. 标签区域（保留编辑动效）
             unifiedTagsRow
                 .padding(.vertical, 16)
+                .id("tagsSection")
         }
-        .background(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white.opacity(0.35))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                )
-        )
+        .cardStyle()
     }
 
     // MARK: - 统计行
@@ -395,62 +393,62 @@ struct RestaurantDetailView: View {
         .padding(.horizontal, 4)
     }
     
-    // MARK: - 点评行（保留编辑动效）
+    // MARK: - 点评行（深色胶囊背景）
     private var unifiedReviewRow: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("一句话点评")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(AppTheme.Colors.darkText)
                 .padding(.horizontal, 20)
-            
+
             // 点评内容（可点击编辑）
-             ZStack(alignment: .bottomTrailing) {
-                 VStack(spacing: 0) {
-                     if isEditingReview {
-                         ZStack(alignment: .center) {
-                             TextField(restaurant.review.isEmpty ? "添加你的点评..." : restaurant.review, text: $editedReview, axis: .vertical)
-                                 .font(.body)
-                                 .foregroundColor(AppTheme.Colors.brownText)
-                                 .lineSpacing(4)
-                                 .multilineTextAlignment(.center)
-                                 .focused($reviewIsFocused)
-                                 .scrollContentBackground(.hidden)
-                                 .padding(20)
-                                 .padding(.bottom, 10)
-                                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                                 .onAppear {
-                                     reviewIsFocused = true
-                                 }
-                                 .onDisappear {
-                                     reviewIsFocused = false
-                                 }
-                         }
-                         .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
-                     } else {
-                         Text(restaurant.review.isEmpty ? "点击添加点评..." : restaurant.review)
-                             .font(.body)
-                             .foregroundColor(restaurant.review.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.mediumGray)
-                             .lineSpacing(4)
-                             .padding(16)
-                             .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
-                             .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                     }
-                 }
-                 .frame(minHeight: isEditingReview ? 150 : 60)
-                 .id(isEditingReview)
-                 .background(
-                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                         .fill(AppTheme.Colors.softBackground.opacity(isEditingReview ? 0.5 : 0.3))
-                 )
-                
-                // 勾叉按钮（压在容器下边缘，一半在内一半在外）
-                bubbleButtons(
-                    isEditing: isEditingReview,
-                    onSave: saveReview,
-                    onCancel: cancelReview
+            ZStack(alignment: .bottomTrailing) {
+                VStack(spacing: 0) {
+                    if isEditingReview {
+                        ZStack(alignment: .center) {
+                            TextField(restaurant.review.isEmpty ? "添加你的点评..." : restaurant.review, text: $editedReview, axis: .vertical)
+                                .font(.body)
+                                .foregroundColor(AppTheme.Colors.brownText)
+                                .lineSpacing(4)
+                                .multilineTextAlignment(.center)
+                                .focused($reviewIsFocused)
+                                .scrollContentBackground(.hidden)
+                                .padding(20)
+                                .padding(.bottom, 10)
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                                // 移除自动聚焦，避免键盘自动弹出
+                                .onDisappear {
+                                    reviewIsFocused = false
+                                }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
+                    } else {
+                        Text(restaurant.review.isEmpty ? "点击添加点评..." : restaurant.review)
+                            .font(.body)
+                            .foregroundColor(restaurant.review.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.mediumGray)
+                            .lineSpacing(4)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    }
+                }
+                .frame(minHeight: isEditingReview ? 150 : 48)
+                .id(isEditingReview)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppTheme.Colors.warmGray)
                 )
-                .padding(.trailing, 12)
-                .offset(y: 24) // 向下偏移24pt，一半在容器内，一半在容器外
+
+                // 勾叉按钮（使用统一组件）
+                if isEditingReview {
+                    EditActionButtons(
+                        onCancel: cancelReview,
+                        onConfirm: saveReview
+                    )
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 12)
+                }
             }
             .padding(.horizontal, 20)
             .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
@@ -465,85 +463,131 @@ struct RestaurantDetailView: View {
         }
     }
     
-    // MARK: - 标签行（保留编辑动效）
+    // MARK: - 标签区域（完全使用 ProfileView 的实现逻辑）
     private var unifiedTagsRow: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("标签")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(AppTheme.Colors.darkText)
                 .padding(.horizontal, 20)
-            
+
             // 标签内容（可点击编辑）
             ZStack(alignment: .bottomTrailing) {
-                VStack(spacing: 12) {
-                    FlowLayout(spacing: 10) {
-                        ForEach(restaurant.tags, id: \.self) { tag in
-                            tagSticker(tag: tag, isEditing: isEditingTags)
-                        }
-                        
-                        if isEditingTags {
-                            newTagInputField
-                        }
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(AppTheme.Colors.softBackground.opacity(isEditingTags ? 0.5 : 0.3))
-                    )
-                    
-                    // 编辑状态下的常用标签
-                    if isEditingTags {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("常用标签")
-                                .font(.caption)
-                                .foregroundColor(AppTheme.Colors.mediumGray)
-                                .padding(.horizontal, 4)
-                            
-                            FlowLayout(spacing: 8) {
-                                ForEach(presetTags.filter { !restaurant.tags.contains($0) }, id: \.self) { tag in
-                                    Button {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            restaurant.tags.append(tag)
-                                        }
-                                    } label: {
-                                        Text(tag)
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(AppTheme.Colors.mediumGray)
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 8)
-                                            .background(
-                                                Capsule()
-                                                    .fill(AppTheme.Colors.softBackground)
-                                            )
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    }
+                tagsCloudMainContent
+                tagsCloudActionButtons
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    // MARK: - 标签区域主内容（完全复制 ProfileView）
+    private var tagsCloudMainContent: some View {
+        VStack(spacing: 0) {
+            tagsLayoutContainer
+
+            if isEditingTags {
+                presetTagsSection
+                    .padding(.top, 16)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
+        .onTapGesture {
+            if !isEditingTags {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    isEditingTags = true
                 }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isEditingTags)
-                .onTapGesture {
-                    if !isEditingTags {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            isEditingTags = true
-                        }
-                    }
-                }
-                
-                // 勾叉按钮（压在容器下边缘，一半在内一半在外）
-                bubbleButtons(
-                    isEditing: isEditingTags,
-                    onSave: saveTags,
-                    onCancel: cancelTags
-                )
-                .padding(.trailing, 12)
-                .offset(y: 24) // 向下偏移24pt，一半在容器内，一半在容器外
             }
         }
     }
+
+    // MARK: - 标签布局容器（完全复制 ProfileView）
+    @ViewBuilder
+    private var tagsLayoutContainer: some View {
+        if isEditingTags {
+            tagsEditingLayout
+        } else {
+            tagsDisplayLayout
+        }
+    }
+
+    // MARK: - 编辑模式标签布局（完全复制 ProfileView）
+    private var tagsEditingLayout: some View {
+        FlowLayout(spacing: 10) {
+            ForEach(restaurant.tags, id: \.self) { tag in
+                restaurantTagSticker(tag)
+            }
+            restaurantNewTagInputField
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.5))
+        )
+    }
+
+    // MARK: - 新标签输入框（完全复制 ProfileView）
+    private var restaurantNewTagInputField: some View {
+        TextField("新标签...", text: $newTagInput)
+            .font(.system(size: 14, design: .rounded))
+            .foregroundColor(AppTheme.Colors.darkText)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.5))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 1)
+            )
+            .focused($tagInputIsFocused)
+            .frame(minWidth: 80)
+            .onSubmit {
+                addNewTag()
+            }
+    }
+
+    // MARK: - 展示模式标签布局（完全复制 ProfileView）
+    private var tagsDisplayLayout: some View {
+        FlowLayout(spacing: 10) {
+            ForEach(restaurant.tags, id: \.self) { tag in
+                restaurantTagSticker(tag)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.5))
+        )
+    }
+
+    // MARK: - 标签区域操作按钮（勾叉）- 使用统一组件
+    @ViewBuilder
+    private var tagsCloudActionButtons: some View {
+        if isEditingTags {
+            EditActionButtons(
+                onCancel: {
+                    withAnimation(AppTheme.Animations.editingSpring) {
+                        cancelTags()
+                        isEditingTags = false
+                        newTagInput = ""
+                    }
+                },
+                onConfirm: {
+                    withAnimation(AppTheme.Animations.editingSpring) {
+                        saveTags()
+                        isEditingTags = false
+                        newTagInput = ""
+                    }
+                }
+            )
+            .padding(.trailing, 12)
+            .padding(.bottom, 12)
+        }
+    }
+
+
     
     private var statsSection: some View {
         HStack(spacing: 0) {
@@ -562,15 +606,7 @@ struct RestaurantDetailView: View {
             )
         }
         .padding(4)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.35))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                )
-        )
-        .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 4)
+        .cardStyle()
     }
 
     private func statMiniCard(icon: String, iconColor: Color, title: String, value: String) -> some View {
@@ -612,11 +648,15 @@ struct RestaurantDetailView: View {
             ZStack(alignment: .bottomTrailing) {
                 reviewCardContent
 
-                bubbleButtons(
-                    isEditing: isEditingReview,
-                    onSave: saveReview,
-                    onCancel: cancelReview
-                )
+                // 勾叉按钮（使用统一组件）
+                if isEditingReview {
+                    EditActionButtons(
+                        onCancel: cancelReview,
+                        onConfirm: saveReview
+                    )
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 12)
+                }
             }
         }
         .onTapGesture {
@@ -635,15 +675,7 @@ struct RestaurantDetailView: View {
                 .frame(minHeight: isEditingReview ? 150 : 60)
                 .id(isEditingReview)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.35))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                )
-        )
-        .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 10)
+        .cardStyle()
         .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
     }
 
@@ -661,9 +693,7 @@ struct RestaurantDetailView: View {
                     .padding(20)
                     .padding(.bottom, 10)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    .onAppear {
-                        reviewIsFocused = true
-                    }
+                    // 移除自动聚焦，避免键盘自动弹出
                     .onDisappear {
                         reviewIsFocused = false
                 }
@@ -680,165 +710,53 @@ struct RestaurantDetailView: View {
         }
     }
     
-    private var tagsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("标签")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 4)
 
-            ZStack(alignment: .bottomTrailing) {
-                tagsCardContent
-                    .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 10)
 
-                bubbleButtons(
-                    isEditing: isEditingTags,
-                    onSave: saveTags,
-                    onCancel: cancelTags
-                )
-            }
-        }
-        .onTapGesture {
-            if !isEditingTags {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    isEditingTags = true
-                }
-            }
-        }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isEditingTags)
-    }
 
-    private var tagsCardContent: some View {
-        VStack(spacing: 0) {
-            tagsFlowContent
-                .padding(20)
 
-            if isEditingTags {
-                Divider()
-                    .background(AppTheme.Colors.glassWhite)
-                    .padding(.horizontal, 20)
-
-                presetTagsSection
-                    .padding(20)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.35))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                )
-        )
-        .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 10)
-    }
-
-    private var tagsFlowContent: some View {
-        FlowLayout(spacing: 10) {
-            ForEach(restaurant.tags, id: \.self) { tag in
-                tagSticker(tag: tag, isEditing: isEditingTags)
-            }
-
-            if isEditingTags {
-                newTagInputField
-            }
-        }
-    }
-
-    private var newTagInputField: some View {
-        HStack(spacing: 6) {
-            TextField("新标签", text: $newTagInput)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(Color(hex: "#1A1A1A"))
-                .frame(width: 60)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .focused($tagInputIsFocused)
-                .onSubmit {
-                    addNewTag()
-                }
-
-            Button {
-                addNewTag()
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(Color(hex: "#525252"))
-            }
-            .disabled(newTagInput.trimmingCharacters(in: .whitespaces).isEmpty)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(
-            Capsule()
-                .fill(AppTheme.Colors.softBackground)
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
-                )
-        )
-    }
-
+    // MARK: - 常用标签区域（完全复制 ProfileView）
     private var presetTagsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("常用标签")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(AppTheme.Colors.mediumGray)
-                .padding(.horizontal, 4)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundColor(AppTheme.Colors.lightText)
 
             FlowLayout(spacing: 10) {
-                ForEach(presetTags, id: \.self) { presetTag in
-                    presetTagButton(presetTag: presetTag)
+                ForEach(presetTags.filter { !restaurant.tags.contains($0) }, id: \.self) { tag in
+                    Button {
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                            restaurant.tags.append(tag)
+                        }
+                    } label: {
+                        Text(tag)
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.darkText)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.5))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }
     }
 
-    private func presetTagButton(presetTag: String) -> some View {
-        let isAdded = restaurant.tags.contains(presetTag)
-        return Button {
-            let generator = UIImpactFeedbackGenerator(style: .light)
-            generator.impactOccurred()
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
-                if isAdded {
-                    restaurant.tags.removeAll { $0 == presetTag }
-                } else {
-                    restaurant.tags.append(presetTag)
-                }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle.fill")
-                    .font(.system(size: 12))
-                Text(presetTag)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            }
-            .foregroundColor(isAdded ? .white : Color(hex: "#1A1A1A"))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(isAdded ? AnyShapeStyle(Color(hex: "#1A1A1A")) : AnyShapeStyle(AppTheme.Colors.softBackground))
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
-                    )
-            )
-        }
-        .frame(minHeight: 44)
-    }
-
-    private func tagSticker(tag: String, isEditing: Bool) -> some View {
-        HStack(spacing: 4) {
+    // MARK: - 餐厅标签贴纸（完全复制 ProfileView 的 profileTagSticker）
+    private func restaurantTagSticker(_ tag: String) -> some View {
+        HStack(spacing: 6) {
             Text(tag)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: "#1A1A1A"))
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
 
-            if isEditing {
+            if isEditingTags {
+                // 删除按钮
                 Button {
                     withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
                         restaurant.tags.removeAll { $0 == tag }
@@ -851,114 +769,13 @@ struct RestaurantDetailView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(AppTheme.Colors.warmGray)
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
-                )
+                .fill(AppTheme.Colors.warmGray.opacity(0.6))
         )
     }
 
-    @State private var wiggleRotation: Double = 0
-    @State private var isWiggling: Bool = false
-    
-    private func bubbleButtons(isEditing: Bool, onSave: @escaping () -> Void, onCancel: @escaping () -> Void) -> some View {
-        VStack {
-            Spacer()
-                .frame(height: 36)
-            
-            if isEditing {
-                HStack(spacing: 16) {
-                    cancelBubble(onCancel: onCancel)
-                        .offset(y: 12)
-                    
-                    saveBubble(onSave: onSave)
-                        .offset(y: 12)
-                }
-                .transition(.scale.combined(with: .opacity))
-                .onAppear {
-                    triggerWiggleAnimation()
-                }
-            }
-        }
-        .animation(
-            .spring(response: 0.4, dampingFraction: 0.6),
-            value: isEditing
-        )
-    }
-    
-    private func cancelBubble(onCancel: @escaping () -> Void) -> some View {
-        Button(action: {
-            let generator = UISelectionFeedbackGenerator()
-            generator.selectionChanged()
-            onCancel()
-        }) {
-            Image(systemName: "xmark")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 48, height: 48)
-                .background(
-                    Circle()
-                        .fill(Color.black)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
-                )
-                .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 2)
-        }
-        .buttonStyle(ScaleButtonStyle())
-        .contentShape(Circle())
-        .frame(width: 48, height: 48)
-        .rotationEffect(Angle.degrees(wiggleRotation))
-    }
-    
-    private func saveBubble(onSave: @escaping () -> Void) -> some View {
-        Button(action: {
-            let generator = UISelectionFeedbackGenerator()
-            generator.selectionChanged()
-            onSave()
-        }) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 48, height: 48)
-                .background(
-                    Circle()
-                        .fill(AppTheme.Colors.accent)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
-                )
-                .shadow(color: Color.red.opacity(0.2), radius: 6, x: 0, y: 2)
-        }
-        .buttonStyle(ScaleButtonStyle())
-        .contentShape(Circle())
-        .frame(width: 48, height: 48)
-        .rotationEffect(Angle.degrees(-wiggleRotation))
-    }
-    
-    private func triggerWiggleAnimation() {
-        isWiggling = true
-        withAnimation(
-            Animation.linear(duration: 0.05)
-                .repeatCount(6, autoreverses: true)
-        ) {
-            wiggleRotation = 10
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            withAnimation(.easeOut(duration: 0.2)) {
-                wiggleRotation = 0
-                isWiggling = false
-            }
-        }
-    }
-    
     private func saveReview() {
         restaurant.review = editedReview
         let generator = UINotificationFeedbackGenerator()
@@ -1124,7 +941,7 @@ struct RestaurantDetailView: View {
                     )
             )
         }
-        .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 8)
+        .cardStyle()
     }
 
     private func checkInLogCard(log: VisitLog) -> some View {
@@ -1226,15 +1043,7 @@ struct RestaurantDetailView: View {
             }
         }
         .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.35))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                )
-        )
-        .shadow(color: Color.black.opacity(0.02), radius: 20, x: 0, y: 10)
+        .cardStyle()
         .contextMenu {
             Button {
                 logToEdit = log

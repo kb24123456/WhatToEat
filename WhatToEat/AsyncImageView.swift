@@ -54,6 +54,9 @@ class AsyncImageLoader: ObservableObject {
                 }
                 return
             }
+
+            // 4.5 修正图片方向
+            let fixedImage = originalImage.fixOrientation()
             
             // 5. 检查是否已取消
             guard !self.cancellable else {
@@ -64,7 +67,7 @@ class AsyncImageLoader: ObservableObject {
             }
             
             // 6. 预解码图片（优化渲染性能）
-            AnimationUtils.preDecodeImage(originalImage) { decodedImage in
+            AnimationUtils.preDecodeImage(fixedImage) { decodedImage in
                 // 检查是否已取消
                 guard !self.cancellable else {
                     self.isLoading = false
@@ -83,11 +86,11 @@ class AsyncImageLoader: ObservableObject {
                         }
                     }
                 } else {
-                    // 解码失败，使用原始图片
-                    ImageCacheManager.shared.saveToCache(image: originalImage, forKey: filename)
+                    // 解码失败，使用方向修正后的图片
+                    ImageCacheManager.shared.saveToCache(image: fixedImage, forKey: filename)
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            self.image = originalImage
+                            self.image = fixedImage
                             self.isLoading = false
                         }
                     }
@@ -233,10 +236,13 @@ struct AsyncImageView: View {
             // 视图消失时取消加载，避免内存泄漏
             loader.cancel()
         }
-        .onChange(of: filename) {
+        .onChange(of: filename) { oldFilename, newFilename in
             // 文件名变化时重新加载
-            if let filename = $0 {
-                loader.loadImage(filename: filename)
+            if oldFilename != newFilename {
+                loader.cancel()
+                if let newFilename = newFilename {
+                    loader.loadImage(filename: newFilename)
+                }
             }
         }
     }
@@ -291,5 +297,30 @@ class ImageCacheManager {
     /// - Parameter key: 缓存键
     func removeFromCache(forKey key: String) {
         memoryCache.removeValue(forKey: key)
+    }
+}
+
+// MARK: - UIImage 方向修正扩展
+extension UIImage {
+    /// 修正图片方向，确保图片以正确的方向显示
+    func fixOrientation() -> UIImage {
+        // 如果图片方向已经是正常的，直接返回
+        if imageOrientation == .up {
+            return self
+        }
+
+        // 创建图形上下文来重新绘制图片
+        UIGraphicsBeginImageContextWithOptions(size, false, scale)
+        defer { UIGraphicsEndImageContext() }
+
+        // 绘制图片（系统会自动处理方向转换）
+        draw(in: CGRect(origin: .zero, size: size))
+
+        // 获取修正后的图片
+        guard let normalizedImage = UIGraphicsGetImageFromCurrentImageContext() else {
+            return self
+        }
+
+        return normalizedImage
     }
 }

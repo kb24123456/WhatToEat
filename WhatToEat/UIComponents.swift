@@ -218,10 +218,124 @@ struct PremiumAccentGradient: View {
     }
 }
 
+// MARK: - Scale Button Style (全局按钮缩放效果)
+struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Soft Neutral Colors
 extension Color {
     static let softBackground = Color(hex: "#F8F9FB")
     static let softGray = Color(hex: "#F0F2F5")
     static let softText = Color(hex: "#2C3E50")
     static let softSecondary = Color(hex: "#7F8C8D")
+}
+
+// MARK: - 统一编辑操作按钮组 (勾叉按钮)
+/// 用于所有编辑场景的统一确认/取消按钮组
+/// 设计规范：
+/// - 按钮尺寸：40x40pt
+/// - 图标尺寸：14pt
+/// - 间距：12pt
+/// - 位置：容器右下角，向下偏移 20pt（一半在容器外）
+/// - 阴影：弥散阴影效果
+struct EditActionButtons: View {
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+    var spacing: CGFloat = 12
+    var buttonSize: CGFloat = 40
+    var iconSize: CGFloat = 14
+    var offsetY: CGFloat = 20
+    
+    var body: some View {
+        HStack(spacing: spacing) {
+            // 取消按钮（黑色背景）
+            Button(action: onCancel) {
+                Image(systemName: "xmark")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: buttonSize, height: buttonSize)
+                    .background(
+                        Circle()
+                            .fill(AppTheme.Colors.darkBackground)
+                            .shadow(
+                                color: Color.black.opacity(0.15),
+                                radius: 8,
+                                x: 0,
+                                y: 4
+                            )
+                    )
+            }
+            .buttonStyle(ScaleButtonStyle())
+            
+            // 确认按钮（红色背景）
+            Button(action: onConfirm) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: buttonSize, height: buttonSize)
+                    .background(
+                        Circle()
+                            .fill(AppTheme.Colors.accent)
+                            .shadow(
+                                color: AppTheme.Colors.accent.opacity(0.3),
+                                radius: 8,
+                                x: 0,
+                                y: 4
+                            )
+                    )
+            }
+            .buttonStyle(ScaleButtonStyle())
+        }
+        .offset(y: offsetY)
+        .transition(.scale.combined(with: .opacity))
+    }
+}
+
+// MARK: - 编辑操作按钮组容器
+/// 包装 EditActionButtons，提供统一的动画和定位
+struct EditActionButtonsContainer<Content: View>: View {
+    let isEditing: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+    let content: Content
+    let onTapToEdit: () -> Void
+    
+    init(
+        isEditing: Bool,
+        onCancel: @escaping () -> Void,
+        onConfirm: @escaping () -> Void,
+        onTapToEdit: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.isEditing = isEditing
+        self.onCancel = onCancel
+        self.onConfirm = onConfirm
+        self.onTapToEdit = onTapToEdit
+        self.content = content()
+    }
+    
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            content
+            
+            if isEditing {
+                EditActionButtons(onCancel: onCancel, onConfirm: onConfirm)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 12)
+            }
+        }
+        .animation(AppTheme.Animations.standardSpring, value: isEditing)
+        .onTapGesture {
+            if !isEditing {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    onTapToEdit()
+                }
+            }
+        }
+    }
 }
