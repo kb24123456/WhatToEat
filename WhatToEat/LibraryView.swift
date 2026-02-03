@@ -32,8 +32,7 @@ struct LibraryView: View {
     // 城市存储键
     private let kSavedCityKey = "UserSelectedCity"
     
-    // 动画命名空间（用于英雄动画）
-    @Namespace private var animation
+
     
     // 选中餐厅（用于详情页展开）
     @State private var selectedRestaurant: Restaurant?
@@ -63,7 +62,9 @@ struct LibraryView: View {
     // MARK: - 生命周期
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // 背景由 ContentView 统一提供
+            // 视觉保底背景色：防止转场时出现黑色色块
+            Color(hex: "#F5F7FA")
+                .ignoresSafeArea()
             
             VStack(alignment: .leading, spacing: 0) {
                 HeaderView(
@@ -83,34 +84,25 @@ struct LibraryView: View {
                 RestaurantListView(
                     filteredRestaurants: filteredRestaurants,
                     locationManager: locationManager,
-                    animation: animation,
                     selectedRestaurant: $selectedRestaurant,
                     isDetailPresented: $isDetailPresented
                 )
             }
         }
-        .sheet(isPresented: $isDetailPresented) {
-            if let restaurant = selectedRestaurant {
-                RestaurantDetailView(
-                    restaurant: restaurant,
-                    locationManager: locationManager,
-                    isPresented: $isDetailPresented
-                )
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-            }
+        // 使用 item-based sheet 避免黑色色块
+        .sheet(item: $selectedRestaurant) { restaurant in
+            RestaurantDetailView(
+                restaurant: restaurant,
+                locationManager: locationManager,
+                isPresented: $isDetailPresented
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
-        .onChange(of: isDetailPresented) { _, newValue in
-            if !newValue && !isAnimatingOut {
-                isAnimatingOut = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.72)) {
-                        selectedRestaurant = nil
-                    }
-                    isAnimatingOut = false
-                }
-            }
-            isTabBarHidden = newValue
+        .onChange(of: selectedRestaurant) { _, newValue in
+            // 同步 isDetailPresented 状态
+            isDetailPresented = newValue != nil
+            isTabBarHidden = newValue != nil
         }
         .onReceive(NotificationCenter.default.publisher(for: .restoreTabBar)) { _ in
             isTabBarHidden = false
@@ -437,7 +429,6 @@ private struct FilterBarView: View {
 private struct RestaurantListView: View {
     let filteredRestaurants: [Restaurant]
     let locationManager: LocationManager
-    let animation: Namespace.ID
     @Binding var selectedRestaurant: Restaurant?
     @Binding var isDetailPresented: Bool
     
@@ -446,25 +437,16 @@ private struct RestaurantListView: View {
             LazyVStack(spacing: AppTheme.Spacing.lg) {
                 ForEach(filteredRestaurants) { restaurant in
                     Button {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                            if selectedRestaurant?.id == restaurant.id {
-                                selectedRestaurant = nil
-                                isDetailPresented = false
-                            } else {
-                                selectedRestaurant = restaurant
-                                isDetailPresented = true
-                            }
-                        }
+                        // 直接设置选中餐厅，让 sheet 自动处理转场
+                        selectedRestaurant = restaurant
                     } label: {
                         RestaurantCard(
                             restaurant: restaurant,
                             locationManager: locationManager,
-                            animation: animation,
-                            isExpanded: selectedRestaurant?.id == restaurant.id
+                            isExpanded: false
                         )
                     }
                     .buttonStyle(ScaleButtonStyle())
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.lg)

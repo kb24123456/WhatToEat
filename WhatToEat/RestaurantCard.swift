@@ -5,7 +5,6 @@ import SwiftData
 struct RestaurantCard: View {
     let restaurant: Restaurant
     @ObservedObject var locationManager: LocationManager
-    let animation: Namespace.ID
     let isExpanded: Bool
     
     @State private var showCheckInSheet = false
@@ -61,7 +60,6 @@ struct RestaurantCard: View {
                     }
                 )
             )
-            .matchedGeometryEffect(id: "coverImage-\(restaurant.id)", in: animation)
             .frame(width: AppTheme.Cards.restaurantCoverWidth, height: AppTheme.Cards.restaurantCoverHeight)
             .cornerRadius(AppTheme.Radius.image)
             .clipped()
@@ -91,7 +89,6 @@ struct RestaurantCard: View {
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
-                .matchedGeometryEffect(id: "title-\(restaurant.id)", in: animation)
 
             Color.clear.frame(height: 12)
 
@@ -115,12 +112,10 @@ struct RestaurantCard: View {
             Text(priceText)
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.price)
-                .matchedGeometryEffect(id: "price-\(restaurant.id)", in: animation)
 
             Text(restaurant.district)
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundColor(Color(hex: "#6B7280"))
-                .matchedGeometryEffect(id: "district-\(restaurant.id)", in: animation)
 
             if let userLocation = locationManager.userLocation {
                 Text(distanceText(from: userLocation, to: restaurant))
@@ -137,7 +132,6 @@ struct RestaurantCard: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(metaBackground)
-        .matchedGeometryEffect(id: "meta-\(restaurant.id)", in: animation)
     }
     
     private var metaBackground: some View {
@@ -152,18 +146,15 @@ struct RestaurantCard: View {
     private var tagsRow: some View {
         HStack(spacing: AppTheme.Spacing.sm) {
             ratingView
-                .matchedGeometryEffect(id: "rating-\(restaurant.id)", in: animation)
             
             Text(restaurant.type)
                 .font(.system(size: 12, weight: .regular, design: .rounded))
                 .foregroundColor(Color(hex: "#6B7280"))
-                .matchedGeometryEffect(id: "type-\(restaurant.id)", in: animation)
             
             ForEach(restaurant.tags.prefix(2), id: \.self) { tag in
                 TagView(tag: tag)
             }
         }
-        .matchedGeometryEffect(id: "tags-\(restaurant.id)", in: animation)
     }
     
     private var ratingView: some View {
@@ -197,7 +188,6 @@ struct RestaurantCard: View {
         .background(AppTheme.Colors.lightGray.opacity(0.5))
         .cornerRadius(6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .matchedGeometryEffect(id: "review-\(restaurant.id)", in: animation)
     }
     
     private var checkInButton: some View {

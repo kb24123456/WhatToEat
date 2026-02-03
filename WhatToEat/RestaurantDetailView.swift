@@ -116,15 +116,17 @@ struct RestaurantDetailView: View {
     // MARK: - Keyboard Animation Delay
     private let keyboardAnimationDelay: TimeInterval = 0.25  // 展开动画完成后再弹出键盘
     
-    @State private var animateOffset: CGFloat = 500
-    
-    // MARK: - Animation States
-    @State private var isAnimated = false
-    @State private var cardScale: CGFloat = 1.0
+    // MARK: - 转场完成状态（用于磨砂遮罩切换）
+    @State private var isTransitionComplete: Bool = false
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
+                // 1. 最底层：实色底座，消除黑色色块
+                Color.white
+                    .ignoresSafeArea()
+                
+                // 2. 背景渐变层
                 backgroundGradient
                     .ignoresSafeArea()
 
@@ -136,7 +138,7 @@ struct RestaurantDetailView: View {
                                 .padding(.top, 20 + geometry.safeAreaInsets.top)
                                 .padding(.bottom, 16)
 
-                            // Bottom Lists with staggered slide-up animation
+                            // Bottom Lists
                             bottomContentSection
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, isEditingTags ? 400 : 100)
@@ -156,31 +158,25 @@ struct RestaurantDetailView: View {
                     }
                 }
             }
-            .offset(y: animateOffset)
-            .animation(
-                .interpolatingSpring(stiffness: 120, damping: 15)
-                    .speed(1.2)
-                    .delay(0.1),
-                value: animateOffset
-            )
+            // 视图合成优化
+            .compositingGroup()
+            .onAppear {
+                // 动静分离：延迟设置转场完成状态（用于磨砂遮罩切换）
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    isTransitionComplete = true
+                }
+            }
         }
     }
     
-    // MARK: - Bottom Content Section (Premium Staggered Animation)
+    // MARK: - Bottom Content Section (清理动画版)
     private var bottomContentSection: some View {
-        VStack(alignment: .leading, spacing: 32) {
+        LazyVStack(alignment: .leading, spacing: 32) {
             unifiedInfoSection
-                .offset(y: animateOffset == 0 ? 0 : 40)
-                .opacity(animateOffset == 0 ? 1 : 0)
-                .animation(AppTheme.Animations.staggeredEntrance(index: 1), value: animateOffset)
 
             checkInHistorySection
-                .offset(y: animateOffset == 0 ? 0 : 40)
-                .opacity(animateOffset == 0 ? 1 : 0)
-                .animation(AppTheme.Animations.staggeredEntrance(index: 2), value: animateOffset)
         }
         .onAppear {
-            animateOffset = 0
             editedReview = restaurant.review
         }
         .sheet(isPresented: $showSheet) {
@@ -224,7 +220,7 @@ struct RestaurantDetailView: View {
         MilkyDiffuseBackground()
     }
     
-    // Hero Card Content (重构版：完美解决报错)
+    // Hero Card Content (优化版：动静分离)
         private var heroCardContent: some View {
             ZStack(alignment: .bottom) {
                 // --- 1. 底层：餐厅原始图片 ---
@@ -246,23 +242,40 @@ struct RestaurantDetailView: View {
                     .clipped()
                 }
                 
-                // --- 2. 中层：动态磨砂渐变层 ---
-                // 这一层实现了从清晰到磨砂的平滑过渡
-                Rectangle()
-                    .fill(.thinMaterial) // 系统自带磨砂材质
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),      // 顶部完全清晰
-                                .init(color: .black.opacity(0.55), location: 0.55), //开始逐渐模糊
-                                .init(color: .black.opacity(0.75), location: 0.75), // 中间开始变模糊
-                                .init(color: .black, location: 1.0)     // 底部完全模糊
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
+                // --- 2. 中层：动态过渡层（动静分离优化）---
+                // 转场动画中使用简单的颜色渐变，完成后才使用磨砂材质
+                if isTransitionComplete {
+                    // 动画完成后：使用磨砂材质
+                    Rectangle()
+                        .fill(.thinMaterial)
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0),
+                                    .init(color: .black.opacity(0.55), location: 0.55),
+                                    .init(color: .black.opacity(0.75), location: 0.75),
+                                    .init(color: .black, location: 1.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
+                        .frame(height: 220)
+                        .transition(.opacity)
+                } else {
+                    // 动画过程中：使用简单的颜色渐变（性能更好）
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .white.opacity(0.3), location: 0.55),
+                            .init(color: .white.opacity(0.6), location: 0.75),
+                            .init(color: .white.opacity(0.85), location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
-                    .frame(height: 220) // 磨砂区域的高度
+                    .frame(height: 220)
+                }
                 
                 // --- 3. 顶层：信息叠层 ---
                 heroCardInfo
@@ -275,6 +288,13 @@ struct RestaurantDetailView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 32, style: .continuous)
                     .stroke(AppTheme.Colors.rimLight, lineWidth: 1.5)
+            )
+            // 3. 简化转场阴影：动画过程中使用轻量阴影
+            .shadow(
+                color: Color.black.opacity(isTransitionComplete ? 0.08 : 0.04),
+                radius: isTransitionComplete ? 20 : 5,
+                x: 0,
+                y: isTransitionComplete ? 10 : 3
             )
             .cardStyle()
         }
@@ -313,13 +333,10 @@ struct RestaurantDetailView: View {
 
 
 
-    // MARK: - 1. 动画包装层 (请确保只有一个)
+    // MARK: - Hero Section (清理动画版)
         private var heroSection: some View {
             heroCardContent
                 .frame(height: 320)
-                // 与页面整体动画同步，使用相同的 animateOffset
-                .opacity(animateOffset == 0 ? 1 : 0)
-                .scaleEffect(animateOffset == 0 ? 1.0 : 0.95)
                 .onTapGesture {
                     showActionSheet = true
                 }
@@ -480,28 +497,30 @@ struct RestaurantDetailView: View {
         }
     }
 
-    // MARK: - 标签区域主内容（完全复制 ProfileView）
+    // MARK: - 标签区域主内容（优化动画）
     private var tagsCloudMainContent: some View {
         VStack(spacing: 0) {
             tagsLayoutContainer
 
+            // 常用标签区域 - 使用 opacity 过渡避免上移
             if isEditingTags {
                 presetTagsSection
                     .padding(.top, 16)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .transition(.opacity)
             }
         }
-        .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
+        // 使用更流畅的动画曲线
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isEditingTags)
         .onTapGesture {
             if !isEditingTags {
-                withAnimation(AppTheme.Animations.editingSpring) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                     isEditingTags = true
                 }
             }
         }
     }
 
-    // MARK: - 标签布局容器（完全复制 ProfileView）
+    // MARK: - 标签布局容器（使用 @ViewBuilder 切换，与 ProfileView 一致）
     @ViewBuilder
     private var tagsLayoutContainer: some View {
         if isEditingTags {
@@ -510,8 +529,8 @@ struct RestaurantDetailView: View {
             tagsDisplayLayout
         }
     }
-
-    // MARK: - 编辑模式标签布局（完全复制 ProfileView）
+    
+    // MARK: - 编辑模式标签布局
     private var tagsEditingLayout: some View {
         FlowLayout(spacing: 10) {
             ForEach(restaurant.tags, id: \.self) { tag in
@@ -525,8 +544,22 @@ struct RestaurantDetailView: View {
                 .fill(Color.white.opacity(0.5))
         )
     }
+    
+    // MARK: - 展示模式标签布局
+    private var tagsDisplayLayout: some View {
+        FlowLayout(spacing: 10) {
+            ForEach(restaurant.tags, id: \.self) { tag in
+                restaurantTagSticker(tag)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.5))
+        )
+    }
 
-    // MARK: - 新标签输入框（完全复制 ProfileView）
+    // MARK: - 新标签输入框
     private var restaurantNewTagInputField: some View {
         TextField("新标签...", text: $newTagInput)
             .font(.system(size: 14, design: .rounded))
@@ -546,20 +579,6 @@ struct RestaurantDetailView: View {
             .onSubmit {
                 addNewTag()
             }
-    }
-
-    // MARK: - 展示模式标签布局（完全复制 ProfileView）
-    private var tagsDisplayLayout: some View {
-        FlowLayout(spacing: 10) {
-            ForEach(restaurant.tags, id: \.self) { tag in
-                restaurantTagSticker(tag)
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.5))
-        )
     }
 
     // MARK: - 标签区域操作按钮（勾叉）- 使用统一组件

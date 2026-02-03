@@ -3,6 +3,12 @@ import SwiftData
 import MapKit
 import CoreLocation
 
+// MARK: - 可唯一标识的 MapItem 包装器
+struct IdentifiableMapItem: Identifiable {
+    let id = UUID() // 每次搜索生成新 ID，强制刷新视图
+    let item: MKMapItem
+}
+
 // MARK: - 智能搜索半屏浮层
 struct SmartSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -22,8 +28,8 @@ struct SmartSearchSheet: View {
     var onAutoFill: (() -> Void)?
     
     @State private var searchQuery = ""
-    @State private var searchResults: [MKMapItem] = []
-    @State private var nearbyPlaces: [MKMapItem] = []
+    @State private var searchResults: [IdentifiableMapItem] = []
+    @State private var nearbyPlaces: [IdentifiableMapItem] = []
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
     
@@ -276,13 +282,31 @@ struct SmartSearchSheet: View {
         )
     }
     
-    // MARK: - 结果列表
+    // MARK: - 结果列表（优化版：ScrollView + LazyVStack 替代 List）
     private var resultsList: some View {
-        List {
-            if searchQuery.isEmpty {
-                // 默认显示附近推荐
-                Section {
-                    if nearbyPlaces.isEmpty {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                if searchQuery.isEmpty {
+                    // 默认显示附近推荐
+                    if !nearbyPlaces.isEmpty {
+                        // Header
+                        HStack {
+                            Image(systemName: "location.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(hex: "#FF6B6B"))
+                            Text("附近推荐")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Color(hex: "#666666"))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
+                        
+                        ForEach(nearbyPlaces) { identifiableItem in
+                            searchResultRow(item: identifiableItem.item, index: 0)
+                                .padding(.horizontal, 20)
+                        }
+                    } else {
                         HStack {
                             Spacer()
                             VStack(spacing: 8) {
@@ -295,31 +319,9 @@ struct SmartSearchSheet: View {
                             .padding(.vertical, 40)
                             Spacer()
                         }
-                        .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(Array(nearbyPlaces.enumerated()), id: \.element) { index, item in
-                            searchResultRow(item: item, index: index)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
-                        }
                     }
-                } header: {
-                    HStack {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(hex: "#FF6B6B"))
-                        Text("附近推荐")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(Color(hex: "#666666"))
-                        Spacer()
-                    }
-                    .textCase(nil)
-                    .padding(.bottom, 8)
-                }
-            } else {
-                // 搜索结果
-                Section {
+                } else {
+                    // 搜索结果
                     if isSearching {
                         HStack {
                             Spacer()
@@ -333,7 +335,6 @@ struct SmartSearchSheet: View {
                             .padding(.vertical, 40)
                             Spacer()
                         }
-                        .listRowBackground(Color.clear)
                     } else if searchResults.isEmpty {
                         HStack {
                             Spacer()
@@ -348,20 +349,31 @@ struct SmartSearchSheet: View {
                             .padding(.vertical, 40)
                             Spacer()
                         }
-                        .listRowBackground(Color.clear)
                     } else {
-                        ForEach(Array(searchResults.enumerated()), id: \.element) { index, item in
-                            searchResultRow(item: item, index: index)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+                        ForEach(searchResults) { identifiableItem in
+                            searchResultRow(item: identifiableItem.item, index: 0)
+                                .padding(.horizontal, 20)
                         }
                     }
                 }
             }
+            .padding(.vertical, 8)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+        // 4. 彻底解决键盘拦截：点击列表以外区域收起键盘
+        .onTapGesture {
+            hideKeyboard()
+        }
+        // 4. 滚动列表时立即收起键盘
+        .gesture(
+            DragGesture().onChanged { _ in
+                hideKeyboard()
+            }
+        )
+    }
+    
+    // MARK: - 隐藏键盘辅助方法
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     // MARK: - 搜索结果行
@@ -388,8 +400,12 @@ struct SmartSearchSheet: View {
         }
     }
     
-    // MARK: - 执行搜索
+    // MARK: - 执行搜索（优化版：自闭环管理）
     private func performSearch(query: String) {
+        // 2. 搜索任务自闭环：取消旧任务，清空旧结果
+        searchTask?.cancel()
+        self.searchResults = []
+        
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
         
@@ -414,8 +430,10 @@ struct SmartSearchSheet: View {
             DispatchQueue.main.async {
                 isSearching = false
                 if let items = response?.mapItems {
-                    // 只筛选餐厅、咖啡、烘焙、甜品等美食类地点
-                    searchResults = items.filter { isFoodRelated($0) }
+                    // 只筛选餐厅、咖啡、烘焙、甜品等美食类地点，并映射为 IdentifiableMapItem
+                    searchResults = items
+                        .filter { isFoodRelated($0) }
+                        .map { IdentifiableMapItem(item: $0) }
                 } else {
                     searchResults = []
                 }
@@ -488,32 +506,41 @@ struct SmartSearchSheet: View {
         search.start { response, error in
             DispatchQueue.main.async {
                 if let items = response?.mapItems {
-                    // 只筛选美食类地点
+                    // 只筛选美食类地点，并映射为 IdentifiableMapItem
                     nearbyPlaces = Array(items.filter { isFoodRelated($0) }.prefix(6))
+                        .map { IdentifiableMapItem(item: $0) }
                 }
             }
         }
     }
     
-    // MARK: - 选择地点
+    // MARK: - 选择地点（优化版：异步加固）
     private func selectPlace(_ item: MKMapItem) {
-        // 填充数据
-        selectedName = item.name ?? ""
-        selectedAddress = formatFullAddress(from: item.placemark)
-        selectedDistrict = extractDistrict(from: item.placemark)
-        // 注意：城市字段不再由 SmartSearchSheet 设置，统一使用 LibraryView 中选择的城市
-        
-        // 使用双重匹配逻辑确定品类
-        let categoryResult = determineCategory(from: item)
-        selectedCategory = categoryResult.category
-        selectedLatitude = item.placemark.coordinate.latitude
-        selectedLongitude = item.placemark.coordinate.longitude
-        
-        // 触发高亮效果（传入匹配状态）
-        onAutoFill?()
-        
-        // 关闭浮层
-        dismiss()
+        Task { @MainActor in
+            // 1. 先收键盘
+            hideKeyboard()
+            
+            // 2. 赋值
+            selectedName = item.name ?? ""
+            selectedAddress = formatFullAddress(from: item.placemark)
+            selectedDistrict = extractDistrict(from: item.placemark)
+            // 注意：城市字段不再由 SmartSearchSheet 设置，统一使用 LibraryView 中选择的城市
+            
+            // 使用双重匹配逻辑确定品类
+            let categoryResult = determineCategory(from: item)
+            selectedCategory = categoryResult.category
+            selectedLatitude = item.placemark.coordinate.latitude
+            selectedLongitude = item.placemark.coordinate.longitude
+            
+            // 触发高亮效果（传入匹配状态）
+            onAutoFill?()
+            
+            // 3. 强制等待一个微小周期，确保 UI 线程更新
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            
+            // 4. 关闭
+            dismiss()
+        }
     }
     
     // MARK: - 辅助方法
@@ -602,19 +629,28 @@ struct SmartSearchSheet: View {
     }
 }
 
-// MARK: - 搜索结果按钮（独立结构体避免类型检查问题）
+// MARK: - 搜索结果按钮（优化版：强化点击热区与视觉反馈）
 struct SearchResultButton: View {
     let item: MKMapItem
     let action: () -> Void
     
     @ObservedObject private var locationManager = LocationManager.shared
+    // 视觉反馈：按压状态
+    @State private var isPressed = false
     
     var body: some View {
         Button(action: {
-            // 添加触觉反馈
+            // 1. 立即触发触感反馈
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
-            action()
+            
+            // 2. 强制收键盘（防止焦点切换拦截点击事件）
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            
+            // 3. 异步执行选择逻辑，确保点击动效能被感知
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                action()
+            }
         }) {
             HStack(spacing: 12) {
                 // 图标
@@ -668,11 +704,27 @@ struct SearchResultButton: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white)
+                    // 视觉反馈：按下时背景变暗
+                    .fill(isPressed ? Color.black.opacity(0.05) : Color.white)
                     .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
             )
+            // 视觉反馈：按下时轻微缩放
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: isPressed)
         }
         .buttonStyle(PlainButtonStyle())
+        // 1. 强化点击热区：确保整行（包括透明区域）都可点击
+        .contentShape(Rectangle())
+        // 按压状态监听
+        .pressEvents {
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = true
+            }
+        } onRelease: {
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = false
+            }
+        }
     }
     
     private var categoryIcon: String {
@@ -732,5 +784,21 @@ struct SearchResultButton: View {
             components.append(thoroughfare)
         }
         return components.joined(separator: " ")
+    }
+}
+
+// MARK: - View 扩展：按压事件监听
+extension View {
+    func pressEvents(onPress: @escaping () -> Void, onRelease: @escaping () -> Void) -> some View {
+        self
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        onPress()
+                    }
+                    .onEnded { _ in
+                        onRelease()
+                    }
+            )
     }
 }
