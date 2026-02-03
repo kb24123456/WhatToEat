@@ -106,14 +106,13 @@ struct ProfileView: View {
         }
         // 餐厅详情 Sheet
         .sheet(item: $selectedRestaurantForDetail) { restaurant in
-            RestaurantDetailView(
-                restaurant: restaurant,
-                locationManager: LocationManager(),
-                isPresented: Binding(
-                    get: { selectedRestaurantForDetail != nil },
-                    set: { if !$0 { selectedRestaurantForDetail = nil } }
+            NavigationStack {
+                RestaurantDetailView(
+                    restaurant: restaurant,
+                    locationManager: LocationManager(),
+                    navigationPath: .constant(NavigationPath())
                 )
-            )
+            }
         }
         // 键盘避让：点击空白处收起键盘
         .scrollDismissesKeyboard(.interactively)
@@ -330,22 +329,49 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 16) {
             tagsCloudHeader
             tagsCloudContent
-                .padding(.bottom, isEditingTags ? 28 : 0) // 编辑模式下增加底部空间容纳按钮
         }
         .padding(16)
         .cardStyle()
     }
 
-    // MARK: - 标签区域头部
+    // MARK: - 标签区域头部（使用统一编辑栏规范）
     private var tagsCloudHeader: some View {
-        HStack {
+        HStack(alignment: .center, spacing: 0) {
             Text("我的标签")
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
+                .foregroundColor(isEditingTags ? AppTheme.Colors.textSecondary : AppTheme.Colors.darkText)
             
             Spacer()
             
-            if !isEditingTags {
+            if isEditingTags {
+                // 编辑状态下的取消/完成按钮
+                HStack(spacing: 16) {
+                    Button {
+                        withAnimation(AppTheme.Animations.editingSpring) {
+                            isEditingTags = false
+                            newTagInput = ""
+                        }
+                    } label: {
+                        Text("取消")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                    }
+                    
+                    Button {
+                        withAnimation(AppTheme.Animations.editingSpring) {
+                            saveTags()
+                            isEditingTags = false
+                            newTagInput = ""
+                        }
+                    } label: {
+                        Text("完成")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.accent)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+            } else {
+                // 非编辑状态下的管理按钮
                 Button {
                     withAnimation(AppTheme.Animations.editingSpring) {
                         isEditingTags = true
@@ -361,17 +387,14 @@ struct ProfileView: View {
     
     // MARK: - 标签区域内容
     private var tagsCloudContent: some View {
-        ZStack(alignment: .bottomTrailing) {
-            tagsCloudMainContent
-            tagsCloudActionButtons
-        }
-        .onTapGesture {
-            if !isEditingTags {
-                withAnimation(AppTheme.Animations.editingSpring) {
-                    isEditingTags = true
+        tagsCloudMainContent
+            .onTapGesture {
+                if !isEditingTags {
+                    withAnimation(AppTheme.Animations.editingSpring) {
+                        isEditingTags = true
+                    }
                 }
             }
-        }
     }
     
     // MARK: - 标签区域主内容
@@ -430,6 +453,7 @@ struct ProfileView: View {
             )
             .focused($tagInputIsFocused)
             .frame(minWidth: 80)
+            .submitLabel(.done)  // 键盘显示"完成"按钮
             .onSubmit {
                 addNewTag()
             }
@@ -448,30 +472,6 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.white.opacity(0.5))
         )
-    }
-    
-    // MARK: - 标签区域操作按钮（勾叉）- 使用统一组件
-    @ViewBuilder
-    private var tagsCloudActionButtons: some View {
-        if isEditingTags {
-            EditActionButtons(
-                onCancel: {
-                    withAnimation(AppTheme.Animations.editingSpring) {
-                        isEditingTags = false
-                        newTagInput = ""
-                    }
-                },
-                onConfirm: {
-                    withAnimation(AppTheme.Animations.editingSpring) {
-                        saveTags()
-                        isEditingTags = false
-                        newTagInput = ""
-                    }
-                }
-            )
-            .padding(.trailing, 12)
-            .padding(.bottom, 12)
-        }
     }
     
     // MARK: - 推荐标签区域

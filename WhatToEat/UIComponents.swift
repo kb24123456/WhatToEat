@@ -24,6 +24,102 @@ struct MilkyCardStyle: ViewModifier {
     }
 }
 
+// MARK: - 统一编辑栏标题栏规范 (Design System v2.1)
+// 使用场景：所有可编辑模块的标题栏（一句话点评、标签等）
+// 视觉特征：左侧标题 + 右侧取消/完成按钮，编辑时按钮从右侧滑入
+struct EditableSectionHeader: View {
+    let title: String
+    let isEditing: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+    
+    var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            Text(title)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(isEditing ? AppTheme.Colors.textSecondary : AppTheme.Colors.darkText)
+            
+            Spacer()
+            
+            // 编辑状态下的取消/完成按钮
+            if isEditing {
+                HStack(spacing: 16) {
+                    Button {
+                        onCancel()
+                    } label: {
+                        Text("取消")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                    }
+                    
+                    Button {
+                        onConfirm()
+                    } label: {
+                        Text("完成")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(AppTheme.Colors.accent)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+}
+
+// MARK: - 可编辑模块容器 (Design System v2.1)
+// 包装可编辑内容，提供统一的标题栏和交互
+struct EditableSectionContainer<Content: View>: View {
+    let title: String
+    let isEditing: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+    let onTapToEdit: () -> Void
+    let content: Content
+    let spacing: CGFloat
+    
+    init(
+        title: String,
+        isEditing: Bool,
+        onCancel: @escaping () -> Void,
+        onConfirm: @escaping () -> Void,
+        onTapToEdit: @escaping () -> Void,
+        spacing: CGFloat = 12,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.isEditing = isEditing
+        self.onCancel = onCancel
+        self.onConfirm = onConfirm
+        self.onTapToEdit = onTapToEdit
+        self.spacing = spacing
+        self.content = content()
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            // 标题栏
+            EditableSectionHeader(
+                title: title,
+                isEditing: isEditing,
+                onCancel: onCancel,
+                onConfirm: onConfirm
+            )
+            
+            // 内容区域
+            content
+                .padding(.horizontal, 20)
+        }
+        .onTapGesture {
+            if !isEditing {
+                withAnimation(AppTheme.Animations.editingSpring) {
+                    onTapToEdit()
+                }
+            }
+        }
+    }
+}
+
 extension View {
     /// 奶脂实色卡片 (Design System v2.0 标准)
     /// - 背景：纯白实色 (Color.white)

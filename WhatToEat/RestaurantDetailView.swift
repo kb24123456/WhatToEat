@@ -93,8 +93,9 @@ extension View {
 struct RestaurantDetailView: View {
     let restaurant: Restaurant
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     let locationManager: LocationManager
-    @Binding var isPresented: Bool
+    @Binding var navigationPath: NavigationPath
     
     @State private var showSheet = false
     @State private var logToEdit: VisitLog? = nil
@@ -115,9 +116,6 @@ struct RestaurantDetailView: View {
     
     // MARK: - Keyboard Animation Delay
     private let keyboardAnimationDelay: TimeInterval = 0.25  // 展开动画完成后再弹出键盘
-    
-    // MARK: - 转场完成状态（用于磨砂遮罩切换）
-    @State private var isTransitionComplete: Bool = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -141,17 +139,18 @@ struct RestaurantDetailView: View {
                             // Bottom Lists
                             bottomContentSection
                                 .padding(.horizontal, 20)
-                                .padding(.bottom, isEditingTags ? 400 : 100)
+                                .padding(.bottom, 100)
                         }
                     }
                     .ignoresSafeArea(edges: .top)
-                    // 标签编辑时自动滚动到标签区域
+                    // 标签编辑时自动滚动，确保常用标签显示在底部导航条上方
                     .onChange(of: isEditingTags) { _, isEditing in
                         if isEditing {
                             // 延迟等待布局完成
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                                 withAnimation(.easeInOut(duration: 0.4)) {
-                                    proxy.scrollTo("tagsSection", anchor: .top)
+                                    // 滚动到常用标签区域，使用 .center 确保整个区域（包括所有标签）都能显示
+                                    proxy.scrollTo("presetTagsSection", anchor: .center)
                                 }
                             }
                         }
@@ -160,12 +159,17 @@ struct RestaurantDetailView: View {
             }
             // 视图合成优化
             .compositingGroup()
-            .onAppear {
-                // 动静分离：延迟设置转场完成状态（用于磨砂遮罩切换）
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    isTransitionComplete = true
-                }
-            }
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
+            // 右滑返回手势
+            .gesture(
+                DragGesture()
+                    .onEnded { value in
+                        if value.translation.width > 100 && abs(value.translation.height) < 50 {
+                            navigationPath.removeLast()
+                        }
+                    }
+            )
         }
     }
     
@@ -200,13 +204,13 @@ struct RestaurantDetailView: View {
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView(selectedImages: $newCoverImages)
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
         .onChange(of: photoPickerItem) { _, newItem in
             Task {
                 if let data = try? await newItem?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     await MainActor.run {
-                        updateCover(image: image)
+                        newCoverImages = [image]  // 单选替换逻辑
                     }
                 }
             }
@@ -222,7 +226,7 @@ struct RestaurantDetailView: View {
     
     // Hero Card Content (优化版：动静分离)
         private var heroCardContent: some View {
-            ZStack(alignment: .bottom) {
+            ZStack(alignment: .topLeading) {
                 // --- 1. 底层：餐厅原始图片 ---
                 GeometryReader { geo in
                     AsyncImageView(
@@ -242,45 +246,67 @@ struct RestaurantDetailView: View {
                     .clipped()
                 }
                 
-                // --- 2. 中层：动态过渡层（动静分离优化）---
-                // 转场动画中使用简单的颜色渐变，完成后才使用磨砂材质
-                if isTransitionComplete {
-                    // 动画完成后：使用磨砂材质
+                // --- 2. 中层：渐变模糊遮罩（参考图效果）---
+                // 使用更细腻的渐变 stops 实现平滑过渡
+                VStack(spacing: 0) {
+                    // 第一层：完全清晰区域
                     Rectangle()
-                        .fill(.thinMaterial)
-                        .mask(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .clear, location: 0),
-                                    .init(color: .black.opacity(0.55), location: 0.55),
-                                    .init(color: .black.opacity(0.75), location: 0.75),
-                                    .init(color: .black, location: 1.0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(height: 220)
-                        .transition(.opacity)
-                } else {
-                    // 动画过程中：使用简单的颜色渐变（性能更好）
+                        .fill(.clear)
+                        .frame(height: 100)
+                    
+                    // 第二层：开始轻微模糊（非常细腻的过渡）
                     LinearGradient(
                         stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .white.opacity(0.3), location: 0.55),
-                            .init(color: .white.opacity(0.6), location: 0.75),
-                            .init(color: .white.opacity(0.85), location: 1.0)
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .white.opacity(0.05), location: 0.3),
+                            .init(color: .white.opacity(0.15), location: 0.6),
+                            .init(color: .white.opacity(0.35), location: 1.0)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 220)
+                    .frame(height: 80)
+                    
+                    // 第三层：中等模糊区域
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(0.35), location: 0.0),
+                            .init(color: .white.opacity(0.55), location: 0.4),
+                            .init(color: .white.opacity(0.75), location: 0.8),
+                            .init(color: .white.opacity(0.9), location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 80)
+                    
+                    // 第四层：底部强模糊（确保文字可读）
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(0.9), location: 0.0),
+                            .init(color: .white.opacity(0.95), location: 0.5),
+                            .init(color: .white, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 60)
                 }
+                .frame(height: 320)
+                .allowsHitTesting(false)
                 
-                // --- 3. 顶层：信息叠层 ---
-                heroCardInfo
-                    .padding(.bottom, 24)
-                    .frame(maxWidth: .infinity)
+                // --- 3. 顶层：信息叠层（底部对齐）---
+                VStack {
+                    Spacer()
+                    heroCardInfo
+                        .padding(.bottom, 24)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                // --- 4. 返回按钮（嵌入封面图左上角）---
+                backButton
+                    .padding(.leading, 12)
+                    .padding(.top, 12)
             }
             .frame(height: 320)
             .frame(maxWidth: .infinity)
@@ -289,14 +315,35 @@ struct RestaurantDetailView: View {
                 RoundedRectangle(cornerRadius: 32, style: .continuous)
                     .stroke(AppTheme.Colors.rimLight, lineWidth: 1.5)
             )
-            // 3. 简化转场阴影：动画过程中使用轻量阴影
+            // 阴影效果
             .shadow(
-                color: Color.black.opacity(isTransitionComplete ? 0.08 : 0.04),
-                radius: isTransitionComplete ? 20 : 5,
+                color: Color.black.opacity(0.08),
+                radius: 20,
                 x: 0,
-                y: isTransitionComplete ? 10 : 3
+                y: 10
             )
             .cardStyle()
+        }
+        
+        // MARK: - 返回按钮
+        private var backButton: some View {
+            Button {
+                navigationPath.removeLast()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(Color.black.opacity(0.3))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                    )
+            }
+            .pressableButton(scale: 0.9)
         }
 
     // Hero Card Embedded Info
@@ -413,60 +460,75 @@ struct RestaurantDetailView: View {
     // MARK: - 点评行（深色胶囊背景）
     private var unifiedReviewRow: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("一句话点评")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 20)
-
-            // 点评内容（可点击编辑）
-            ZStack(alignment: .bottomTrailing) {
-                VStack(spacing: 0) {
-                    if isEditingReview {
-                        ZStack(alignment: .center) {
-                            TextField(restaurant.review.isEmpty ? "添加你的点评..." : restaurant.review, text: $editedReview, axis: .vertical)
-                                .font(.body)
-                                .foregroundColor(AppTheme.Colors.brownText)
-                                .lineSpacing(4)
-                                .multilineTextAlignment(.center)
-                                .focused($reviewIsFocused)
-                                .scrollContentBackground(.hidden)
-                                .padding(20)
-                                .padding(.bottom, 10)
-                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                                // 移除自动聚焦，避免键盘自动弹出
-                                .onDisappear {
-                                    reviewIsFocused = false
-                                }
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
-                    } else {
-                        Text(restaurant.review.isEmpty ? "点击添加点评..." : restaurant.review)
-                            .font(.body)
-                            .foregroundColor(restaurant.review.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.mediumGray)
-                            .lineSpacing(4)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 14)
-                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    }
-                }
-                .frame(minHeight: isEditingReview ? 150 : 48)
-                .id(isEditingReview)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(AppTheme.Colors.warmGray)
-                )
-
-                // 勾叉按钮（使用统一组件）
+            // 标题栏：包含标题和取消/完成按钮
+            HStack(alignment: .center, spacing: 0) {
+                Text("一句话点评")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(isEditingReview ? AppTheme.Colors.textSecondary : AppTheme.Colors.darkText)
+                
+                Spacer()
+                
+                // 编辑状态下的取消/完成按钮
                 if isEditingReview {
-                    EditActionButtons(
-                        onCancel: cancelReview,
-                        onConfirm: saveReview
-                    )
-                    .padding(.trailing, 12)
-                    .padding(.bottom, 12)
+                    HStack(spacing: 16) {
+                        Button {
+                            cancelReview()
+                        } label: {
+                            Text("取消")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.mediumGray)
+                        }
+                        
+                        Button {
+                            saveReview()
+                        } label: {
+                            Text("完成")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.accent)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
+            .padding(.horizontal, 20)
+
+            // 点评内容（可点击编辑）
+            VStack(spacing: 0) {
+                if isEditingReview {
+                    ZStack(alignment: .center) {
+                        TextField(restaurant.review.isEmpty ? "添加你的点评..." : restaurant.review, text: $editedReview, axis: .vertical)
+                            .font(.body)
+                            .foregroundColor(AppTheme.Colors.brownText)
+                            .lineSpacing(4)
+                            .multilineTextAlignment(.center)
+                            .focused($reviewIsFocused)
+                            .scrollContentBackground(.hidden)
+                            .padding(20)
+                            .padding(.bottom, 10)
+                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                            // 移除自动聚焦，避免键盘自动弹出
+                            .onDisappear {
+                                reviewIsFocused = false
+                            }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
+                } else {
+                    Text(restaurant.review.isEmpty ? "点击添加点评..." : restaurant.review)
+                        .font(.body)
+                        .foregroundColor(restaurant.review.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.mediumGray)
+                        .lineSpacing(4)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 14)
+                        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                }
+            }
+            .frame(minHeight: isEditingReview ? 150 : 48)
+            .id(isEditingReview)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(AppTheme.Colors.warmGray)
+            )
             .padding(.horizontal, 20)
             .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
             .onTapGesture {
@@ -483,17 +545,49 @@ struct RestaurantDetailView: View {
     // MARK: - 标签区域（完全使用 ProfileView 的实现逻辑）
     private var unifiedTagsRow: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("标签")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 20)
-
-            // 标签内容（可点击编辑）
-            ZStack(alignment: .bottomTrailing) {
-                tagsCloudMainContent
-                tagsCloudActionButtons
+            // 标题栏：包含标题和取消/完成按钮
+            HStack(alignment: .center, spacing: 0) {
+                Text("标签")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(isEditingTags ? AppTheme.Colors.textSecondary : AppTheme.Colors.darkText)
+                
+                Spacer()
+                
+                // 编辑状态下的取消/完成按钮
+                if isEditingTags {
+                    HStack(spacing: 16) {
+                        Button {
+                            withAnimation(AppTheme.Animations.editingSpring) {
+                                cancelTags()
+                                isEditingTags = false
+                                newTagInput = ""
+                            }
+                        } label: {
+                            Text("取消")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.mediumGray)
+                        }
+                        
+                        Button {
+                            withAnimation(AppTheme.Animations.editingSpring) {
+                                saveTags()
+                                isEditingTags = false
+                                newTagInput = ""
+                            }
+                        } label: {
+                            Text("完成")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.accent)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+                }
             }
             .padding(.horizontal, 20)
+
+            // 标签内容（可点击编辑）
+            tagsCloudMainContent
+                .padding(.horizontal, 20)
         }
     }
 
@@ -530,7 +624,7 @@ struct RestaurantDetailView: View {
         }
     }
     
-    // MARK: - 编辑模式标签布局
+    // MARK: - 编辑模式标签布局（无卡片背景，与常用标签一致）
     private var tagsEditingLayout: some View {
         FlowLayout(spacing: 10) {
             ForEach(restaurant.tags, id: \.self) { tag in
@@ -538,25 +632,15 @@ struct RestaurantDetailView: View {
             }
             restaurantNewTagInputField
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.5))
-        )
     }
     
-    // MARK: - 展示模式标签布局
+    // MARK: - 展示模式标签布局（无卡片背景，与常用标签一致）
     private var tagsDisplayLayout: some View {
         FlowLayout(spacing: 10) {
             ForEach(restaurant.tags, id: \.self) { tag in
                 restaurantTagSticker(tag)
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.5))
-        )
     }
 
     // MARK: - 新标签输入框
@@ -576,38 +660,12 @@ struct RestaurantDetailView: View {
             )
             .focused($tagInputIsFocused)
             .frame(minWidth: 80)
+            .submitLabel(.done)  // 键盘显示"完成"按钮
             .onSubmit {
                 addNewTag()
             }
     }
 
-    // MARK: - 标签区域操作按钮（勾叉）- 使用统一组件
-    @ViewBuilder
-    private var tagsCloudActionButtons: some View {
-        if isEditingTags {
-            EditActionButtons(
-                onCancel: {
-                    withAnimation(AppTheme.Animations.editingSpring) {
-                        cancelTags()
-                        isEditingTags = false
-                        newTagInput = ""
-                    }
-                },
-                onConfirm: {
-                    withAnimation(AppTheme.Animations.editingSpring) {
-                        saveTags()
-                        isEditingTags = false
-                        newTagInput = ""
-                    }
-                }
-            )
-            .padding(.trailing, 12)
-            .padding(.bottom, 12)
-        }
-    }
-
-
-    
     private var statsSection: some View {
         HStack(spacing: 0) {
             statMiniCard(
@@ -658,25 +716,39 @@ struct RestaurantDetailView: View {
 
     private var reviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("一句话点评")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 4)
-
-            ZStack(alignment: .bottomTrailing) {
-                reviewCardContent
-
-                // 勾叉按钮（使用统一组件）
+            // 标题栏：包含标题和取消/完成按钮
+            HStack(alignment: .center, spacing: 0) {
+                Text("一句话点评")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(isEditingReview ? AppTheme.Colors.textSecondary : AppTheme.Colors.darkText)
+                
+                Spacer()
+                
+                // 编辑状态下的取消/完成按钮
                 if isEditingReview {
-                    EditActionButtons(
-                        onCancel: cancelReview,
-                        onConfirm: saveReview
-                    )
-                    .padding(.trailing, 12)
-                    .padding(.bottom, 12)
+                    HStack(spacing: 16) {
+                        Button {
+                            cancelReview()
+                        } label: {
+                            Text("取消")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(AppTheme.Colors.mediumGray)
+                        }
+                        
+                        Button {
+                            saveReview()
+                        } label: {
+                            Text("完成")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(AppTheme.Colors.accent)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
+            .padding(.horizontal, 20)
+
+            reviewCardContent
         }
         .onTapGesture {
             if !isEditingReview {
@@ -765,6 +837,7 @@ struct RestaurantDetailView: View {
                 }
             }
         }
+        .id("presetTagsSection")
     }
 
     // MARK: - 餐厅标签贴纸（完全复制 ProfileView 的 profileTagSticker）
@@ -940,7 +1013,7 @@ struct RestaurantDetailView: View {
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
             modelContext.delete(restaurant)
-            isPresented = false
+            navigationPath.removeLast()
         } label: {
             HStack {
                 Image(systemName: "trash")

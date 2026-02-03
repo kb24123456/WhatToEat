@@ -59,67 +59,60 @@ struct LibraryView: View {
         return districts
     }
     
+    // MARK: - Navigation路径
+    @State private var navigationPath = NavigationPath()
+    
     // MARK: - 生命周期
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // 视觉保底背景色：防止转场时出现黑色色块
-            Color(hex: "#F5F7FA")
-                .ignoresSafeArea()
-            
-            VStack(alignment: .leading, spacing: 0) {
-                HeaderView(
-                    selectedCity: selectedCity,
-                    showCityPicker: $showCityPicker,
-                    searchText: $searchText,
-                    isSearchFocused: _isSearchFocused
-                )
-                FilterBarView(
-                    selectedCity: selectedCity,
-                    selectedDistrict: $selectedDistrict,
-                    selectedType: $selectedType,
-                    sortOption: $sortOption,
-                    restaurants: restaurants,
-                    districts: currentDistricts
-                )
-                RestaurantListView(
-                    filteredRestaurants: filteredRestaurants,
+        NavigationStack(path: $navigationPath) {
+            ZStack(alignment: .topLeading) {
+                // 视觉保底背景色：防止转场时出现黑色色块
+                Color(hex: "#F5F7FA")
+                    .ignoresSafeArea()
+                
+                VStack(alignment: .leading, spacing: 0) {
+                    HeaderView(
+                        selectedCity: selectedCity,
+                        showCityPicker: $showCityPicker,
+                        searchText: $searchText,
+                        isSearchFocused: _isSearchFocused
+                    )
+                    FilterBarView(
+                        selectedCity: selectedCity,
+                        selectedDistrict: $selectedDistrict,
+                        selectedType: $selectedType,
+                        sortOption: $sortOption,
+                        restaurants: restaurants,
+                        districts: currentDistricts
+                    )
+                    RestaurantListView(
+                        filteredRestaurants: filteredRestaurants,
+                        locationManager: locationManager,
+                        navigationPath: $navigationPath
+                    )
+                }
+            }
+            .navigationDestination(for: Restaurant.self) { restaurant in
+                RestaurantDetailView(
+                    restaurant: restaurant,
                     locationManager: locationManager,
-                    selectedRestaurant: $selectedRestaurant,
-                    isDetailPresented: $isDetailPresented
+                    navigationPath: $navigationPath
                 )
             }
-        }
-        // 使用 item-based sheet 避免黑色色块
-        .sheet(item: $selectedRestaurant) { restaurant in
-            RestaurantDetailView(
-                restaurant: restaurant,
-                locationManager: locationManager,
-                isPresented: $isDetailPresented
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
-        .onChange(of: selectedRestaurant) { _, newValue in
-            // 同步 isDetailPresented 状态
-            isDetailPresented = newValue != nil
-            isTabBarHidden = newValue != nil
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .restoreTabBar)) { _ in
-            isTabBarHidden = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .restaurantListShouldRefresh)) { _ in
-            if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity") {
-                selectedCity = savedCity
+            .onReceive(NotificationCenter.default.publisher(for: .restaurantListShouldRefresh)) { _ in
+                if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity") {
+                    selectedCity = savedCity
+                }
+                print("RestaurantListRefresh: 收到刷新通知, selectedCity=\(selectedCity)")
             }
-            print("RestaurantListRefresh: 收到刷新通知, selectedCity=\(selectedCity)")
-        }
-        .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
-        .sheet(isPresented: $showImportSheet) { ImportDataView() }
-        .sheet(isPresented: $showCityPicker) {
-            CitySelectionView(selectedCity: $selectedCity)
-        }
-        .onChange(of: selectedCity) {
-            UserDefaults.standard.set($0, forKey: kSavedCityKey)
+            .toolbar(.visible, for: .tabBar)
+            .sheet(isPresented: $showImportSheet) { ImportDataView() }
+            .sheet(isPresented: $showCityPicker) {
+                CitySelectionView(selectedCity: $selectedCity)
+            }
+            .onChange(of: selectedCity) {
+                UserDefaults.standard.set($0, forKey: kSavedCityKey)
+            }
         }
     }
 
@@ -425,21 +418,17 @@ private struct FilterBarView: View {
         return result
     }
     
-    // MARK: - 餐厅列表子视图
+    // MARK: - 餐厅列表子视图（Navigation版）
 private struct RestaurantListView: View {
     let filteredRestaurants: [Restaurant]
     let locationManager: LocationManager
-    @Binding var selectedRestaurant: Restaurant?
-    @Binding var isDetailPresented: Bool
+    @Binding var navigationPath: NavigationPath
     
     var body: some View {
         ScrollView {
             LazyVStack(spacing: AppTheme.Spacing.lg) {
                 ForEach(filteredRestaurants) { restaurant in
-                    Button {
-                        // 直接设置选中餐厅，让 sheet 自动处理转场
-                        selectedRestaurant = restaurant
-                    } label: {
+                    NavigationLink(value: restaurant) {
                         RestaurantCard(
                             restaurant: restaurant,
                             locationManager: locationManager,
