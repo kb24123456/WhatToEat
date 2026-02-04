@@ -104,6 +104,14 @@ class AsyncImageLoader: ObservableObject {
         cancellable = true
     }
     
+    /// 重置加载器状态
+    func reset() {
+        cancellable = false
+        image = nil
+        isLoading = false
+        error = nil
+    }
+    
     /// 清除缓存
     static func clearCache() {
         ImageCacheManager.shared.clearCache()
@@ -166,6 +174,8 @@ struct AsyncImageView: View {
     
     // 使用 StateObject 管理图片加载状态
     @StateObject private var loader = AsyncImageLoader()
+    // 跟踪当前加载的文件名，用于检测变化
+    @State private var loadedFilename: String?
     
     // MARK: - 初始化方法
     /// 初始化异步图片视图
@@ -228,7 +238,9 @@ struct AsyncImageView: View {
             }
         }
         .onAppear {
-            if let filename = filename {
+            // 只在文件名变化或首次加载时重新加载
+            if let filename = filename, filename != loadedFilename {
+                loadedFilename = filename
                 loader.loadImage(filename: filename)
             }
         }
@@ -238,8 +250,10 @@ struct AsyncImageView: View {
         }
         .onChange(of: filename) { oldFilename, newFilename in
             // 文件名变化时重新加载
-            if oldFilename != newFilename {
+            if newFilename != loadedFilename {
+                loadedFilename = newFilename
                 loader.cancel()
+                loader.reset()  // 重置加载器状态
                 if let newFilename = newFilename {
                     loader.loadImage(filename: newFilename)
                 }

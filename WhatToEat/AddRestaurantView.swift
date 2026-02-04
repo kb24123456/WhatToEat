@@ -276,7 +276,7 @@ struct AddRestaurantView: View {
         ZStack {
             // 虚线边框背景
             RoundedRectangle(cornerRadius: 20)
-                .fill(AppTheme.Colors.lightGray)
+                .fill(AppTheme.Colors.cardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
                         .strokeBorder(
@@ -409,7 +409,7 @@ struct AddRestaurantView: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.Colors.cardBackground)
+                    .fill(AppTheme.Colors.softBackground)
             )
     }
     
@@ -506,7 +506,7 @@ struct AddRestaurantView: View {
                         .fill(.ultraThinMaterial)
                         .overlay(
                             Circle()
-                                .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+                                .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
                         )
                 )
                 .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 3)
@@ -666,7 +666,8 @@ struct AddRestaurantView: View {
             .id(isEditingReview)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(AppTheme.Colors.warmGray)
+                    .fill(AppTheme.Colors.card)
+                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
             )
             .padding(.horizontal, 20)
             .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
@@ -798,7 +799,7 @@ struct AddRestaurantView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(0.5))
+                    .fill(AppTheme.Colors.softBackground)
             )
             .overlay(
                 Capsule()
@@ -817,7 +818,7 @@ struct AddRestaurantView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(0.5))
+                    .fill(AppTheme.Colors.softBackground)
             )
             .overlay(
                 Capsule()
@@ -1036,7 +1037,7 @@ struct AddRestaurantView: View {
                     .padding(.vertical, 6)
                     .background(
                         Capsule()
-                            .fill(Color.white.opacity(0.35))
+                            .fill(AppTheme.Colors.softBackground)
                     )
                     .focused($tagInputIsFocused)
                     .frame(minWidth: 80)
@@ -1090,10 +1091,10 @@ struct AddRestaurantView: View {
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(AppTheme.Colors.warmGray)
+                .fill(AppTheme.Colors.softBackground)
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
+                        .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
                 )
         )
     }
@@ -1111,7 +1112,7 @@ struct AddRestaurantView: View {
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(Color.white.opacity(0.35))
+                        .fill(AppTheme.Colors.softBackground)
                 )
                 .overlay(
                     Capsule()

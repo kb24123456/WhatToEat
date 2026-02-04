@@ -907,10 +907,10 @@ struct RestaurantMapView: View {
                 // 这个区域位于导航栏上方，实现平滑过渡效果
                 LinearGradient(
                     stops: [
-                        .init(color: Color.white.opacity(0), location: 0.0),       // 最上方完全透明（显示地图）
-                        .init(color: Color.white.opacity(0.0), location: 0.2),   // 20%位置轻微白色
+                        .init(color: Color.white.opacity(0.25), location: 0.0),       // 最上方完全透明（显示地图）
+                        .init(color: Color.white.opacity(0.65), location: 0.2),   // 20%位置轻微白色
                         .init(color: Color.white.opacity(0.85), location: 0.65),    // 65%位置较明显
-                        .init(color: Color.white.opacity(0.98), location: 0.85),   // 85%位置开始几乎纯白
+                        .init(color: Color.white, location: 0.95),   // 85%位置开始几乎纯白
                         .init(color: Color.white, location: 1.0)                  // 最下方纯白色（与导航栏衔接）
                     ],
                     startPoint: .top,
@@ -1127,6 +1127,7 @@ struct RestaurantCluster: Identifiable {
 struct GourmetAnnotation: View, Equatable {
     static func == (lhs: GourmetAnnotation, rhs: GourmetAnnotation) -> Bool {
         lhs.restaurant.id == rhs.restaurant.id &&
+        lhs.restaurant.coverPhotoFilename == rhs.restaurant.coverPhotoFilename &&
         lhs.isNavigating == rhs.isNavigating &&
         lhs.isDestination == rhs.isDestination &&
         lhs.simplified == rhs.simplified &&
@@ -1141,6 +1142,11 @@ struct GourmetAnnotation: View, Equatable {
     @State private var appearScale: CGFloat = 0.0
     @State private var appearOffset: CGFloat = 20
     var onSelect: (Restaurant) -> Void
+    
+    // 使用 restaurant.id 和 coverPhotoFilename 组合作为唯一标识
+    private var viewID: String {
+        "\(restaurant.id)-\(restaurant.coverPhotoFilename ?? "no-image")"
+    }
     
     // 判断是否已打卡
     private var isCheckedIn: Bool {
@@ -1206,6 +1212,7 @@ struct GourmetAnnotation: View, Equatable {
                     .clipShape(Circle())
                 } else {
                     // 完整模式：加载真实图片
+                    // 使用 viewID 强制视图刷新，确保图片正确显示
                     AsyncImageView(
                         filename: restaurant.coverPhotoFilename,
                         placeholder: AnyView(
@@ -1218,6 +1225,7 @@ struct GourmetAnnotation: View, Equatable {
                             }
                         )
                     )
+                    .id(viewID)  // 关键：使用唯一标识强制视图刷新
                     .frame(width: 40, height: 40)
                     .clipShape(Circle())
                 }

@@ -71,7 +71,7 @@ struct RestaurantCard: View {
                         endPoint: .bottom
                     ))
             )
-            .overlay(RoundedRectangle(cornerRadius: AppTheme.Radius.image).stroke(Color.white.opacity(0.8), lineWidth: 1.2))
+            .overlay(RoundedRectangle(cornerRadius: AppTheme.Radius.image).stroke(AppTheme.Colors.divider, lineWidth: 1.2))
         }
         .shadow(color: Color.black.opacity(0.03), radius: 6, x: 4, y: 6)
     }
@@ -139,7 +139,7 @@ struct RestaurantCard: View {
             .fill(AppTheme.Colors.softBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
             )
     }
     
@@ -185,7 +185,7 @@ struct RestaurantCard: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(AppTheme.Colors.lightGray.opacity(0.5))
+        .background(AppTheme.Colors.softBackground)
         .cornerRadius(6)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -203,10 +203,10 @@ struct RestaurantCard: View {
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(Color.white.opacity(0.9))
+                .fill(AppTheme.Colors.card)
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                        .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
                 )
                 .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
         )

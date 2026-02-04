@@ -4,6 +4,20 @@ import SwiftData
 import UIKit
 import PhotosUI
 
+// MARK: - 修复：在使用自定义返回按钮时恢复侧滑返回手势
+// 这段代码启用原生的 iMessage 风格交互式返回效果
+extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
+    override open func viewDidLoad() {
+        super.viewDidLoad()
+        interactivePopGestureRecognizer?.delegate = self
+    }
+    
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // 只有在导航栈中有多个视图控制器时才启用手势
+        return viewControllers.count > 1
+    }
+}
+
 // MARK: - 中文日期格式化扩展
 extension Date {
     var chineseFormatted: String {
@@ -58,6 +72,7 @@ extension View {
 }
 
 // MARK: - Pressable Button Modifier (Micro-interaction)
+// 优化：不拦截从屏幕边缘开始的滑动，避免与右滑返回手势冲突
 struct PressableButtonModifier: ViewModifier {
     let scale: CGFloat
     @State private var isPressed = false
@@ -67,8 +82,12 @@ struct PressableButtonModifier: ViewModifier {
             .scaleEffect(isPressed ? scale : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
             .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        // 忽略从边缘开始的拖动（避免与右滑返回冲突）
+                        let startX = value.startLocation.x
+                        guard startX > 40 else { return }
+                        
                         if !isPressed {
                             isPressed = true
                             let generator = UIImpactFeedbackGenerator(style: .light)
@@ -120,11 +139,7 @@ struct RestaurantDetailView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
-                // 1. 最底层：实色底座，消除黑色色块
-                Color.white
-                    .ignoresSafeArea()
-                
-                // 2. 背景渐变层
+                // 背景渐变层
                 backgroundGradient
                     .ignoresSafeArea()
 
@@ -161,15 +176,6 @@ struct RestaurantDetailView: View {
             .compositingGroup()
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
-            // 右滑返回手势
-            .gesture(
-                DragGesture()
-                    .onEnded { value in
-                        if value.translation.width > 100 && abs(value.translation.height) < 50 {
-                            navigationPath.removeLast()
-                        }
-                    }
-            )
         }
     }
     
@@ -233,7 +239,7 @@ struct RestaurantDetailView: View {
                         filename: restaurant.coverPhotoFilename,
                         placeholder: AnyView(
                             Rectangle()
-                                .fill(AppTheme.Colors.lightGray)
+                                .fill(AppTheme.Colors.cardBackground)
                                 .overlay(
                                     Image(systemName: "fork.knife")
                                         .font(.system(size: 40))
@@ -340,7 +346,7 @@ struct RestaurantDetailView: View {
                     )
                     .overlay(
                         Circle()
-                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                            .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
                     )
             }
             .pressableButton(scale: 0.9)
@@ -360,7 +366,7 @@ struct RestaurantDetailView: View {
                             .fontWeight(.semibold)
                             .foregroundColor(.black)
                             .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Color.white.opacity(0.35), in: Capsule())
+                            .background(AppTheme.Colors.softBackground, in: Capsule())
                         
                         if restaurant.averagePrice > 0 {
                             Text("¥\(Int(restaurant.averagePrice))/人")
@@ -527,7 +533,8 @@ struct RestaurantDetailView: View {
             .id(isEditingReview)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(AppTheme.Colors.warmGray)
+                    .fill(AppTheme.Colors.card)
+                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
             )
             .padding(.horizontal, 20)
             .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
@@ -652,7 +659,7 @@ struct RestaurantDetailView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(0.5))
+                    .fill(AppTheme.Colors.softBackground)
             )
             .overlay(
                 Capsule()
@@ -826,7 +833,7 @@ struct RestaurantDetailView: View {
                             .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(Color.white.opacity(0.5))
+                                    .fill(AppTheme.Colors.softBackground)
                             )
                             .overlay(
                                 Capsule()
@@ -864,7 +871,7 @@ struct RestaurantDetailView: View {
         .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(AppTheme.Colors.warmGray.opacity(0.6))
+                .fill(AppTheme.Colors.softBackground)
         )
     }
 
@@ -998,10 +1005,10 @@ struct RestaurantDetailView: View {
         .padding(.vertical, 40)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.35))
+                .fill(AppTheme.Colors.card)
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
                 )
         )
         .shadow(color: Color.black.opacity(0.04), radius: 20, x: 0, y: 10)
@@ -1026,10 +1033,10 @@ struct RestaurantDetailView: View {
             .padding(.vertical, 14)
             .background(
                 Capsule()
-                    .foregroundStyle(.ultraThinMaterial)
+                    .fill(AppTheme.Colors.card)
                     .overlay(
                         Capsule()
-                            .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
+                            .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
                     )
             )
         }
@@ -1129,7 +1136,7 @@ struct RestaurantDetailView: View {
                             .fill(AppTheme.Colors.softBackground)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
                             )
                     )
             }

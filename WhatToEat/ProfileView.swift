@@ -128,7 +128,7 @@ struct ProfileView: View {
                 // 头像
                 ZStack {
                     Circle()
-                        .fill(Color.white.opacity(0.5))
+                        .fill(AppTheme.Colors.card)
                         .frame(width: 64, height: 64)
 
                     if let avatarData = userProfile.avatarData,
@@ -225,7 +225,7 @@ struct ProfileView: View {
             consumptionTrendChart
             
             Divider()
-                .background(Color.white.opacity(0.3))
+                .background(AppTheme.Colors.divider)
             
             // 餐饮类型占比分段进度条
             cuisineTypeBars
@@ -304,7 +304,7 @@ struct ProfileView: View {
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(AppTheme.Colors.warmGray)
+                                    .fill(AppTheme.Colors.softBackground)
                                     .frame(height: 6)
                                 
                                 RoundedRectangle(cornerRadius: 3)
@@ -397,15 +397,15 @@ struct ProfileView: View {
             }
     }
     
-    // MARK: - 标签区域主内容
+    // MARK: - 标签区域主内容（无卡片背景，与 RestaurantDetailView 一致）
     private var tagsCloudMainContent: some View {
         VStack(spacing: 0) {
             tagsLayoutContainer
             
             if isEditingTags {
                 presetTagsSection
-                    .padding(16)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .padding(.top, 16)
+                    .transition(.opacity)
             }
         }
         .animation(AppTheme.Animations.standardSpring, value: isEditingTags)
@@ -421,7 +421,7 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - 编辑模式标签布局
+    // MARK: - 编辑模式标签布局（无卡片背景，与 RestaurantDetailView 一致）
     private var tagsEditingLayout: some View {
         FlowLayout(spacing: 10) {
             ForEach(userTags, id: \.self) { tag in
@@ -429,11 +429,6 @@ struct ProfileView: View {
             }
             newTagInputField
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.5))
-        )
     }
     
     // MARK: - 新标签输入框
@@ -445,7 +440,7 @@ struct ProfileView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(0.5))
+                    .fill(AppTheme.Colors.softBackground)
             )
             .overlay(
                 Capsule()
@@ -460,29 +455,58 @@ struct ProfileView: View {
             // 移除自动聚焦，避免键盘自动弹出
     }
 
-    // MARK: - 展示模式标签布局（最多2行）
+    // MARK: - 展示模式标签布局（无卡片背景，与 RestaurantDetailView 一致）
     private var tagsDisplayLayout: some View {
-        LimitedRowsFlowLayout(spacing: 10, maxRows: 2) {
+        FlowLayout(spacing: 10) {
             ForEach(userTags, id: \.self) { tag in
                 profileTagSticker(tag)
             }
+            // 新标签输入按钮（与 RestaurantDetailView 和 AddRestaurantView 同款）
+            newTagInputButton
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.5))
-        )
     }
     
-    // MARK: - 推荐标签区域
+    // MARK: - 新标签输入按钮（点击后进入编辑模式）
+    private var newTagInputButton: some View {
+        Button {
+            withAnimation(AppTheme.Animations.editingSpring) {
+                isEditingTags = true
+                // 延迟聚焦，等待布局完成
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    tagInputIsFocused = true
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                Text("新标签")
+                    .font(.system(size: 14, design: .rounded))
+            }
+            .foregroundColor(AppTheme.Colors.lightText)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(AppTheme.Colors.softBackground)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.Colors.separatorGray.opacity(0.5), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    // MARK: - 常用标签区域（与 RestaurantDetailView 一致）
     private var presetTagsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("推荐标签")
+            Text("常用标签")
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.lightText)
             
             FlowLayout(spacing: 10) {
-                let presetTags = ["氛围感", "老字号", "二刷", "排队王", "性价比", "网红店", "隐藏菜单", "约会圣地"]
+                let presetTags = ["网红店", "性价比", "环境好", "服务好", "排队久", "踩雷", "常客", "回头客"]
                 ForEach(presetTags.filter { !userTags.contains($0) }, id: \.self) { tag in
                     Button {
                         withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
@@ -496,7 +520,7 @@ struct ProfileView: View {
                             .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(Color.white.opacity(0.5))
+                                    .fill(AppTheme.Colors.softBackground)
                             )
                             .overlay(
                                 Capsule()
@@ -533,7 +557,7 @@ struct ProfileView: View {
         .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(AppTheme.Colors.warmGray.opacity(0.6))
+                .fill(AppTheme.Colors.softBackground)
         )
     }
     
@@ -708,7 +732,7 @@ struct ProfileView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.7))
+                .fill(AppTheme.Colors.card)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .stroke(AppTheme.Colors.separatorGray.opacity(0.3), lineWidth: 0.5)
@@ -944,7 +968,7 @@ struct NextLevelProgressView: View {
                     ZStack(alignment: .leading) {
                         // 背景
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(AppTheme.Colors.warmGray)
+                            .fill(AppTheme.Colors.softBackground)
                             .frame(height: 4)
 
                         // 进度
@@ -1012,7 +1036,7 @@ struct TopRestaurantCard: View {
                 // 餐厅头像（左上角叠加排名徽章）
                 ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(AppTheme.Colors.warmGray)
+                        .fill(AppTheme.Colors.cardBackground)
                         .frame(width: 60, height: 60)
                     
                     if let imageName = restaurant.coverPhotoFilename,
@@ -1031,7 +1055,7 @@ struct TopRestaurantCard: View {
                     // 排名徽章 - 移至左上角，缩小20%（原32pt -> 25.6pt ≈ 26pt）
                     ZStack {
                         Circle()
-                            .fill(rank <= 3 ? AppTheme.Colors.accent : AppTheme.Colors.warmGray)
+                            .fill(rank <= 3 ? AppTheme.Colors.accent : AppTheme.Colors.softBackground)
                             .frame(width: 26, height: 26)
                         
                         Text("\(rank)")
