@@ -238,10 +238,13 @@ struct AsyncImageView: View {
             }
         }
         .onAppear {
-            // 只在文件名变化或首次加载时重新加载
-            if let filename = filename, filename != loadedFilename {
-                loadedFilename = filename
-                loader.loadImage(filename: filename)
+            // 修复：只要图片未加载且有文件名，就尝试加载
+            if let filename = filename {
+                // 如果文件名变化或图片尚未加载，重新加载
+                if filename != loadedFilename || loader.image == nil {
+                    loadedFilename = filename
+                    loader.loadImage(filename: filename)
+                }
             }
         }
         .onDisappear {

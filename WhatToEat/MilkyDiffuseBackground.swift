@@ -1,83 +1,65 @@
 import SwiftUI
 
-/// 奶脂风格色彩弥散背景 - 柔和氛围式
-/// 主体为纯白背景，顶部和底部各三分之一处有弥散色彩，中间三分之一留白
+/// 奶脂风格色彩弥散背景 - 参考图实现版
+/// 大面积柔和渐变，左侧和右下淡粉，右上淡青
 struct MilkyDiffuseBackground: View {
-    @State private var isAnimating = false
+    @State private var animate = false
 
-    // 定义可见的点缀色彩（中等饱和度）
-    private let softBlue = Color(hex: "#B8E0F8")    // 淡蓝
-    private let softPink = Color(hex: "#F0D0E0")    // 淡粉
+    // 参考图色彩分析
+    private let softPink = Color(hex: "#FCE8E8")      // 极淡粉色
+    private let softCyan = Color(hex: "#E8F8F5")      // 极淡青色/薄荷
+    private let softLavender = Color(hex: "#F0E8F8")  // 极淡薰衣草紫
 
     var body: some View {
         GeometryReader { geometry in
+            let w = geometry.size.width
+            let h = geometry.size.height
+
             ZStack {
-                // 1. 基础底色：纯净白（中间三分之一留白）
-                Color.white
+                // 基础底色：极淡的暖白色
+                Color(hex: "#FDFCFB").ignoresSafeArea()
 
-                // 2. 顶部弥散层 - 占顶部三分之一
-                VStack {
-                    HStack {
-                        // 左上角：淡蓝弥散
-                        Circle()
-                            .fill(softBlue)
-                            .frame(width: geometry.size.width * 0.6)
-                            .blur(radius: 55)
-                            .opacity(0.28)
-                            .offset(x: -geometry.size.width * 0.15,
-                                    y: -geometry.size.height * 0.05)
+                // 左侧大面积淡粉色 - 从左边渐入
+                Ellipse()
+                    .fill(softPink)
+                    .frame(width: w * 0.8, height: h * 0.9)
+                    .blur(radius: 120)
+                    .opacity(0.5)
+                    .offset(x: -w * 0.25, y: -h * 0.05)
+                    .offset(x: animate ? 15 : -10)
 
-                        Spacer()
+                // 右下角淡粉色 - 大面积覆盖
+                Ellipse()
+                    .fill(softPink)
+                    .frame(width: w * 0.9, height: h * 0.8)
+                    .blur(radius: 140)
+                    .opacity(0.45)
+                    .offset(x: w * 0.2, y: h * 0.3)
+                    .offset(y: animate ? -10 : 15)
 
-                        // 右上角：淡粉弥散
-                        Circle()
-                            .fill(softPink)
-                            .frame(width: geometry.size.width * 0.55)
-                            .blur(radius: 52)
-                            .opacity(0.26)
-                            .offset(x: geometry.size.width * 0.15,
-                                    y: -geometry.size.height * 0.03)
-                    }
-                    .frame(height: geometry.size.height * 0.33)
+                // 右上角淡青色/薄荷 - 清新感
+                Ellipse()
+                    .fill(softCyan)
+                    .frame(width: w * 0.7, height: h * 0.7)
+                    .blur(radius: 100)
+                    .opacity(0.4)
+                    .offset(x: w * 0.15, y: -h * 0.15)
+                    .offset(x: animate ? -10 : 10, y: animate ? 10 : -10)
 
-                    Spacer() // 中间三分之一留白
-                }
-
-                // 3. 底部弥散层 - 占底部三分之一
-                VStack {
-                    Spacer() // 中间三分之一留白
-
-                    HStack {
-                        // 左下角：淡粉弥散
-                        Circle()
-                            .fill(softPink)
-                            .frame(width: geometry.size.width * 0.5)
-                            .blur(radius: 50)
-                            .opacity(0.24)
-                            .offset(x: -geometry.size.width * 0.12,
-                                    y: geometry.size.height * 0.05)
-
-                        Spacer()
-
-                        // 右下角：淡蓝弥散
-                        Circle()
-                            .fill(softBlue)
-                            .frame(width: geometry.size.width * 0.45)
-                            .blur(radius: 48)
-                            .opacity(0.24)
-                            .offset(x: geometry.size.width * 0.12,
-                                    y: geometry.size.height * 0.03)
-                    }
-                    .frame(height: geometry.size.height * 0.33)
-                }
+                // 中央偏下淡薰衣草紫 - 过渡色
+                Ellipse()
+                    .fill(softLavender)
+                    .frame(width: w * 0.6, height: w * 0.6)
+                    .blur(radius: 80)
+                    .opacity(0.25)
+                    .offset(y: h * 0.1)
             }
-            .drawingGroup() // 高性能渲染
+            .drawingGroup()
         }
         .ignoresSafeArea()
         .onAppear {
-            // 极缓慢的呼吸动画，几乎察觉不到
-            withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
-                isAnimating = true
+            withAnimation(.easeInOut(duration: 25).repeatForever(autoreverses: true)) {
+                animate.toggle()
             }
         }
     }

@@ -134,13 +134,12 @@ struct ContentView: View {
                 withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.7, blendDuration: 0.2)) {
                     isAdding = true
                 }
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
             } label: {
                 ZStack {
                     Circle()
                         .fill(Color.black)
                         .frame(width: 44, height: 44)
-                    
+
                     Image(systemName: TabItem.add.iconName)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.white)
@@ -148,6 +147,7 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
+            .oreoClickEffect(style: .medium) // Oreo: 黑色按钮用 medium 震动
             
             // 4. 食记按钮
             tabButton(

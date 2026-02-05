@@ -13,20 +13,21 @@ import SwiftUI
 // v2.0: Milky Solid 奶脂实色风格 (当前)
 
 struct AppTheme {
-    // MARK: - 1. 配色方案 (Design System v2.0 - 奶脂实色风格)
+    // MARK: - 1. 配色方案 (Misty Oreo Design System)
     struct Colors {
         // 背景色系统
-        static let background = Color(hex: "#F8F9FB") // 柔和的浅灰背景
+        static let background = Color(hex: "#FFFFFF") // 纯白背景
         static let navigationBar = Colors.background
         static let card = Color.white
         
-        // 文字色系统 (柔和半透明)
-        static let textPrimary = Color(hex: "#2C3E50") // 深蓝灰，柔和不刺眼
-        static let textSecondary = Color(hex: "#7F8C8D").opacity(0.9) // 柔和 secondary
-        static let textTertiary = Color(hex: "#95A5A6").opacity(0.7) // 更淡的辅助文字
+        // 文字色系统
+        static let textPrimary = Color(hex: "#1A1A1A") // 主文字
+        static let textSecondary = Color(hex: "#1A1A1A").opacity(0.6) // 次要文字
+        static let textTertiary = Color(hex: "#1A1A1A").opacity(0.4) // 辅助文字
         
-        // 🔴 核心强调色（小红书红）
+        // 🔴 核心强调色（小红书红）- 感性动作
         static let accent = Color(hex: "#FF2442")
+        static let xhsRed = Color(hex: "#FF2442")
         static let accentGradient = LinearGradient(
             colors: [Color(hex: "#FF2442"), Color(hex: "#E61238")],
             startPoint: .topLeading,
@@ -34,10 +35,11 @@ struct AppTheme {
         )
         
         // ✅ 辅助色系
-        static let primary = Color(hex: "#5796E6")
+        static let primary = Color(hex: "#89CFF0") // Baby Blue - 理性数据
+        static let babyBlue = Color(hex: "#89CFF0") // 理性数据专用
         static let secondary = Color(hex: "#FFB347")
         static let success = Color(hex: "#43C59E")
-        static let price = Color(hex: "#FF2442") // 小红书红
+        static let price = Color(hex: "#89CFF0") // 价格用 babyBlue
         
         // 柔和背景色
         static let lightRed = Color(hex: "#FFE8EE").opacity(0.8)
@@ -47,9 +49,9 @@ struct AppTheme {
         static let softBackground = Color(hex: "#F8F9FB")
         static let divider = Color.black.opacity(0.04) // 更淡的分隔线
         
-        // MARK: - 奶脂实色风格专用 (v2.0)
+        // MARK: - Misty Oreo 专用
         static let softSecondary = Color(hex: "#A2AAB1")
-        static let milkyWhite = Color.white.opacity(0.95)
+        static let milkyWhite = Color.white.opacity(0.2) // 极淡 0.2 透明度
         static let shadowColor = Color.black.opacity(0.04)
         
         // MARK: - 语义化补齐
@@ -57,8 +59,6 @@ struct AppTheme {
         static let destructive = Color(hex: "#FF3B30")
         /// 警告颜色，用于智能识别不确定时的提示
         static let warning = Color(hex: "#FF9500")
-        /// 婴儿蓝，用于特殊强调或装饰
-        static let babyBlue = Color(hex: "#89CFF0")
         
         // MARK: - 极致细节专用
         /// 极致边缘高光色 (Rim Light)，用于 overlay 描边，提升物理厚度感
@@ -68,12 +68,12 @@ struct AppTheme {
         /// 玻璃白色，用于玻璃态背景
         static let glassWhite = Color.white.opacity(0.3)
         
-        /// 奶脂玻璃蒙层渐变：用于图片底部的文字承载区
+        /// Misty Oreo 蒙层渐变：极淡
         static let milkyOverlayGradient = LinearGradient(
             colors: [
                 Color.white.opacity(0),
-                Color.white.opacity(0.4),
-                Colors.milkyWhite // 使用你已有的 milkyWhite
+                Color.white.opacity(0.1),
+                Colors.milkyWhite // 0.2 透明度
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -121,6 +121,18 @@ struct AppTheme {
         static let confettiPurple = Color(hex: "#9966FF")
     }
         
+    // MARK: - 5. 布局规范 (Design System v2.0)
+    struct Layout {
+        /// 页面水平边距：50pt - 去容器化后的宽松边距，营造杂志感
+        static let pagePadding: CGFloat = 50
+        
+        /// 模块垂直间距：24pt - 组件之间的呼吸空间
+        static let sectionSpacing: CGFloat = 24
+        
+        /// 元素内部间距：16pt - 紧凑元素组
+        static let elementSpacing: CGFloat = 16
+    }
+
     // MARK: - 6. 设计规则 (Design System v2.0)
     struct Rules {
         // 导航栏规则
@@ -130,77 +142,52 @@ struct AppTheme {
         static let restaurantCardUseShadow = false // 餐厅信息卡片不允许有阴影
     }
     
-    // MARK: - 7. 奶脂实色卡片规范 (Design System v2.0)
+    // MARK: - 7. Misty Oreo 卡片规范
     struct Card {
         /// 卡片背景色：纯白实色
         static let background = Color.white
 
-        /// 卡片圆角：28pt (continuous 风格)
-        static let cornerRadius: CGFloat = 28
+        /// 卡片圆角：32pt (continuous 风格)
+        static let cornerRadius: CGFloat = 32
 
-        /// 卡片内边距：16pt
-        static let padding: CGFloat = 16
+        /// 卡片内边距
+        static let paddingHorizontal: CGFloat = 24
+        static let paddingVertical: CGFloat = 20
 
-        /// 卡片间距：12pt
-        static let spacing: CGFloat = 12
+        /// 模块间距：32pt 或 48pt
+        static let spacingSmall: CGFloat = 32
+        static let spacingLarge: CGFloat = 48
 
-        /// 边缘高光：白色描边，增强物理厚度感
-        static let rimLight = Color.white.opacity(0.8)
-        static let rimLightWidth: CGFloat = 0.5
+        /// 边框：极细黑色描边
+        static let strokeColor = Color.black.opacity(0.05)
+        static let strokeWidth: CGFloat = 0.5
 
-        /// 双层阴影系统
+        /// 废弃阴影
         struct Shadow {
-            /// 底层环境光：大范围柔和阴影
-            static let ambient = (
-                color: Color.black.opacity(0.04),
-                radius: CGFloat(20),
-                x: CGFloat(0),
-                y: CGFloat(10)
-            )
-            /// 边缘定义光：小范围清晰阴影
-            static let defining = (
-                color: Color.black.opacity(0.06),
-                radius: CGFloat(5),
-                x: CGFloat(0),
-                y: CGFloat(2)
-            )
+            static let ambient = (color: Color.clear, radius: CGFloat(0), x: CGFloat(0), y: CGFloat(0))
         }
 
-        /// 内部输入框背景：极浅色，产生下陷感
-        static let insetBackground = Color(hex: "#F0F2F5")
-
-        /// 轻量级立体感卡片样式 - 统一应用到所有卡片
+        /// Misty Oreo 卡片样式 - 扁平 + 细边框
         static func standardStyle() -> some ViewModifier {
             CardStandardStyle()
         }
     }
 
-    /// 标准卡片样式修饰符 - 轻量级立体感
+    /// Misty Oreo 标准卡片样式 - 扁平 + 细边框
     struct CardStandardStyle: ViewModifier {
         func body(content: Content) -> some View {
             content
+                .padding(.horizontal, Card.paddingHorizontal)
+                .padding(.vertical, Card.paddingVertical)
                 .background(
                     RoundedRectangle(cornerRadius: Card.cornerRadius, style: .continuous)
                         .fill(Card.background)
-                        // 内阴影效果 - 增加厚度感
                         .overlay(
                             RoundedRectangle(cornerRadius: Card.cornerRadius, style: .continuous)
-                                .stroke(Card.rimLight, lineWidth: Card.rimLightWidth)
+                                .stroke(Card.strokeColor, lineWidth: Card.strokeWidth)
                         )
                 )
-                // 轻量级双层阴影
-                .shadow(
-                    color: Card.Shadow.ambient.color,
-                    radius: Card.Shadow.ambient.radius,
-                    x: Card.Shadow.ambient.x,
-                    y: Card.Shadow.ambient.y
-                )
-                .shadow(
-                    color: Card.Shadow.defining.color,
-                    radius: Card.Shadow.defining.radius,
-                    x: Card.Shadow.defining.x,
-                    y: Card.Shadow.defining.y
-                )
+            // 无阴影 - Misty Oreo 扁平风格
         }
     }
     
@@ -354,6 +341,30 @@ struct HapticFeedbackModifier: ViewModifier {
     }
 }
 
+// MARK: - Oreo 点击效果修饰符
+struct OreoClickEffectModifier: ViewModifier {
+    @State private var isPressed = false
+    let impactStyle: UIImpactFeedbackGenerator.FeedbackStyle
+    
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.1, dampingFraction: 0.7), value: isPressed)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !isPressed {
+                            isPressed = true
+                            UIImpactFeedbackGenerator(style: impactStyle).impactOccurred()
+                        }
+                    }
+                    .onEnded { _ in
+                        isPressed = false
+                    }
+            )
+    }
+}
+
 extension View {
     /// 为输入框添加聚焦时的动态效果（边框高亮、阴影增强、缩放动画）
     func withFocusedInputEffects(isFocused: FocusState<Bool>.Binding) -> some View {
@@ -380,5 +391,95 @@ extension View {
         self.onTapGesture {
             hideKeyboard()
         }
+    }
+    
+    /// Oreo 点击效果 - 微交互升级
+    /// - Parameter style: 震动反馈强度，黑色按钮用 .medium，彩色按钮用 .light
+    func oreoClickEffect(style: UIImpactFeedbackGenerator.FeedbackStyle = .light) -> some View {
+        self.modifier(OreoClickEffectModifier(impactStyle: style))
+    }
+}
+
+// MARK: - Oreo 骨架屏组件
+struct SkeletonView: View {
+    let width: CGFloat
+    let height: CGFloat
+    let cornerRadius: CGFloat
+    
+    @State private var isAnimating = false
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(hex: "#F8F9FA"),
+                        Color(hex: "#FFFFFF"),
+                        Color(hex: "#F8F9FA")
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(width: width, height: height)
+            .overlay(
+                GeometryReader { geometry in
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.clear,
+                            Color.white.opacity(0.6),
+                            Color.clear
+                        ]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geometry.size.width * 0.4)
+                    .offset(x: isAnimating ? geometry.size.width : -geometry.size.width * 0.4)
+                    .animation(
+                        Animation.linear(duration: 1.5)
+                            .repeatForever(autoreverses: false),
+                        value: isAnimating
+                    )
+                }
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            )
+            .onAppear {
+                isAnimating = true
+            }
+    }
+}
+
+// MARK: - 骨架屏修饰符
+struct SkeletonModifier: ViewModifier {
+    let isLoading: Bool
+    let width: CGFloat
+    let height: CGFloat
+    let cornerRadius: CGFloat
+    
+    func body(content: Content) -> some View {
+        ZStack {
+            if isLoading {
+                SkeletonView(width: width, height: height, cornerRadius: cornerRadius)
+            } else {
+                content
+            }
+        }
+    }
+}
+
+extension View {
+    /// Oreo: 骨架屏加载效果
+    func skeleton(
+        isLoading: Bool,
+        width: CGFloat,
+        height: CGFloat,
+        cornerRadius: CGFloat = 32
+    ) -> some View {
+        self.modifier(SkeletonModifier(
+            isLoading: isLoading,
+            width: width,
+            height: height,
+            cornerRadius: cornerRadius
+        ))
     }
 }

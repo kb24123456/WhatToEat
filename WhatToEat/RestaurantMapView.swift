@@ -432,18 +432,23 @@ struct RestaurantMapView: View {
                 }
             }
             
-            // 导航路线
+            // Misty Oreo: 导航路线 - Baby Blue 发光效果
             if let route = route, isNavigating {
+                // 外层发光
                 MapPolyline(route)
-                    .stroke(Color(hex: "#4CAF50").opacity(0.4), lineWidth: 14)
+                    .stroke(AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 12)
+                // 中层
+                MapPolyline(route)
+                    .stroke(AppTheme.Colors.babyBlue.opacity(0.6), lineWidth: 8)
+                // 内层主线
                 MapPolyline(route)
                     .stroke(
                         LinearGradient(
-                            colors: [Color(hex: "#4CAF50"), Color(hex: "#66BB6A")],
+                            colors: [AppTheme.Colors.babyBlue, AppTheme.Colors.babyBlue.opacity(0.8)],
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
-                        lineWidth: 8
+                        lineWidth: 6
                     )
             }
         }
@@ -1123,7 +1128,7 @@ struct RestaurantCluster: Identifiable {
     let isCluster: Bool
 }
 
-// MARK: - 奶脂大头针组件 (GourmetAnnotation)
+// MARK: - Misty Oreo 大头针组件 (GourmetAnnotation)
 struct GourmetAnnotation: View, Equatable {
     static func == (lhs: GourmetAnnotation, rhs: GourmetAnnotation) -> Bool {
         lhs.restaurant.id == rhs.restaurant.id &&
@@ -1137,41 +1142,27 @@ struct GourmetAnnotation: View, Equatable {
     let restaurant: Restaurant
     let isNavigating: Bool
     let isDestination: Bool
-    let simplified: Bool  // 简化模式：不显示气泡和名称
-    let showBubble: Bool  // 是否显示气泡
+    let simplified: Bool
+    let showBubble: Bool
     @State private var appearScale: CGFloat = 0.0
     @State private var appearOffset: CGFloat = 20
     var onSelect: (Restaurant) -> Void
-    
-    // 使用 restaurant.id 和 coverPhotoFilename 组合作为唯一标识
+
     private var viewID: String {
         "\(restaurant.id)-\(restaurant.coverPhotoFilename ?? "no-image")"
     }
-    
-    // 判断是否已打卡
+
     private var isCheckedIn: Bool {
         !restaurant.logs.isEmpty
     }
-    
-    // 边框颜色：已打卡用小红书红，未打卡用 milkyWhite
-    private var borderColor: Color {
-        isCheckedIn ? AppTheme.Colors.accent : AppTheme.Colors.milkyWhite
-    }
-    
-    // 截断评论，限制最大字数
-    private var truncatedReview: String {
-        let maxLength = 12
-        if restaurant.review.count <= maxLength {
-            return restaurant.review
-        }
-        return String(restaurant.review.prefix(maxLength)) + "..."
-    }
-    
 
-    
+    private var checkInCount: Int {
+        restaurant.checkInCount
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // 所有餐厅都显示评论气泡（白色背景）
+            // 评论气泡
             if showBubble && !simplified && !restaurant.review.isEmpty {
                 Text(truncatedReview)
                     .font(.system(size: 10, weight: .medium))
@@ -1190,47 +1181,59 @@ struct GourmetAnnotation: View, Equatable {
                     .opacity(appearScale)
             }
 
-            // 头像层：简化模式下缩小尺寸
+            // Misty Oreo: 头像圆环 + 底座尖角
             ZStack {
-                // 外圈边框
+                // 外圈边框 - 3pt 宽纯白色实色边框
                 Circle()
-                    .fill(borderColor)
-                    .frame(width: simplified ? 36 : 46, height: simplified ? 36 : 46)
-                    .shadow(color: Color.black.opacity(0.15), radius: simplified ? 4 : 6, x: 0, y: simplified ? 2 : 3)
+                    .fill(Color.white)
+                    .frame(width: simplified ? 40 : 46, height: simplified ? 40 : 46)
+                    .shadow(color: Color.black.opacity(0.12), radius: simplified ? 4 : 6, x: 0, y: simplified ? 2 : 3)
 
-                // 封面图 - 简化模式下不加载图片，使用占位符
+                // 封面图
                 if simplified {
-                    // 简化模式：纯色背景 + 图标
                     ZStack {
                         Circle()
-                            .fill(AppTheme.Colors.primary.opacity(0.1))
+                            .fill(AppTheme.Colors.babyBlue.opacity(0.1))
                         Image(systemName: "fork.knife")
                             .font(.system(size: 14))
-                            .foregroundColor(AppTheme.Colors.primary)
+                            .foregroundColor(AppTheme.Colors.babyBlue)
                     }
-                    .frame(width: 30, height: 30)
+                    .frame(width: 34, height: 34)
                     .clipShape(Circle())
                 } else {
-                    // 完整模式：加载真实图片
-                    // 使用 viewID 强制视图刷新，确保图片正确显示
                     AsyncImageView(
                         filename: restaurant.coverPhotoFilename,
                         placeholder: AnyView(
                             ZStack {
                                 Circle()
-                                    .fill(AppTheme.Colors.primary.opacity(0.1))
+                                    .fill(AppTheme.Colors.babyBlue.opacity(0.1))
                                 Image(systemName: "fork.knife")
                                     .font(.system(size: 16))
-                                    .foregroundColor(AppTheme.Colors.primary)
+                                    .foregroundColor(AppTheme.Colors.babyBlue)
                             }
                         )
                     )
-                    .id(viewID)  // 关键：使用唯一标识强制视图刷新
+                    .id(viewID)
                     .frame(width: 40, height: 40)
                     .clipShape(Circle())
                 }
 
-                // MARK: - 导航模式下的终点波纹动画
+                // Misty Oreo: 已打卡状态 - 右上角红色圆点显示次数
+                if isCheckedIn && !simplified {
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.Colors.xhsRed)
+                            .frame(width: 14, height: 14)
+
+                        Text("\(min(checkInCount, 9))")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .offset(x: 16, y: -16)
+                    .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+                }
+
+                // 导航波纹动画
                 if isDestination && isNavigating {
                     RippleAnimation()
                 }
@@ -1238,19 +1241,19 @@ struct GourmetAnnotation: View, Equatable {
             .scaleEffect(appearScale)
             .offset(y: appearOffset)
 
-            // 小三角形指针（简化模式下缩小）
+            // Misty Oreo: 白色三角形指针
             Triangle()
-                .fill(borderColor)
+                .fill(Color.white)
                 .frame(width: simplified ? 8 : 10, height: simplified ? 5 : 6)
                 .offset(y: -1 + appearOffset * 0.5)
                 .scaleEffect(appearScale)
                 .opacity(appearScale)
 
-            // 餐厅名称（简化模式下不显示）
+            // 餐厅名称
             if !simplified {
                 Text(restaurant.name)
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(isCheckedIn ? AppTheme.Colors.xhsRed : AppTheme.Colors.darkText)
                     .lineLimit(1)
                     .shadow(color: Color.white, radius: 2, x: 0, y: 0)
                     .padding(.top, 2)
@@ -1259,27 +1262,27 @@ struct GourmetAnnotation: View, Equatable {
             }
         }
         .onAppear {
-            // 生长动画：从地图"生长"出来的效果
-            // 初始状态：缩小、向下偏移
             appearScale = 0.0
             appearOffset = 20
-
-            // 延迟执行动画，产生错落感
             let delay = Double.random(in: 0.0...0.3)
-
             withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(delay)) {
                 appearScale = 1.0
                 appearOffset = 0
             }
         }
         .onTapGesture {
-            // 震动反馈
             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
             impactFeedback.impactOccurred()
-
-            // 触发选中回调
             onSelect(restaurant)
         }
+    }
+
+    private var truncatedReview: String {
+        let maxLength = 12
+        if restaurant.review.count <= maxLength {
+            return restaurant.review
+        }
+        return String(restaurant.review.prefix(maxLength)) + "..."
     }
 }
 
@@ -1760,7 +1763,7 @@ struct RestaurantDetailSheet: View {
                             StatItem(
                                 icon: "checkmark.circle.fill",
                                 value: "\(restaurant.checkInCount)",
-                                label: "累计打卡"
+                                label: "已造访"
                             )
                             
                             // 总消费金额

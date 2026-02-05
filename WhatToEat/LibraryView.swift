@@ -63,20 +63,29 @@ struct LibraryView: View {
     @State private var navigationPath = NavigationPath()
     
     // MARK: - 生命周期
+    @State private var scrollOffset: CGFloat = 0
+    
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ZStack(alignment: .topLeading) {
-                // 视觉保底背景色：防止转场时出现黑色色块
-                Color(hex: "#F5F7FA")
+                // 使用 MilkyDiffuseBackground 作为背景
+                MilkyDiffuseBackground()
                     .ignoresSafeArea()
+
+                // 动态毛玻璃导航条
+                DynamicHeaderView(
+                    selectedCity: selectedCity,
+                    showCityPicker: $showCityPicker,
+                    searchText: $searchText,
+                    isSearchFocused: _isSearchFocused,
+                    scrollOffset: scrollOffset
+                )
+                .zIndex(100)
                 
                 VStack(alignment: .leading, spacing: 0) {
-                    HeaderView(
-                        selectedCity: selectedCity,
-                        showCityPicker: $showCityPicker,
-                        searchText: $searchText,
-                        isSearchFocused: _isSearchFocused
-                    )
+                    // 占位空间，避免内容被固定头部遮挡（与头部高度匹配）
+                    Color.clear.frame(height: 72)
+                    
                     FilterBarView(
                         selectedCity: selectedCity,
                         selectedDistrict: $selectedDistrict,
@@ -85,10 +94,11 @@ struct LibraryView: View {
                         restaurants: restaurants,
                         districts: currentDistricts
                     )
-                    RestaurantListView(
+                    RestaurantListViewWithOffset(
                         filteredRestaurants: filteredRestaurants,
                         locationManager: locationManager,
-                        navigationPath: $navigationPath
+                        navigationPath: $navigationPath,
+                        scrollOffset: $scrollOffset
                     )
                 }
             }
@@ -116,70 +126,210 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - 顶部 Header 子视图
+    // MARK: - 动态毛玻璃导航条 (Oreo)
+    private struct DynamicHeaderView: View {
+        let selectedCity: String
+        @Binding var showCityPicker: Bool
+        @Binding var searchText: String
+        @FocusState var isSearchFocused: Bool
+        let scrollOffset: CGFloat
+        
+        // 滚动超过 20pt 时触发毛玻璃效果
+        private var isScrolled: Bool {
+            scrollOffset > 20
+        }
+
+        var body: some View {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    // 1. 标题"WhatToEat"
+                    Text("WhatToEat")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+
+                    // 2. 城市选择器 + 搜索框合并一行
+                    HStack(spacing: 0) {
+                        // 城市选择按钮
+                        Button {
+                            showCityPicker = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(selectedCity)
+                                    .font(AppTheme.Fonts.footnote)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                Image(systemName: "chevron.down")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+
+                        Divider()
+                            .frame(height: 20)
+                            .background(Color.gray.opacity(0.2))
+
+                        // 搜索框
+                        HStack(spacing: 6) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            TextField("搜索餐厅名称、菜系...", text: $searchText)
+                                .font(AppTheme.Fonts.footnote)
+                                .focused($isSearchFocused)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(isScrolled ? Color.white.opacity(0.8) : Color.black.opacity(0.03))
+                    )
+                    .withFocusedInputEffects(isFocused: $isSearchFocused)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                
+                // 底部分隔线（滚动时显示）
+                Rectangle()
+                    .fill(Color.black.opacity(0.05))
+                    .frame(height: 0.5)
+                    .opacity(isScrolled ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: isScrolled)
+            }
+            // Oreo: 动态背景 - 滚动时显示毛玻璃
+            .background(
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .opacity(isScrolled ? 1 : 0)
+            )
+            .animation(.easeInOut(duration: 0.2), value: isScrolled)
+        }
+    }
+    
+    // MARK: - 带滚动偏移监听的列表视图
+    private struct RestaurantListViewWithOffset: View {
+        let filteredRestaurants: [Restaurant]
+        let locationManager: LocationManager
+        @Binding var navigationPath: NavigationPath
+        @Binding var scrollOffset: CGFloat
+        @State private var checkInRestaurant: Restaurant? = nil
+        @State private var showCheckInSheet = false
+
+        var body: some View {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(filteredRestaurants.enumerated()), id: \.element.id) { index, restaurant in
+                        ZStack {
+                            NavigationLink(value: restaurant) {
+                                RestaurantCard(
+                                    restaurant: restaurant,
+                                    locationManager: locationManager,
+                                    isExpanded: false,
+                                    index: index,
+                                    onCheckInTap: {
+                                        checkInRestaurant = restaurant
+                                        showCheckInSheet = true
+                                    }
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                }
+                .padding(.bottom, 90)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear
+                            .preference(key: ScrollOffsetPreferenceKey.self, value: proxy.frame(in: .named("scroll")).minY)
+                    }
+                )
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                    scrollOffset = -value
+                }
+            }
+            .coordinateSpace(name: "scroll")
+            .sheet(item: $checkInRestaurant) { restaurant in
+                CheckInView(
+                    restaurant: restaurant,
+                    onClose: {
+                        showCheckInSheet = false
+                        checkInRestaurant = nil
+                    }
+                )
+            }
+        }
+    }
+    
+    // MARK: - 滚动偏移 PreferenceKey
+    struct ScrollOffsetPreferenceKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = nextValue()
+        }
+    }
+    
+    // MARK: - 顶部 Header 子视图 (The Masthead) - 保留原实现供参考
     private struct HeaderView: View {
         let selectedCity: String
         @Binding var showCityPicker: Bool
         @Binding var searchText: String
         @FocusState var isSearchFocused: Bool
-        
+
         var body: some View {
-            HStack(spacing: AppTheme.Spacing.md) {
+            HStack(spacing: 12) {
                 // 1. 标题"吃啥呢"
                 Text("吃啥呢")
                     .font(AppTheme.Fonts.largeTitle)
                     .fontWeight(.bold)
                     .foregroundColor(AppTheme.Colors.textPrimary)
                     .tracking(2)
-                
-                // 2. 城市选择器
-                Button {
-                    showCityPicker = true
-                } label: {
-                    HStack {
-                        Text(selectedCity)
-                            .font(AppTheme.Fonts.footnote)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                        Image(systemName: "chevron.down")
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.35))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                            )
-                    )
-                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
-                }
-                .buttonStyle(.plain)
 
-                // 3. 搜索框（占据剩余空间）
-                HStack {
-                    Image(systemName: "magnifyingglass").foregroundColor(.gray)
-                    TextField("搜索餐厅名称、菜系...", text: $searchText)
-                        .font(AppTheme.Fonts.footnote)
-                        .focused($isSearchFocused)
+                // 2. 城市选择器 + 搜索框合并一行
+                HStack(spacing: 0) {
+                    // 城市选择按钮
+                    Button {
+                        showCityPicker = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(selectedCity)
+                                .font(AppTheme.Fonts.footnote)
+                                .fontWeight(.medium)
+                                .foregroundColor(AppTheme.Colors.textPrimary)
+                            Image(systemName: "chevron.down")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider()
+                        .frame(height: 20)
+                        .background(Color.gray.opacity(0.2))
+
+                    // 搜索框
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        TextField("搜索餐厅名称、菜系...", text: $searchText)
+                            .font(AppTheme.Fonts.footnote)
+                            .focused($isSearchFocused)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white.opacity(0.35))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
-                        )
+                    RoundedRectangle(cornerRadius: 12) // 固定圆角 12
+                        .fill(Color.black.opacity(0.03)) // 背景改为 Color.black.opacity(0.03)
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
                 .withFocusedInputEffects(isFocused: $isSearchFocused)
             }
-            .padding(.horizontal, AppTheme.Spacing.lg)
+            .padding(.horizontal, 24) // 与下方照片的最外侧对齐线保持一致
             .padding(.vertical, AppTheme.Spacing.sm)
         }
     }
@@ -197,7 +347,7 @@ enum SortOption: String, CaseIterable {
     }
 }
 
-// MARK: - 筛选按钮栏子视图
+// MARK: - 筛选按钮栏子视图 (去容器化)
 private struct FilterBarView: View {
     let selectedCity: String
     @Binding var selectedDistrict: String?
@@ -205,110 +355,68 @@ private struct FilterBarView: View {
     @Binding var sortOption: SortOption
     let restaurants: [Restaurant]
     let districts: [String]
-    
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 24) { // 增加按钮之间的水平间距
             // 1. 地区筛选
             Menu {
-                // 全区选项
                 Button("全区") { selectedDistrict = nil }
                 Divider()
-                // 动态获取当前城市的区列表
                 ForEach(districts, id: \.self) { district in
                     Button(district) { selectedDistrict = district }
                 }
             } label: {
-                HStack {
+                HStack(spacing: 4) {
                     Text(selectedDistrict ?? "地区")
-                        .font(AppTheme.Fonts.footnote)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .font(.system(size: 14, weight: .semibold)) // 字号 14，字重 semibold
+                        .foregroundColor(.black) // 纯黑色
                     Image(systemName: "chevron.down")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
+                        .font(.system(size: 8)) // 极小的 chevron
+                        .foregroundColor(AppTheme.Colors.babyBlue) // Baby Blue 颜色
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .fill(AppTheme.Colors.card)
-                        .shadow(
-                            color: Color.black.opacity(0.05), 
-                            radius: 5, 
-                            x: 0, 
-                            y: 2
-                        )
-                )
             }
             .buttonStyle(.plain)
-            
-            // 2. 分类筛选
+
+            // 2. 品类筛选
             Menu {
-                // 全部分类选项
                 Button("全部分类") { selectedType = nil }
                 Divider()
-                // 动态获取所有餐厅类型
                 ForEach(CategoryManager.shared.getAllCategories(from: restaurants), id: \.self) { type in
                     Button(type) { selectedType = type }
                 }
             } label: {
-                HStack {
+                HStack(spacing: 4) {
                     Text(selectedType ?? "品类")
-                        .font(AppTheme.Fonts.footnote)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.black)
                     Image(systemName: "chevron.down")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
+                        .font(.system(size: 8))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .fill(AppTheme.Colors.card)
-                        .shadow(
-                            color: Color.black.opacity(0.05), 
-                            radius: 5, 
-                            x: 0, 
-                            y: 2
-                        )
-                )
             }
             .buttonStyle(.plain)
-            
-            // 3. 排序切换
+
+            // 3. 排序筛选
             Menu {
                 ForEach(SortOption.allCases, id: \.self) { option in
                     Button(option.displayName) { sortOption = option }
                 }
             } label: {
-                HStack {
+                HStack(spacing: 4) {
                     Text(sortOption.displayName)
-                        .font(AppTheme.Fonts.footnote)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.black)
                     Image(systemName: "chevron.down")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
+                        .font(.system(size: 8))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                        .fill(AppTheme.Colors.card)
-                        .shadow(
-                            color: Color.black.opacity(0.05), 
-                            radius: 5, 
-                            x: 0, 
-                            y: 2
-                        )
-                )
             }
             .buttonStyle(.plain)
+
+            Spacer()
         }
-        .padding(.horizontal, AppTheme.Spacing.lg)
-        .padding(.top, AppTheme.Spacing.xs)
-        .padding(.bottom, AppTheme.Spacing.md)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 8)
     }
 }
     
@@ -423,24 +531,80 @@ private struct RestaurantListView: View {
     let filteredRestaurants: [Restaurant]
     let locationManager: LocationManager
     @Binding var navigationPath: NavigationPath
+    @State private var checkInRestaurant: Restaurant? = nil
+    @State private var showCheckInSheet = false
     
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: AppTheme.Spacing.lg) {
-                ForEach(filteredRestaurants) { restaurant in
-                    NavigationLink(value: restaurant) {
-                        RestaurantCard(
-                            restaurant: restaurant,
-                            locationManager: locationManager,
-                            isExpanded: false
-                        )
+            LazyVStack(spacing: 0) { // 去边界化：使用 0 间距，由卡片内部控制留白
+                if filteredRestaurants.isEmpty {
+                    // Oreo: 情感化空状态
+                    EmptyStateView(
+                        icon: "fork.knife.circle",
+                        message: "还没留下你的美食足迹",
+                        submessage: "点击右下角 + 号，记录第一家餐厅"
+                    )
+                    .padding(.top, 100)
+                } else {
+                    ForEach(Array(filteredRestaurants.enumerated()), id: \.element.id) { index, restaurant in
+                        // 使用 ZStack 叠加 NavigationLink 和打卡按钮
+                        ZStack {
+                            // 底层：导航到详情页
+                            NavigationLink(value: restaurant) {
+                                RestaurantCard(
+                                    restaurant: restaurant,
+                                    locationManager: locationManager,
+                                    isExpanded: false,
+                                    index: index,
+                                    onCheckInTap: {
+                                        // 打卡快捷入口：弹出 CheckInView
+                                        checkInRestaurant = restaurant
+                                        showCheckInSheet = true
+                                    }
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
                     }
-                    .buttonStyle(ScaleButtonStyle())
                 }
             }
-            .padding(.horizontal, AppTheme.Spacing.lg)
             .padding(.bottom, 90)
         }
+        // 打卡弹窗
+        .sheet(item: $checkInRestaurant) { restaurant in
+            CheckInView(
+                restaurant: restaurant,
+                onClose: {
+                    showCheckInSheet = false
+                    checkInRestaurant = nil
+                }
+            )
+        }
+    }
+}
+
+// MARK: - Oreo: 情感化空状态组件
+struct EmptyStateView: View {
+    let icon: String
+    let message: String
+    let submessage: String
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 48, weight: .light))
+                .foregroundColor(AppTheme.Colors.babyBlue)
+            
+            Text(message)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundColor(AppTheme.Colors.textPrimary)
+                .tracking(0.5)
+            
+            Text(submessage)
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

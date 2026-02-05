@@ -139,8 +139,35 @@ struct CheckInView: View {
                 .padding(.bottom, 20)
                 .padding(.horizontal, 20)
                 
-                globalContainer
-                    .padding(.horizontal, 16)
+                // 所有组件直接显示，无父容器包裹（水平间距：50pt）
+                timeHeaderView
+                    .padding(.bottom, 20)
+                    .padding(.horizontal, 50)
+                
+                moduleDivider
+                    .padding(.horizontal, 50)
+                
+                moodSelectorSection
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 50)
+                
+                moduleDivider
+                    .padding(.horizontal, 50)
+                
+                receiptSection
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 50)
+                
+                moduleDivider
+                    .padding(.horizontal, 50)
+                
+                tagsSection
+                    .padding(.top, 16)
+                    .padding(.horizontal, 50)
+                
+                saveButton
+                    .padding(.top, 24)
+                    .padding(.horizontal, 50)
 
                 Spacer().frame(height: 40)
             }
@@ -148,41 +175,6 @@ struct CheckInView: View {
         }
     }
     
-    // MARK: - 一体化容器
-    private var globalContainer: some View {
-        VStack(spacing: 0) {
-            timeHeaderView
-                .padding(.bottom, 20)
-            
-            moduleDivider
-            
-            moodSelectorSection
-                .padding(.vertical, 16)
-            
-            moduleDivider
-            
-            receiptSection
-                .padding(.vertical, 16)
-            
-            moduleDivider
-            
-            tagsSection
-                .padding(.top, 16)
-            
-            saveButton
-                .padding(.top, 24)
-        }
-        .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white.opacity(0.35))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                )
-        )
-    }
-
     // MARK: - 日历式日期头部（对称布局）
     private var timeHeaderView: some View {
         VStack(spacing: 0) {

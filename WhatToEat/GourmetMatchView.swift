@@ -224,167 +224,102 @@ struct GourmetMatchView: View {
         .frame(maxHeight: 480)
     }
     
-    // MARK: - 核心卡片 (参考 RestaurantCard 样式)
+    // MARK: - Misty Oreo: 去容器化游戏卡片
     private func matchCard(for restaurant: Restaurant, cardSize: CGSize, isTop: Bool) -> some View {
-        ZStack {
-            // 卡片背景 (奶脂实色风格)
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
-                )
-                .shadow(
-                    color: AppTheme.Shadows.premium.ambient.color,
-                    radius: AppTheme.Shadows.premium.ambient.radius,
-                    x: AppTheme.Shadows.premium.ambient.x,
-                    y: AppTheme.Shadows.premium.ambient.y
-                )
-                .shadow(
-                    color: AppTheme.Shadows.premium.defining.color,
-                    radius: AppTheme.Shadows.premium.defining.radius,
-                    x: AppTheme.Shadows.premium.defining.x,
-                    y: AppTheme.Shadows.premium.defining.y
-                )
-            
-            VStack(spacing: 0) {
-                // 图片区域 (无遮罩)
-                AsyncImageView(
-                    filename: restaurant.coverPhotoFilename,
-                    placeholder: AnyView(
-                        ZStack {
-                            AppTheme.Colors.primary.opacity(0.1)
-                            Image(systemName: "fork.knife.circle.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(AppTheme.Colors.primary.opacity(0.3))
-                        }
-                    )
-                )
-                .scaledToFill()
-                .frame(width: cardSize.width - 24, height: cardSize.height * 0.52)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .padding(.top, 12)
-                
-                // 信息区域 (参考 RestaurantCard.infoContent)
-                VStack(alignment: .leading, spacing: 0) {
-                    // 餐厅名称
-                    Text(restaurant.name)
-                        .font(AppTheme.Fonts.title3)
-                        .bold()
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineLimit(1)
-                    
-                    Color.clear.frame(height: 12)
-                    
-                    // metaInfo (价格 + 区域 + 距离)
-                    HStack(spacing: AppTheme.Spacing.md) {
-                        // 价格
-                        Text(restaurant.averagePrice > 0 ? "¥\(Int(restaurant.averagePrice))/人" : "暂无消费数据")
-                            .font(AppTheme.Fonts.subheadline)
-                            .foregroundColor(AppTheme.Colors.price)
-                        
-                        // 区域
-                        Text(restaurant.district)
-                            .font(AppTheme.Fonts.subheadline)
-                            .foregroundColor(AppTheme.Colors.textSecondary)
-                        
-                        // 距离
-                        if let userLocation = locationManager.userLocation {
-                            let distance = userLocation.distance(from: CLLocation(latitude: restaurant.latitude, longitude: restaurant.longitude))
-                            if distance < 1000 {
-                                Text(String(format: "%.0fm", distance))
-                                    .font(AppTheme.Fonts.subheadline)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                            } else {
-                                Text(String(format: "%.1fkm", distance / 1000))
-                                    .font(AppTheme.Fonts.subheadline)
-                                    .foregroundColor(AppTheme.Colors.textSecondary)
-                            }
-                        } else {
-                            Text("未定位")
-                                .font(AppTheme.Fonts.subheadline)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
+        ZStack(alignment: .bottom) {
+            // Misty Oreo: 图片直接浮动，无白色背景容器
+            AsyncImageView(
+                filename: restaurant.coverPhotoFilename,
+                placeholder: AnyView(
+                    ZStack {
+                        AppTheme.Colors.babyBlue.opacity(0.1)
+                        Image(systemName: "fork.knife.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(AppTheme.Colors.babyBlue.opacity(0.3))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(AppTheme.Colors.softBackground)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
-                            )
+                )
+            )
+            .scaledToFill()
+            .frame(width: cardSize.width, height: cardSize.height)
+            .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous)) // 3:4 比例，40pt 圆角
+            // Misty Oreo: 内阴影 - 高级相框质感
+            .overlay(
+                RoundedRectangle(cornerRadius: 40, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.black.opacity(0.12),
+                                Color.clear,
+                                Color.clear,
+                                Color.black.opacity(0.2)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                    
-                    Color.clear.frame(height: 10)
-                    
-                    // tagsRow (评分 + 类型 + 标签)
-                    HStack(spacing: AppTheme.Spacing.sm) {
-                        // 评分
-                        HStack(spacing: 2) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(AppTheme.Colors.secondary)
-                                .symbolRenderingMode(.hierarchical)
-                            Text("\(Int(restaurant.rating))")
-                                .font(AppTheme.Fonts.callout)
-                                .foregroundColor(AppTheme.Colors.secondary)
-                                .bold()
-                        }
-                        
-                        // 类型
-                        Text(restaurant.type)
-                            .font(AppTheme.Fonts.callout)
-                            .foregroundColor(Color(hex: "#89CFF0"))
-                        
-                        // 标签
-                        ForEach(Array(restaurant.tags.prefix(2)), id: \.self) { tag in
-                            Text(tag)
-                                .font(AppTheme.Fonts.callout)
-                                .foregroundColor(Color(hex: "#89CFF0"))
-                                .padding(.horizontal, 8)
-                                .background(
-                                    Capsule()
-                                        .fill(Color(hex: "#89CFF0").opacity(0.1))
-                                )
-                        }
+            )
+
+            // Misty Oreo: 底部磨砂遮罩 + 文字浮层
+            VStack(alignment: .leading, spacing: 8) {
+                // 店名 - 白色带微弱投影
+                Text(restaurant.name)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                    .shadow(color: Color.black.opacity(0.4), radius: 4, x: 0, y: 2)
+                    .lineLimit(1)
+
+                // 副标题 - Baby Blue
+                HStack(spacing: 12) {
+                    Text(restaurant.type)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
+
+                    if restaurant.averagePrice > 0 {
+                        Text("¥\(Int(restaurant.averagePrice))/人")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.babyBlue.opacity(0.8))
                     }
-                    
-                    Color.clear.frame(height: 10)
-                    
-                    // 评价 (如果有)
-                    if !restaurant.review.isEmpty {
-                        HStack(spacing: 8) {
-                            Rectangle()
-                                .fill(AppTheme.Colors.accent)
-                                .frame(width: 1.5)
-                                .cornerRadius(1)
-                                .shadow(color: AppTheme.Colors.accent.opacity(0.2), radius: 1.5, x: 0, y: 0)
-                            
-                            Text(restaurant.review)
-                                .font(AppTheme.Fonts.callout)
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                                .lineLimit(1)
-                                .multilineTextAlignment(.leading)
-                                .fontWeight(.medium)
-                                .tracking(0.5)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(AppTheme.Colors.lightGray.opacity(0.5))
-                        .cornerRadius(AppTheme.Radius.base)
-                        .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
+
+                    if let userLocation = locationManager.userLocation {
+                        let distance = userLocation.distance(from: CLLocation(latitude: restaurant.latitude, longitude: restaurant.longitude))
+                        Text(distance < 1000 ? String(format: "%.0fm", distance) : String(format: "%.1fkm", distance / 1000))
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.babyBlue.opacity(0.8))
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 16)
-                
-                Spacer()
+
+                // 点评预览
+                if !restaurant.review.isEmpty {
+                    HStack(spacing: 6) {
+                        Rectangle()
+                            .fill(AppTheme.Colors.babyBlue)
+                            .frame(width: 2, height: 14)
+
+                        Text(restaurant.review)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white.opacity(0.9))
+                            .lineLimit(1)
+                    }
+                    .padding(.top, 4)
+                }
             }
-            
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
+            .background(
+                // Material Mask - 磨砂遮罩
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0),
+                        Color.black.opacity(0.4),
+                        Color.black.opacity(0.6)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
+            )
+
             // 拖拽状态覆盖层
             if isTop && offset.width != 0 {
                 swipeOverlay
@@ -496,84 +431,85 @@ struct GourmetMatchView: View {
         }
     }
     
-    // MARK: - 交互按钮
+    // MARK: - Misty Oreo: 交互按钮 - 去除多余修饰
     private var actionButtons: some View {
         HStack(spacing: 48) {
-            // 不吃按钮 - 黑色圆形背景 + 白色图标
+            // 不吃按钮 - 哑光黑
             Button {
                 passAction()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.black)
+                        .fill(Color.black.opacity(0.85)) // 哑光黑
                         .frame(width: 64, height: 64)
-                        .shadow(color: Color.black.opacity(0.3), radius: 12, x: 0, y: 6)
                     
                     Image(systemName: "xmark")
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.white)
                 }
             }
-            .pressableButton()
+            .oreoClickEffect(style: .medium)
             
-            // 想吃按钮 - 红色圆形背景 + 白色图标
+            // 想吃按钮 - 小红书红
             Button {
                 eatAction()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(AppTheme.Colors.accent)
+                        .fill(AppTheme.Colors.xhsRed) // 小红书红
                         .frame(width: 64, height: 64)
-                        .shadow(color: AppTheme.Colors.accent.opacity(0.4), radius: 12, x: 0, y: 6)
                     
                     Image(systemName: "checkmark")
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.white)
                 }
             }
-            .pressableButton()
+            .oreoClickEffect(style: .light)
         }
     }
     
-    // MARK: - 空状态视图
+    // MARK: - Oreo: 极致情感化空状态
     private var emptyStateView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
+            // 图标占据屏幕上方 1/3
             Image(systemName: "face.smiling")
-                .font(.system(size: 80))
-                .foregroundColor(Color(hex: "#89CFF0"))
-            
-            Text("哎呀，都划完了")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-            
-            Text("要不重新筛选一下？")
-                .font(.system(size: 16))
+                .font(.system(size: 64, weight: .light))
+                .foregroundColor(AppTheme.Colors.babyBlue)
+                .padding(.top, 40)
+
+            // 标题 17pt Bold 黑色
+            Text("都品尝过了")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(AppTheme.Colors.darkText)
+                .tracking(0.5)
+
+            // 描述 14pt Italic 灰色
+            Text("换个筛选条件，继续探索美食世界")
+                .font(.system(size: 14, weight: .regular))
+                .italic()
                 .foregroundColor(AppTheme.Colors.textSecondary)
-            
+                .multilineTextAlignment(.center)
+
             Button {
                 currentIndex = 0
             } label: {
-                Text("重新开始")
-                    .font(.system(size: 16, weight: .semibold))
+                Text("再来一轮")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 28)
                     .padding(.vertical, 12)
                     .background(
                         Capsule()
-                            .fill(Color(hex: "#89CFF0"))
+                            .fill(AppTheme.Colors.babyBlue)
                     )
             }
-            .padding(.top, 10)
+            .oreoClickEffect(style: .light)
+            .padding(.top, 16)
+
+            Spacer()
         }
-        .padding(40)
-        .background(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
-                )
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 40)
     }
 }
 

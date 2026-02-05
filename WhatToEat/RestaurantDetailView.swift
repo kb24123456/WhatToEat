@@ -18,7 +18,7 @@ extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     }
 }
 
-// MARK: - 中文日期格式化扩展
+// MARK: - Oreo: 中文日期格式化扩展（情感化时间）
 extension Date {
     var chineseFormatted: String {
         let formatter = DateFormatter()
@@ -26,25 +26,64 @@ extension Date {
         formatter.dateFormat = "yyyy年M月d日 HH:mm"
         return formatter.string(from: self)
     }
-    
+
     var chineseShortTime: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: self)
     }
-    
+
     var chineseDateOnly: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "yyyy年M月d日"
         return formatter.string(from: self)
     }
-    
+
+    // Oreo: 情感化时间显示
     var chineseDateTime: String {
+        let calendar = Calendar.current
+        let now = Date()
+
+        // 判断是否是今天
+        if calendar.isDateInToday(self) {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateFormat = "HH:mm"
+            return "今日 \(formatter.string(from: self))"
+        }
+
+        // 判断是否是昨天
+        if calendar.isDateInYesterday(self) {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateFormat = "HH:mm"
+            return "昨日 \(formatter.string(from: self))"
+        }
+
+        // 其他日期
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "M月d日 HH:mm"
+        return formatter.string(from: self)
+    }
+
+    // Oreo: 手账感时间
+    var journalTime: String {
+        let calendar = Calendar.current
+
+        if calendar.isDateInToday(self) {
+            return "就在刚刚"
+        }
+
+        if calendar.isDateInYesterday(self) {
+            return "昨日"
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M月d日"
         return formatter.string(from: self)
     }
 }
@@ -133,6 +172,12 @@ struct RestaurantDetailView: View {
     @State private var newTagInput = ""
     @FocusState private var tagInputIsFocused: Bool
     
+    // MARK: - 驾车信息（懒加载计算）
+    @State private var drivingDistance: String = ""
+    @State private var drivingTime: String = ""
+    @State private var hasCalculatedDrivingInfo = false
+    @State private var showNavigationMenu = false
+    
     // MARK: - Keyboard Animation Delay
     private let keyboardAnimationDelay: TimeInterval = 0.25  // 展开动画完成后再弹出键盘
 
@@ -145,17 +190,21 @@ struct RestaurantDetailView: View {
 
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
+                        VStack(alignment: .leading, spacing: AppTheme.Card.spacingSmall) { // Misty Oreo: 32pt 间距
                             heroSection
-                                .padding(.horizontal, 20)
-                                .padding(.top, 20 + geometry.safeAreaInsets.top)
-                                .padding(.bottom, 16)
+                                .padding(.horizontal, 24)
+                                .padding(.top, 12 + geometry.safeAreaInsets.top)
+                                .padding(.bottom, 0)
+                            
+                            // 统计卡片
+                            statsRow
+                                .padding(.horizontal, 24)
 
                             // Bottom Lists
                             bottomContentSection
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 100)
+                                .padding(.horizontal, 24)
                         }
+                        .padding(.bottom, AppTheme.Card.spacingLarge) // 48pt 底部留白
                     }
                     .ignoresSafeArea(edges: .top)
                     // 标签编辑时自动滚动，确保常用标签显示在底部导航条上方
@@ -181,13 +230,31 @@ struct RestaurantDetailView: View {
     
     // MARK: - Bottom Content Section (清理动画版)
     private var bottomContentSection: some View {
-        LazyVStack(alignment: .leading, spacing: 32) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             unifiedInfoSection
 
-            checkInHistorySection
+            // 打卡记录标题 - 作为外部二级标题
+            checkInHistoryHeader
+                .padding(.top, 32) // 距离上方卡片 32pt
+                .padding(.bottom, 12) // 距离下方记录 12pt
+
+            // 打卡记录列表
+            checkInHistoryList
+
+            // 底部删除按钮
+            deleteRestaurantButton
+                .padding(.top, 28)
+
+            // 底部留白
+            Spacer().frame(height: 50)
         }
         .onAppear {
             editedReview = restaurant.review
+            
+            // 懒加载计算驾车信息（只在首次进入页面时计算）
+            if !hasCalculatedDrivingInfo {
+                calculateDrivingInfo()
+            }
         }
         .sheet(isPresented: $showSheet) {
             CheckInView(restaurant: restaurant, editingLog: logToEdit, onClose: {
@@ -206,6 +273,18 @@ struct RestaurantDetailView: View {
                     newCoverImages = []
                 }
             }
+        }
+        .confirmationDialog("选择导航应用", isPresented: $showNavigationMenu, titleVisibility: .visible) {
+            Button("高德地图") {
+                openAmapNavigation()
+            }
+            Button("百度地图") {
+                openBaiduNavigation()
+            }
+            Button("苹果地图") {
+                openAppleNavigation()
+            }
+            Button("取消", role: .cancel) { }
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView(selectedImages: $newCoverImages)
@@ -230,106 +309,91 @@ struct RestaurantDetailView: View {
         MilkyDiffuseBackground()
     }
     
-    // Hero Card Content (优化版：动静分离)
-        private var heroCardContent: some View {
-            ZStack(alignment: .topLeading) {
-                // --- 1. 底层：餐厅原始图片 ---
-                GeometryReader { geo in
-                    AsyncImageView(
-                        filename: restaurant.coverPhotoFilename,
-                        placeholder: AnyView(
-                            Rectangle()
-                                .fill(AppTheme.Colors.cardBackground)
-                                .overlay(
-                                    Image(systemName: "fork.knife")
-                                        .font(.system(size: 40))
-                                        .foregroundColor(AppTheme.Colors.lighterGray)
-                                )
-                        )
+    // Hero Card Content (Apple Music 风格渐变模糊)
+    private var heroCardContent: some View {
+        ZStack(alignment: .bottom) {
+            // --- 1. 底层：餐厅原始图片 ---
+            GeometryReader { geo in
+                AsyncImageView(
+                    filename: restaurant.coverPhotoFilename,
+                    placeholder: AnyView(
+                        Rectangle()
+                            .fill(AppTheme.Colors.cardBackground)
+                            .overlay(
+                                Image(systemName: "fork.knife")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(AppTheme.Colors.lighterGray)
+                            )
                     )
-                    .scaledToFill()
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .clipped()
-                }
-                
-                // --- 2. 中层：渐变模糊遮罩（参考图效果）---
-                // 使用更细腻的渐变 stops 实现平滑过渡
-                VStack(spacing: 0) {
-                    // 第一层：完全清晰区域
-                    Rectangle()
-                        .fill(.clear)
-                        .frame(height: 100)
-                    
-                    // 第二层：开始轻微模糊（非常细腻的过渡）
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0.0),
-                            .init(color: .white.opacity(0.05), location: 0.3),
-                            .init(color: .white.opacity(0.15), location: 0.6),
-                            .init(color: .white.opacity(0.35), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 80)
-                    
-                    // 第三层：中等模糊区域
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(0.35), location: 0.0),
-                            .init(color: .white.opacity(0.55), location: 0.4),
-                            .init(color: .white.opacity(0.75), location: 0.8),
-                            .init(color: .white.opacity(0.9), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 80)
-                    
-                    // 第四层：底部强模糊（确保文字可读）
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(0.9), location: 0.0),
-                            .init(color: .white.opacity(0.95), location: 0.5),
-                            .init(color: .white, location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 60)
-                }
-                .frame(height: 320)
-                .allowsHitTesting(false)
-                
-                // --- 3. 顶层：信息叠层（底部对齐）---
-                VStack {
-                    Spacer()
-                    heroCardInfo
-                        .padding(.bottom, 24)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                // --- 4. 返回按钮（嵌入封面图左上角）---
-                backButton
-                    .padding(.leading, 12)
-                    .padding(.top, 12)
+                )
+                .scaledToFill()
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
             }
-            .frame(height: 320)
-            .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .stroke(AppTheme.Colors.rimLight, lineWidth: 1.5)
-            )
-            // 阴影效果
-            .shadow(
-                color: Color.black.opacity(0.08),
-                radius: 20,
-                x: 0,
-                y: 10
-            )
-            .cardStyle()
+
+            // --- 2. 中层：渐变磨砂材质层 (Apple Music 风格) ---
+            Rectangle()
+                .fill(.ultraThinMaterial) // 系统磨砂材质
+                .background(Color.white.opacity(0.1)) // 极淡白色叠加，增强文字可读性
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.0),           // 顶部 0% 完全透明
+                            .init(color: .clear, location: 0.2),           // 顶部 20% 保持清晰
+                            .init(color: .black.opacity(0.5), location: 0.45), // 45% 开始轻微磨砂
+                            .init(color: .black, location: 0.7)            // 70% 达到完全磨砂
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(height: 240) // 增加模糊区域高度
+
+            // --- 3. 顶层：信息内容 ---
+            VStack(spacing: 4) {
+                Spacer()
+                heroCardInfo
+                    .padding(.bottom, 16)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // --- 4. 返回按钮（嵌入封面图左上角）---
+            VStack(spacing: 0) {
+                HStack {
+                    backButton
+                        .padding(.leading, 16)
+                        .padding(.top, 12)
+                    Spacer()
+                }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(height: 260) // 降低整体高度
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        // 扁平风格：细微边框替代阴影
+        .overlay(
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        )
+        // Oreo: 内阴影效果 - 高级相框质感
+        .overlay(
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.black.opacity(0.15),
+                            Color.clear,
+                            Color.clear,
+                            Color.black.opacity(0.08)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        )
+    }
         
         // MARK: - 返回按钮
         private var backButton: some View {
@@ -352,36 +416,148 @@ struct RestaurantDetailView: View {
             .pressableButton(scale: 0.9)
         }
 
-    // Hero Card Embedded Info
-        private var heroCardInfo: some View {
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(restaurant.name)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.darkText)
-                    
-                    HStack(spacing: 8) {
-                        Text(restaurant.type)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(AppTheme.Colors.softBackground, in: Capsule())
-                        
-                        if restaurant.averagePrice > 0 {
-                            Text("¥\(Int(restaurant.averagePrice))/人")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.black)
-                        }
+    // Hero Card Embedded Info (扁平风格字体层级)
+    private var heroCardInfo: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(restaurant.name)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+
+                // 品类 + 地区 + 价格
+                HStack(spacing: 8) {
+                    Text(restaurant.type)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.darkText.opacity(0.7))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.Colors.softBackground)
+                        )
+
+                    // 地区
+                    if !restaurant.district.isEmpty {
+                        Text(restaurant.district)
+                            .font(.system(size: 13))
+                            .foregroundColor(AppTheme.Colors.darkText.opacity(0.5))
+                    }
+
+                    if restaurant.averagePrice > 0 {
+                        Text("¥\(Int(restaurant.averagePrice))/人")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.darkText.opacity(0.7))
                     }
                 }
-                
-                Spacer()
-                
-                heroCheckInButton
             }
-            .padding(.horizontal, 20)
+
+            Spacer()
+
+            heroCheckInButton
+        }
+        .padding(.horizontal, 24)
+    }
+
+        // MARK: - 格式化距离
+        private func formatDistance(_ distance: CLLocationDistance) -> String {
+            if distance < 1000 {
+                return String(format: "%.0fm", distance)
+            } else {
+                return String(format: "%.1fkm", distance / 1000)
+            }
+        }
+        
+        // MARK: - 估算驾车时间
+        private func estimateDrivingTime(distance: CLLocationDistance) -> String {
+            // 假设平均车速 30km/h（城市道路）
+            let speedKmH: Double = 30
+            let timeHours = (distance / 1000) / speedKmH
+            let timeMinutes = Int(timeHours * 60)
+            
+            if timeMinutes < 1 {
+                return "<1分钟"
+            } else if timeMinutes < 60 {
+                return "\(timeMinutes)分钟"
+            } else {
+                let hours = timeMinutes / 60
+                let mins = timeMinutes % 60
+                return "\(hours)小时\(mins)分钟"
+            }
+        }
+        
+        // MARK: - 打开导航菜单
+        private func openNavigation() {
+            showNavigationMenu = true
+        }
+        
+        // MARK: - 打开高德地图
+        private func openAmapNavigation() {
+            let latitude = restaurant.latitude
+            let longitude = restaurant.longitude
+            let name = restaurant.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            
+            if let amapURL = URL(string: "iosamap://path?sourceApplication=WhatToEat&dlat=\(latitude)&dlon=\(longitude)&dname=\(name)&dev=0&t=0"),
+               UIApplication.shared.canOpenURL(amapURL) {
+                UIApplication.shared.open(amapURL)
+            } else {
+                // 未安装，跳转到 App Store
+                if let appStoreURL = URL(string: "https://apps.apple.com/cn/app/高德地图/id461703208") {
+                    UIApplication.shared.open(appStoreURL)
+                }
+            }
+        }
+        
+        // MARK: - 打开百度地图
+        private func openBaiduNavigation() {
+            let latitude = restaurant.latitude
+            let longitude = restaurant.longitude
+            let name = restaurant.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            let userLat = locationManager.userLocation?.coordinate.latitude ?? 0
+            let userLon = locationManager.userLocation?.coordinate.longitude ?? 0
+            
+            if let baiduURL = URL(string: "baidumap://map/direction?origin=latlng:\(userLat),\(userLon)|name:我的位置&destination=latlng:\(latitude),\(longitude)|name:\(name)&mode=driving"),
+               UIApplication.shared.canOpenURL(baiduURL) {
+                UIApplication.shared.open(baiduURL)
+            } else {
+                // 未安装，跳转到 App Store
+                if let appStoreURL = URL(string: "https://apps.apple.com/cn/app/百度地图/id452186370") {
+                    UIApplication.shared.open(appStoreURL)
+                }
+            }
+        }
+        
+        // MARK: - 打开苹果地图
+        private func openAppleNavigation() {
+            let latitude = restaurant.latitude
+            let longitude = restaurant.longitude
+            
+            if let appleURL = URL(string: "http://maps.apple.com/?daddr=\(latitude),\(longitude)&dirflg=d") {
+                UIApplication.shared.open(appleURL)
+            }
+        }
+        
+        // MARK: - 计算驾车信息（性能优化：只在页面打开时计算一次）
+        private func calculateDrivingInfo() {
+            guard let userLocation = locationManager.userLocation else { return }
+            
+            let restaurantLocation = CLLocation(
+                latitude: restaurant.latitude,
+                longitude: restaurant.longitude
+            )
+            
+            let distance = userLocation.distance(from: restaurantLocation)
+            
+            // 在后台线程计算
+            DispatchQueue.global(qos: .userInitiated).async {
+                let distanceStr = self.formatDistance(distance)
+                let timeStr = self.estimateDrivingTime(distance: distance)
+                
+                // 回到主线程更新 UI
+                DispatchQueue.main.async {
+                    self.drivingDistance = distanceStr
+                    self.drivingTime = timeStr
+                    self.hasCalculatedDrivingInfo = true
+                }
+            }
         }
 
 
@@ -417,60 +593,205 @@ struct RestaurantDetailView: View {
                     .fill(Color.black) // 黑色背景
             )
         }
-        .pressableButton() // 果冻手感扩展
+        .oreoClickEffect(style: .medium) // Oreo: 黑色按钮用 medium 震动
     }
 
-    // MARK: - 一体化信息容器（统计+点评+标签）
+    // MARK: - 一体化信息容器（点评+标签）
     private var unifiedInfoSection: some View {
         VStack(spacing: 0) {
-            // 1. 统计区域
-            statsRow
-                .padding(.vertical, 16)
-            
-            // 2. 点评区域（保留编辑动效）
+            // 1. 点评区域（保留编辑动效）
             unifiedReviewRow
-                .padding(.vertical, 16)
+                .padding(.vertical, AppTheme.Card.paddingVertical)
             
-            // 3. 标签区域（保留编辑动效）
+            // 分割线
+            Divider()
+                .opacity(0.05)
+                .padding(.horizontal, AppTheme.Card.paddingHorizontal)
+            
+            // 2. 标签区域（保留编辑动效）
             unifiedTagsRow
-                .padding(.vertical, 16)
+                .padding(.vertical, AppTheme.Card.paddingVertical)
                 .id("tagsSection")
         }
-        .cardStyle()
+        .cardStyle() // 使用统一的 Crystal Container 样式
     }
 
-    // MARK: - 统计行
+    // MARK: - 统计卡片（1x2 网格布局 - 两个正方形）
     private var statsRow: some View {
-        HStack(spacing: 0) {
-            statMiniCard(
-                icon: "flame.fill",
-                iconColor: AppTheme.Colors.iconOrange,
-                title: "累计打卡",
-                value: "\(restaurant.checkInCount)"
-            )
+        let horizontalPadding: CGFloat = 24 // 左右边距
+        let spacing: CGFloat = 8 // 卡片之间的窄间距
+        let cardSize: CGFloat = (UIScreen.main.bounds.width - horizontalPadding * 2 - spacing) / 2 // 减去左右边距和中间间距
+        
+        return HStack(spacing: spacing) {
+            // 左卡片：累计打卡 + 总消费
+            ZStack {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.white)
+                    .frame(width: cardSize, height: cardSize)
+                
+                VStack(alignment: .leading, spacing: 16) {
+                    // 上半部分：累计打卡
+                    HStack(spacing: 12) {
+                        // 图标 - 小红书红（更浅的背景）
+                        ZStack {
+                            Circle()
+                                .fill(AppTheme.Colors.accent.opacity(0.06))
+                                .frame(width: 28, height: 28)
+                            
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.accent)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("已造访")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.Colors.textTertiary)
+                            
+                            // Oreo: 单位降权 - 数字 Bold，单位小 2pt Regular
+                            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                Text("\(restaurant.checkInCount)")
+                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                    .foregroundColor(AppTheme.Colors.babyBlue)
+                                Text("次")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(AppTheme.Colors.babyBlue.opacity(0.7))
+                            }
+                        }
+                    }
+                    
+                    // 分割线
+                    Rectangle()
+                        .fill(AppTheme.Colors.lighterGray)
+                        .frame(height: 1)
+                        .opacity(0.3)
+                    
+                    // 下半部分：总消费
+                    HStack(spacing: 12) {
+                        // 图标
+                        ZStack {
+                            Circle()
+                                .fill(AppTheme.Colors.iconPurple.opacity(0.1))
+                                .frame(width: 28, height: 28)
+                            
+                            Image(systemName: "creditcard.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppTheme.Colors.iconPurple)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("总消费")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.Colors.textTertiary)
+                            
+                            // Oreo: 单位降权 - 数字 Bold，单位小 2pt Regular
+                            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                Text(restaurant.totalExpense > 0 ? "\(Int(restaurant.totalExpense))" : "--")
+                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                    .foregroundColor(AppTheme.Colors.babyBlue)
+                                Text("元")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(AppTheme.Colors.babyBlue.opacity(0.7))
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .padding(.vertical, 20)
+            }
+            .frame(width: cardSize, height: cardSize)
             
-            Divider()
-                .frame(height: 30)
-                .opacity(0.1)
-            
-            statMiniCard(
-                icon: "creditcard.fill",
-                iconColor: AppTheme.Colors.iconPurple,
-                title: "总消费",
-                value: restaurant.totalExpense > 0 ? "\(Int(restaurant.totalExpense))" : "--"
-            )
+            // 右卡片：驾车信息 + 导航（可点击）
+            Button {
+                openNavigation()
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Color.white)
+                        .frame(width: cardSize, height: cardSize)
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        // 上半部分：驾车距离
+                        HStack(spacing: 12) {
+                            // 图标
+                            ZStack {
+                                Circle()
+                                    .fill(AppTheme.Colors.babyBlue.opacity(0.1))
+                                    .frame(width: 28, height: 28)
+                                
+                                Image(systemName: "car.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.babyBlue)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("驾车距离")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                                
+                                // Oreo: 单位降权 - 数字 Bold，单位小 2pt Regular
+                                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                    Text(drivingDistance.isEmpty ? "--" : String(drivingDistance.dropLast(2)))
+                                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                                        .foregroundColor(AppTheme.Colors.babyBlue)
+                                    Text(drivingDistance.isEmpty ? "" : "km")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(AppTheme.Colors.babyBlue.opacity(0.7))
+                                }
+                            }
+                        }
+                        
+                        // 分割线
+                        Rectangle()
+                            .fill(AppTheme.Colors.lighterGray)
+                            .frame(height: 1)
+                            .opacity(0.3)
+                        
+                        // 下半部分：导航
+                        HStack(spacing: 12) {
+                            // 图标
+                            ZStack {
+                                Circle()
+                                    .fill(AppTheme.Colors.babyBlue.opacity(0.1))
+                                    .frame(width: 28, height: 28)
+                                
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.Colors.babyBlue)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("导航")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(AppTheme.Colors.textTertiary)
+                                
+                                Text("去这里")
+                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                    .foregroundColor(AppTheme.Colors.xhsRed) // Misty Oreo: 感性动作用 xhsRed
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .padding(.vertical, 20)
+                }
+                .frame(width: cardSize, height: cardSize)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .oreoClickEffect(style: .light) // Oreo: Baby Blue 按钮用 light 震动
         }
-        .padding(.horizontal, 4)
     }
-    
-    // MARK: - 点评行（深色胶囊背景）
+
+    // MARK: - 点评行（画报化版）
     private var unifiedReviewRow: some View {
         VStack(alignment: .leading, spacing: 12) {
             // 标题栏：包含标题和取消/完成按钮
             HStack(alignment: .center, spacing: 0) {
                 Text("一句话点评")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(isEditingReview ? AppTheme.Colors.textSecondary : AppTheme.Colors.darkText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.darkText.opacity(0.4))
+                    .tracking(0.5)
                 
                 Spacer()
                 
@@ -482,81 +803,88 @@ struct RestaurantDetailView: View {
                         } label: {
                             Text("取消")
                                 .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.mediumGray)
+                                .foregroundColor(AppTheme.Colors.textSecondary)
                         }
-                        
+                        .oreoClickEffect(style: .light)
+
                         Button {
                             saveReview()
                         } label: {
                             Text("完成")
                                 .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.accent)
+                                .foregroundColor(AppTheme.Colors.xhsRed)
                         }
+                        .oreoClickEffect(style: .light) // Oreo: 小红书红用 light 震动
                     }
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppTheme.Card.paddingHorizontal)
 
-            // 点评内容（可点击编辑）
-            VStack(spacing: 0) {
-                if isEditingReview {
-                    ZStack(alignment: .center) {
-                        TextField(restaurant.review.isEmpty ? "添加你的点评..." : restaurant.review, text: $editedReview, axis: .vertical)
-                            .font(.body)
-                            .foregroundColor(AppTheme.Colors.brownText)
-                            .lineSpacing(4)
-                            .multilineTextAlignment(.center)
-                            .focused($reviewIsFocused)
-                            .scrollContentBackground(.hidden)
-                            .padding(20)
-                            .padding(.bottom, 10)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                            // 移除自动聚焦，避免键盘自动弹出
-                            .onDisappear {
-                                reviewIsFocused = false
-                            }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
-                } else {
+            // 点评内容（画报化样式）
+            if isEditingReview {
+                ZStack(alignment: .center) {
+                    TextField(restaurant.review.isEmpty ? "添加你的点评..." : restaurant.review, text: $editedReview, axis: .vertical)
+                        .font(.body)
+                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .lineSpacing(6) // 增加行间距
+                        .multilineTextAlignment(.center)
+                        .focused($reviewIsFocused)
+                        .scrollContentBackground(.hidden)
+                        .padding(AppTheme.Card.paddingHorizontal)
+                        .padding(.vertical, 14)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        .onDisappear {
+                            reviewIsFocused = false
+                        }
+                }
+                .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppTheme.Colors.softBackground)
+                )
+                .padding(.horizontal, AppTheme.Card.paddingHorizontal)
+            } else {
+                // 画报化展示：左侧高亮条 + 斜体文字（与餐厅卡片同款样式）
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    // 指示条 - 与 RestaurantCard 同款样式，与文字第一行基线对齐
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(AppTheme.Colors.babyBlue)
+                        .frame(width: 3, height: 12)
+                    
                     Text(restaurant.review.isEmpty ? "点击添加点评..." : restaurant.review)
                         .font(.body)
-                        .foregroundColor(restaurant.review.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.mediumGray)
-                        .lineSpacing(4)
-                        .padding(.horizontal, 20)
+                        .italic() // 斜体
+                        .foregroundColor(restaurant.review.isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.textPrimary)
+                        .lineSpacing(5) // Oreo: 统一行间距 5pt
                         .padding(.vertical, 14)
-                        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    
+                    Spacer()
                 }
+                .padding(.horizontal, AppTheme.Card.paddingHorizontal)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
-            .frame(minHeight: isEditingReview ? 150 : 48)
-            .id(isEditingReview)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(AppTheme.Colors.card)
-                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
-            )
-            .padding(.horizontal, 20)
-            .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
-            .onTapGesture {
-                if !isEditingReview {
-                    editedReview = restaurant.review
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
-                        isEditingReview = true
-                    }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
+        .onTapGesture {
+            if !isEditingReview {
+                editedReview = restaurant.review
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                    isEditingReview = true
                 }
             }
         }
     }
     
-    // MARK: - 标签区域（完全使用 ProfileView 的实现逻辑）
+    // MARK: - 标签区域（画报化版）
     private var unifiedTagsRow: some View {
         VStack(alignment: .leading, spacing: 12) {
             // 标题栏：包含标题和取消/完成按钮
             HStack(alignment: .center, spacing: 0) {
                 Text("标签")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(isEditingTags ? AppTheme.Colors.textSecondary : AppTheme.Colors.darkText)
+                    .foregroundColor(AppTheme.Colors.mediumGray) // 统一使用 mediumGray
+                    .tracking(1.5) // 增加字间距
                 
                 Spacer()
                 
@@ -590,11 +918,11 @@ struct RestaurantDetailView: View {
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppTheme.Card.paddingHorizontal)
 
             // 标签内容（可点击编辑）
             tagsCloudMainContent
-                .padding(.horizontal, 20)
+                .padding(.horizontal, AppTheme.Card.paddingHorizontal)
         }
     }
 
@@ -634,19 +962,48 @@ struct RestaurantDetailView: View {
     // MARK: - 编辑模式标签布局（无卡片背景，与常用标签一致）
     private var tagsEditingLayout: some View {
         FlowLayout(spacing: 10) {
-            ForEach(restaurant.tags, id: \.self) { tag in
-                restaurantTagSticker(tag)
+            ForEach(Array(restaurant.tags.enumerated()), id: \.element) { index, tag in
+                restaurantTagSticker(tag, index: index)
             }
             restaurantNewTagInputField
         }
     }
-    
+
     // MARK: - 展示模式标签布局（无卡片背景，与常用标签一致）
     private var tagsDisplayLayout: some View {
         FlowLayout(spacing: 10) {
-            ForEach(restaurant.tags, id: \.self) { tag in
-                restaurantTagSticker(tag)
+            ForEach(Array(restaurant.tags.enumerated()), id: \.element) { index, tag in
+                restaurantTagSticker(tag, index: index)
             }
+            // 新标签输入按钮（点击后进入编辑模式）
+            newTagInputButton
+        }
+    }
+
+    // MARK: - 新标签输入按钮（点击后进入编辑模式）
+    private var newTagInputButton: some View {
+        Button {
+            withAnimation(AppTheme.Animations.editingSpring) {
+                isEditingTags = true
+                // 延迟聚焦，等待布局完成
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    tagInputIsFocused = true
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                Text("新标签")
+                    .font(.system(size: 14, design: .rounded))
+            }
+            .foregroundColor(AppTheme.Colors.lightText)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(AppTheme.Colors.softBackground)
+            )
         }
     }
 
@@ -678,7 +1035,7 @@ struct RestaurantDetailView: View {
             statMiniCard(
                 icon: "flame.fill",
                 iconColor: AppTheme.Colors.iconOrange,
-                title: "累计打卡",
+                title: "已造访",
                 value: "\(restaurant.checkInCount)"
             )
             
@@ -703,6 +1060,7 @@ struct RestaurantDetailView: View {
                 Image(systemName: icon)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(iconColor)
+                    .opacity(0.6) // 图标降噪：透明度 0.6
             }
             
             VStack(alignment: .leading, spacing: 2) {
@@ -712,12 +1070,12 @@ struct RestaurantDetailView: View {
                 
                 Text(value)
                     .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(AppTheme.Colors.babyBlue) // 数字强调：Baby Blue
             }
             
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, AppTheme.Card.paddingHorizontal)
         .padding(.vertical, 14)
     }
 
@@ -753,7 +1111,7 @@ struct RestaurantDetailView: View {
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 24)
 
             reviewCardContent
         }
@@ -847,8 +1205,8 @@ struct RestaurantDetailView: View {
         .id("presetTagsSection")
     }
 
-    // MARK: - 餐厅标签贴纸（完全复制 ProfileView 的 profileTagSticker）
-    private func restaurantTagSticker(_ tag: String) -> some View {
+    // MARK: - 餐厅标签贴纸（交替配色版）
+    private func restaurantTagSticker(_ tag: String, index: Int) -> some View {
         HStack(spacing: 6) {
             Text(tag)
                 .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -871,7 +1229,9 @@ struct RestaurantDetailView: View {
         .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(AppTheme.Colors.softBackground)
+                .fill(index % 2 == 0 
+                    ? AppTheme.Colors.babyBlue.opacity(0.08) 
+                    : AppTheme.Colors.accent.opacity(0.08)) // 交替配色
         )
     }
 
@@ -926,38 +1286,45 @@ struct RestaurantDetailView: View {
     
     // MARK: - 显示打卡记录详情的状态
     @State private var showCheckInHistory = false
-    
-    private var checkInHistorySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("打卡记录")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.darkText)
 
-                Text("(\(restaurant.logs.count))")
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
+    // MARK: - 打卡记录标题（外部二级标题）
+    private var checkInHistoryHeader: some View {
+        HStack {
+            Text("打卡记录")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(AppTheme.Colors.mediumGray)
+                .tracking(1.5)
 
-                Spacer()
-                
-                // 查看更多按钮（当记录超过3条时显示）
-                if restaurant.logs.count > 3 {
-                    Button {
-                        showCheckInHistory = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("查看更多")
-                                .font(.system(size: 13, weight: .medium))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12))
-                        }
-                        .foregroundColor(AppTheme.Colors.babyBlue)
+            Text("(\(restaurant.logs.count))")
+                .font(.system(size: 13))
+                .foregroundColor(AppTheme.Colors.mediumGray)
+
+            Spacer()
+
+            // 查看更多按钮（当记录超过3条时显示）
+            if restaurant.logs.count > 3 {
+                Button {
+                    showCheckInHistory = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("查看更多")
+                            .font(.system(size: 13, weight: .medium))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12))
                     }
+                    .foregroundColor(AppTheme.Colors.babyBlue)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 4)
+        }
+        .padding(.horizontal, 24)
+        .sheet(isPresented: $showCheckInHistory) {
+            CheckInHistoryView(restaurant: restaurant)
+        }
+    }
 
+    // MARK: - 打卡记录列表
+    private var checkInHistoryList: some View {
+        VStack(alignment: .leading, spacing: 12) {
             if restaurant.logs.isEmpty {
                 emptyCheckInState
             } else {
@@ -967,52 +1334,56 @@ struct RestaurantDetailView: View {
                     checkInLogCard(log: log)
                 }
             }
-
-            deleteRestaurantButton
-        }
-        .sheet(isPresented: $showCheckInHistory) {
-            CheckInHistoryView(restaurant: restaurant)
         }
     }
 
+    // MARK: - Oreo: 极致情感化空状态
     private var emptyCheckInState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 44))
-                .foregroundColor(AppTheme.Colors.lightText)
+                .font(.system(size: 48, weight: .light))
+                .foregroundColor(AppTheme.Colors.babyBlue)
 
-            Text("暂无记录")
-                .font(.subheadline)
-                .foregroundColor(Color(hex: "#525252"))
+            // 标题 17pt Bold
+            Text("还没有打卡记录")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(AppTheme.Colors.darkText)
+                .tracking(0.5)
+
+            // 描述 14pt Italic
+            Text("第一次的相遇总是最难忘的，去记录这份美味吧")
+                .font(.system(size: 14, weight: .regular))
+                .italic()
+                .foregroundColor(AppTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
 
             Button {
                 showSheet = true
             } label: {
-                Text("立即打卡")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                Text("去打卡")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 12)
                     .background(
                         Capsule()
-                            .fill(Color(hex: "#1A1A1A"))
+                            .fill(Color.black)
                     )
             }
-            .padding(.top, 8)
+            .oreoClickEffect(style: .medium)
+            .padding(.top, 12)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 48)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(AppTheme.Colors.card)
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(AppTheme.Colors.divider, lineWidth: 1)
+                        .stroke(Color.black.opacity(0.06), lineWidth: 1)
                 )
         )
-        .shadow(color: Color.black.opacity(0.04), radius: 20, x: 0, y: 10)
-        .shadow(color: Color.black.opacity(0.06), radius: 5, x: 0, y: 2)
     }
 
     private var deleteRestaurantButton: some View {
@@ -1028,19 +1399,20 @@ struct RestaurantDetailView: View {
             }
             .font(.subheadline)
             .fontWeight(.medium)
-            .foregroundColor(Color(hex: "#1A1A1A"))
+            .foregroundColor(AppTheme.Colors.mediumGray)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, 16)
             .background(
-                Capsule()
-                    .fill(AppTheme.Colors.card)
+                RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
+                    .fill(Color.white)
                     .overlay(
-                        Capsule()
-                            .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
+                            .stroke(AppTheme.Card.strokeColor, lineWidth: AppTheme.Card.strokeWidth)
                     )
             )
         }
-        .cardStyle()
+        .padding(.horizontal, 24)
+        // 扁平风格：去掉阴影
     }
 
     private func checkInLogCard(log: VisitLog) -> some View {

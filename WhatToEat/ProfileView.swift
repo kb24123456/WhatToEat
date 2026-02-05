@@ -54,15 +54,20 @@ struct ProfileView: View {
 
                         // Phase 2: 数据可视化与偏好分析
                         consumptionAnalysisCard
+                            .padding(.top, AppTheme.Card.spacingSmall) // Misty Oreo: 32pt 间距
                         tagsCloudSection
                             .id("tagsCloudSection")
+                            .padding(.top, AppTheme.Card.spacingSmall)
                         top5RestaurantsSection
+                            .padding(.top, AppTheme.Card.spacingSmall)
 
                         // Phase 3: 打卡时间轴
                         timelineSection
+                            .padding(.top, AppTheme.Card.spacingSmall)
 
                         // Phase 4: 工具箱、安全与隐私
                         milkyToolList
+                            .padding(.top, AppTheme.Card.spacingSmall)
                         bottomInfo
 
                         // 键盘避让：标签输入框聚焦时增加额外底部空间
@@ -119,14 +124,19 @@ struct ProfileView: View {
         .animation(.easeInOut(duration: 0.25), value: isEditingTags)
     }
     
-    // MARK: - Phase 1: Profile Card (白色透明名片，显示背景渐变)
+    // MARK: - Phase 1: Profile Card (The Glass Identity - 玻璃态升级)
     private var glassProfileCard: some View {
         Button {
             showingEditProfile = true
         } label: {
             HStack(spacing: 12) {
-                // 头像
+                // 头像 - 增加白色外圈
                 ZStack {
+                    // 白色外圈
+                    Circle()
+                        .fill(Color.white.opacity(0.8))
+                        .frame(width: 68, height: 68)
+
                     Circle()
                         .fill(AppTheme.Colors.card)
                         .frame(width: 64, height: 64)
@@ -150,7 +160,7 @@ struct ProfileView: View {
                     // 昵称和箭头在一行
                     HStack(spacing: 4) {
                         Text(userProfile.nickname)
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(AppTheme.Colors.darkText)
                             .lineLimit(1)
 
@@ -177,8 +187,9 @@ struct ProfileView: View {
                             .foregroundColor(AppTheme.Colors.lightGray)
 
                         Text("加入第\(joinDays)天")
-                            .font(.system(size: 11, design: .rounded))
+                            .font(.system(size: 13, design: .rounded))
                             .foregroundColor(AppTheme.Colors.mediumGray)
+                            .tracking(1.0)
                             .lineLimit(1)
                     }
                 }
@@ -194,82 +205,127 @@ struct ProfileView: View {
             }
             .padding(16)
         }
-        .cardStyle()
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+                )
+        )
         .buttonStyle(PlainButtonStyle())
         .pressableButton(scale: 0.98)
     }
 
-    // MARK: - Phase 1: Grand Stats Dashboard (全局仪表盘)
+    // MARK: - Phase 1: Grand Stats Dashboard (Floating Metrics - 去容器化)
     private var grandStatsDashboard: some View {
         HStack(spacing: 0) {
-            StatCell(value: "\(totalRestaurants)", label: "餐厅", color: AppTheme.Colors.darkText)
-            Divider().frame(height: 40)
-            StatCell(value: "\(totalCheckIns)", label: "打卡", color: AppTheme.Colors.darkText)
-            Divider().frame(height: 40)
-            StatCell(value: formatCurrency(totalExpense), label: "总支出", color: AppTheme.Colors.darkText)
-            Divider().frame(height: 40)
-            StatCell(value: "\(uniqueCities)", label: "城市", color: AppTheme.Colors.darkText)
+            StatCell(value: "\(totalRestaurants)", label: "餐厅", color: AppTheme.Colors.babyBlue)
+            Divider().frame(height: 20).opacity(0.05)
+            StatCell(value: "\(totalCheckIns)", label: "打卡", color: AppTheme.Colors.babyBlue)
+            Divider().frame(height: 20).opacity(0.05)
+            StatCell(value: formatCurrency(totalExpense), label: "总支出", color: AppTheme.Colors.babyBlue)
+            Divider().frame(height: 20).opacity(0.05)
+            StatCell(value: "\(uniqueCities)", label: "城市", color: AppTheme.Colors.babyBlue)
         }
         .padding(.vertical, 16)
-        .cardStyle()
+        // 移除 .cardStyle()，直接浮在背景上
     }
 
-    // MARK: - Phase 2: Consumption Analysis (消费分析)
+    // MARK: - 统计单元格（去容器化版）
+    private struct StatCell: View {
+        let value: String
+        let label: String
+        let color: Color
+
+        var body: some View {
+            VStack(spacing: 4) {
+                Text(value)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(color)
+
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.lightText)
+                    .tracking(1.5)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: - Phase 2: Consumption Analysis (Data Visualization - 数据艺术化)
     private var consumptionAnalysisCard: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // 标题规范：16pt, darkText, tracking(1.5)
             Text("消费洞察")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.Colors.darkText)
-            
+                .tracking(1.5)
+
             // 月度消费趋势图
             consumptionTrendChart
-            
+
             Divider()
-                .background(AppTheme.Colors.divider)
-            
+                .opacity(0.05)
+
             // 餐饮类型占比分段进度条
             cuisineTypeBars
         }
-        .padding(16)
+        .padding(AppTheme.Card.paddingHorizontal)
+        .padding(.vertical, AppTheme.Card.paddingVertical)
         .cardStyle()
     }
 
-    // 月度消费趋势折线图
+    // 月度消费趋势折线图（数据艺术化版）
+    // MARK: - Oreo: 消费趋势图表巅峰化
     private var consumptionTrendChart: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("近6个月消费趋势")
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.mediumGray)
-            
+
             let data = getMonthlyExpenses()
-            
+
             Chart(data, id: \.month) { item in
+                // Oreo: 线宽设为 3
                 LineMark(
                     x: .value("月份", item.month),
                     y: .value("金额", item.amount)
                 )
                 .foregroundStyle(AppTheme.Colors.babyBlue)
-                .lineStyle(StrokeStyle(lineWidth: 2))
-                
+                .lineStyle(StrokeStyle(lineWidth: 3))
+
+                // 渐变填充区域
                 AreaMark(
                     x: .value("月份", item.month),
                     y: .value("金额", item.amount)
                 )
-                .foregroundStyle(AppTheme.Colors.babyBlue.opacity(0.1))
-            }
-            .frame(height: 100)
-            .chartYAxis {
-                AxisMarks(position: .leading) { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let intValue = value.as(Int.self) {
-                            Text("¥\(intValue)")
-                                .font(.system(size: 9))
-                                .foregroundColor(AppTheme.Colors.lightText)
-                        }
-                    }
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            AppTheme.Colors.babyBlue.opacity(0.08),
+                            AppTheme.Colors.babyBlue.opacity(0.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+                // Oreo: 转折点添加 Baby Blue 空心圆点
+                PointMark(
+                    x: .value("月份", item.month),
+                    y: .value("金额", item.amount)
+                )
+                .foregroundStyle(AppTheme.Colors.babyBlue)
+                .symbol {
+                    Circle()
+                        .stroke(AppTheme.Colors.babyBlue, lineWidth: 2)
+                        .background(Circle().fill(Color.white))
+                        .frame(width: 8, height: 8)
                 }
             }
+            .frame(height: 100)
+            .chartYAxis(.hidden)
             .chartXAxis {
                 AxisMarks { value in
                     AxisValueLabel {
@@ -281,18 +337,28 @@ struct ProfileView: View {
                     }
                 }
             }
+
+            // Oreo: 图表注脚
+            HStack {
+                Spacer()
+                Text("数据基于过去180天的记录")
+                    .font(.system(size: 10, weight: .regular, design: .default))
+                    .italic()
+                    .foregroundColor(AppTheme.Colors.textTertiary)
+            }
+            .padding(.top, 4)
         }
     }
     
-    // 餐饮类型占比分段进度条
+    // 餐饮类型占比分段进度条（Baby Blue 动态不透明度）
     private var cuisineTypeBars: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("餐饮偏好")
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.mediumGray)
-            
+
             let typeData = getCuisineTypeDistribution()
-            
+
             VStack(spacing: 8) {
                 ForEach(typeData.prefix(4), id: \.type) { item in
                     HStack(spacing: 8) {
@@ -300,20 +366,22 @@ struct ProfileView: View {
                             .font(.system(size: 12, design: .rounded))
                             .foregroundColor(AppTheme.Colors.mediumGray)
                             .frame(width: 50, alignment: .leading)
-                        
+
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
+                                // 背景：极淡的 softBackground
                                 RoundedRectangle(cornerRadius: 3)
                                     .fill(AppTheme.Colors.softBackground)
                                     .frame(height: 6)
-                                
+
+                                // 填充：Baby Blue，动态不透明度
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(item.color)
+                                    .fill(AppTheme.Colors.babyBlue.opacity(barOpacity(for: item.percent)))
                                     .frame(width: geo.size.width * item.percent, height: 6)
                             }
                         }
                         .frame(height: 6)
-                        
+
                         Text("\(Int(item.percent * 100))%")
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundColor(AppTheme.Colors.darkText)
@@ -323,26 +391,43 @@ struct ProfileView: View {
             }
         }
     }
+
+    // 根据百分比计算不透明度（33% -> 1.0, 9% -> 0.3）
+    private func barOpacity(for percent: Double) -> Double {
+        let minOpacity = 0.3
+        let maxOpacity = 1.0
+        let minPercent = 0.05
+        let maxPercent = 0.4
+
+        if percent >= maxPercent { return maxOpacity }
+        if percent <= minPercent { return minOpacity }
+
+        // 线性插值
+        return minOpacity + (percent - minPercent) / (maxPercent - minPercent) * (maxOpacity - minOpacity)
+    }
     
-    // MARK: - Phase 2: Tags Cloud (我的标签)
+    // MARK: - Phase 2: Tags Cloud (Tags Cloud - 呼吸感排版)
     private var tagsCloudSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             tagsCloudHeader
             tagsCloudContent
         }
-        .padding(16)
+        .padding(AppTheme.Card.paddingHorizontal)
+        .padding(.vertical, AppTheme.Card.paddingVertical)
         .cardStyle()
     }
 
-    // MARK: - 标签区域头部（使用统一编辑栏规范）
+    // MARK: - 标签区域头部（呼吸感排版）
     private var tagsCloudHeader: some View {
         HStack(alignment: .center, spacing: 0) {
+            // 标题规范：16pt, darkText, tracking(1.5)
             Text("我的标签")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(isEditingTags ? AppTheme.Colors.textSecondary : AppTheme.Colors.darkText)
-            
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
+                .tracking(1.5)
+
             Spacer()
-            
+
             if isEditingTags {
                 // 编辑状态下的取消/完成按钮
                 HStack(spacing: 16) {
@@ -356,7 +441,7 @@ struct ProfileView: View {
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(AppTheme.Colors.mediumGray)
                     }
-                    
+
                     Button {
                         withAnimation(AppTheme.Animations.editingSpring) {
                             saveTags()
@@ -371,14 +456,14 @@ struct ProfileView: View {
                 }
                 .transition(.opacity.combined(with: .move(edge: .trailing)))
             } else {
-                // 非编辑状态下的管理按钮
+                // 非编辑状态下的管理按钮：Baby Blue 文字链接，13pt
                 Button {
                     withAnimation(AppTheme.Animations.editingSpring) {
                         isEditingTags = true
                     }
                 } label: {
                     Text("管理")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(AppTheme.Colors.babyBlue)
                 }
             }
@@ -533,13 +618,13 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - 个人资料页标签贴纸（带删除按钮）
+    // MARK: - 个人资料页标签贴纸（呼吸感排版 - 移除描边）
     private func profileTagSticker(_ tag: String) -> some View {
         HStack(spacing: 6) {
             Text(tag)
                 .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.darkText)
-            
+
             if isEditingTags {
                 // 删除按钮
                 Button {
@@ -557,7 +642,7 @@ struct ProfileView: View {
         .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(AppTheme.Colors.softBackground)
+                .fill(AppTheme.Colors.softBackground) // 统一使用 softBackground，无描边
         )
     }
     
@@ -580,12 +665,14 @@ struct ProfileView: View {
     private var top5RestaurantsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
+                // 标题规范：16pt, darkText, tracking(1.5)
                 Text("最常去的餐厅 TOP 5")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.darkText)
-                
+                    .tracking(1.5)
+
                 Spacer()
-                
+
                 Button {
                     // 查看完整年度回顾
                 } label: {
@@ -615,7 +702,8 @@ struct ProfileView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(AppTheme.Card.paddingHorizontal)
+        .padding(.vertical, AppTheme.Card.paddingVertical)
         .cardStyle()
     }
 
@@ -623,12 +711,14 @@ struct ProfileView: View {
     private var timelineSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
+                // 标题规范：16pt, darkText, tracking(1.5)
                 Text("美食足迹")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.darkText)
-                
+                    .tracking(1.5)
+
                 Spacer()
-                
+
                 Button {
                     showCheckInHistory = true
                 } label: {
@@ -637,7 +727,7 @@ struct ProfileView: View {
                         .foregroundColor(AppTheme.Colors.babyBlue)
                 }
             }
-            
+
             // 时间轴
             let recentLogs = getRecentLogsWithRestaurant(limit: 5)
             VStack(spacing: 0) {
@@ -652,92 +742,133 @@ struct ProfileView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(AppTheme.Card.paddingHorizontal)
+        .padding(.vertical, AppTheme.Card.paddingVertical)
         .cardStyle()
         .sheet(isPresented: $showCheckInHistory) {
             CheckInHistoryView()
         }
     }
     
-    // MARK: - Phase 4: Milky Tool List (奶脂风格工具列表)
+    // MARK: - Phase 4: Milky Tool List (Editorial List - 奶脂化定制)
     private var milkyToolList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 隐私锁开关
+            // 隐私锁开关（使用小红书红 tint）
             PrivacyToggleView(privacyEnabled: $privacyEnabled)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-            
+                .tint(AppTheme.Colors.accent) // 小红书红
+
+            // 极细分隔线
             Divider()
-                .background(AppTheme.Colors.divider)
-                .padding(.leading, 60)
-            
+                .background(Color.black.opacity(0.05))
+                .padding(.horizontal, 20)
+
             // 导入餐厅数据
-            MilkyToolRow(
+            EditorialToolRow(
                 icon: "square.and.arrow.down",
                 title: "导入餐厅数据",
                 subtitle: "从 CSV 文件批量导入",
-                color: .pink,
                 action: {
                     showImportSheet = true
                 }
             )
-            
+
+            // 极细分隔线
             Divider()
-                .background(AppTheme.Colors.divider)
-                .padding(.leading, 60)
-            
+                .background(Color.black.opacity(0.05))
+                .padding(.horizontal, 20)
+
             // iCloud 同步
-            MilkyToolRow(
+            EditorialToolRow(
                 icon: "icloud.and.arrow.up",
                 title: "iCloud 同步",
-                subtitle: "上次同步：刚刚",
-                color: .blue
+                subtitle: "上次同步：刚刚"
             )
-            
+
+            // 极细分隔线
             Divider()
-                .background(AppTheme.Colors.divider)
-                .padding(.leading, 60)
-            
+                .background(Color.black.opacity(0.05))
+                .padding(.horizontal, 20)
+
             // 导出 PDF 报告
-            MilkyToolRow(
+            EditorialToolRow(
                 icon: "doc.text",
                 title: "导出美食报告",
-                subtitle: "生成精美 PDF 长图",
-                color: .green
+                subtitle: "生成精美 PDF 长图"
             )
-            
+
+            // 极细分隔线
             Divider()
-                .background(AppTheme.Colors.divider)
-                .padding(.leading, 60)
-            
+                .background(Color.black.opacity(0.05))
+                .padding(.horizontal, 20)
+
             // 分享美食地图
-            MilkyToolRow(
+            EditorialToolRow(
                 icon: "square.and.arrow.up",
                 title: "分享美食地图",
-                subtitle: "生成专属分享卡片",
-                color: .orange
+                subtitle: "生成专属分享卡片"
             )
-            
+
+            // 极细分隔线
             Divider()
-                .background(AppTheme.Colors.divider)
-                .padding(.leading, 60)
-            
+                .background(Color.black.opacity(0.05))
+                .padding(.horizontal, 20)
+
             // 清理存储
-            MilkyToolRow(
+            EditorialToolRow(
                 icon: "externaldrive",
                 title: "存储空间",
-                subtitle: "已用 45MB / 100MB",
-                color: .purple
+                subtitle: "已用 45MB / 100MB"
             )
         }
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(AppTheme.Colors.card)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(AppTheme.Colors.separatorGray.opacity(0.3), lineWidth: 0.5)
-                )
-        )
+        .cardStyle() // 统一使用 cardStyle
+    }
+
+    // MARK: - 编辑风格工具行（奶脂化定制）
+    private struct EditorialToolRow: View {
+        let icon: String
+        let title: String
+        let subtitle: String
+        var action: (() -> Void)? = nil
+
+        var body: some View {
+            Button(action: { action?() }) {
+                HStack(spacing: 12) {
+                    // 图标座：圆角 10pt 正方形，Baby Blue 10% 不透明度
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(AppTheme.Colors.babyBlue.opacity(0.1))
+                            .frame(width: 40, height: 40)
+
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.babyBlue)
+                    }
+
+                    // 文字内容
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.darkText)
+
+                        Text(subtitle)
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.lightText)
+                    }
+
+                    Spacer()
+
+                    // 箭头
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.lighterGray)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
     }
     
     // MARK: - Phase 4: Bottom Info (底部信息)
@@ -912,10 +1043,12 @@ struct LevelBadgeView: View {
 }
 
 // MARK: - Next Level Progress View (下一级进度视图)
+// MARK: - Oreo: 等级进度条巅峰化
 struct NextLevelProgressView: View {
     let currentLevel: Int
     let checkIns: Int
     let nextLevelRequirement: Int
+    @State private var glowOpacity: Double = 0.5
 
     var progress: Double {
         if currentLevel >= 5 { return 1.0 }
@@ -948,7 +1081,6 @@ struct NextLevelProgressView: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
             if currentLevel >= 5 {
-                // 已满级
                 HStack(spacing: 2) {
                     Image(systemName: "crown.fill")
                         .font(.system(size: 10))
@@ -958,32 +1090,38 @@ struct NextLevelProgressView: View {
                         .foregroundColor(AppTheme.Colors.mediumGray)
                 }
             } else {
-                // 显示下一级名称
                 Text(nextLevelName)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .foregroundColor(AppTheme.Colors.mediumGray)
 
-                // 进度条
+                // Oreo: 等级进度条 - 呼吸灯光晕效果
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        // 背景
+                        // 背景 - 极淡灰色
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(AppTheme.Colors.softBackground)
+                            .fill(Color.gray.opacity(0.1))
                             .frame(height: 4)
 
-                        // 进度
+                        // Oreo: 填充色 - Baby Blue 到纯白渐变
                         RoundedRectangle(cornerRadius: 2)
                             .fill(
                                 LinearGradient(
-                                    colors: [AppTheme.Colors.babyBlue, AppTheme.Colors.babyBlue.opacity(0.7)],
+                                    colors: [AppTheme.Colors.babyBlue, Color.white],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
                             .frame(width: geo.size.width * progress, height: 4)
+                            .shadow(color: AppTheme.Colors.babyBlue.opacity(glowOpacity), radius: 4, x: 0, y: 0)
                     }
                 }
                 .frame(width: 60, height: 4)
+                .onAppear {
+                    // Oreo: 呼吸灯动画
+                    withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
+                        glowOpacity = 0.8
+                    }
+                }
 
                 // 剩余打卡数
                 Text("还需 \(nextLevelRequirement - checkIns) 次打卡")

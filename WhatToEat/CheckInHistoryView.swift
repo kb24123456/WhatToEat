@@ -156,26 +156,41 @@ struct CheckInHistoryView: View {
         }
     }
     
-    // MARK: - Empty State
+    // MARK: - Oreo: 极致情感化空状态
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
+            // 图标占据上方 1/3 区域感
             Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 60))
-                .foregroundColor(AppTheme.Colors.lightText)
-            
-            Text("暂无打卡记录")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(AppTheme.Colors.mediumGray)
-            
+                .font(.system(size: 56, weight: .light))
+                .foregroundColor(AppTheme.Colors.babyBlue)
+                .padding(.top, 60)
+
+            // 标题 17pt Bold 黑色
+            Text("还没有打卡记录")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(AppTheme.Colors.darkText)
+                .tracking(0.5)
+
+            // 描述 14pt Italic 灰色
             if restaurant == nil {
-                Text("快去添加你的第一家餐厅吧")
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.Colors.lightText)
+                Text("每一次品尝都值得被记住，去记录第一家餐厅吧")
+                    .font(.system(size: 14, weight: .regular))
+                    .italic()
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            } else {
+                Text("第一次造访总是特别的，去打卡留下足迹吧")
+                    .font(.system(size: 14, weight: .regular))
+                    .italic()
+                    .foregroundColor(AppTheme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
             }
+
+            Spacer()
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 80)
-        .cardStyle()
+        .frame(maxWidth: .infinity, minHeight: 300)
     }
     
     // MARK: - Check In Log Card (优化版)

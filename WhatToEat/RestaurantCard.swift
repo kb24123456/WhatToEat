@@ -2,30 +2,56 @@ import SwiftUI
 import MapKit
 import SwiftData
 
+// MARK: - 杂志级餐厅卡片 (Editorial Magazine Card)
 struct RestaurantCard: View {
     let restaurant: Restaurant
     @ObservedObject var locationManager: LocationManager
     let isExpanded: Bool
+    let index: Int
+
+    var onCheckInTap: (() -> Void)? = nil
+    @State private var isPressed = false
+
+    // MARK: - 杂志级间距系统 (Golden Ratio Spacing)
+    private enum Spacing {
+        static let micro: CGFloat = 12     // 微间距：行内元素（从 8 增大到 12）
+        static let small: CGFloat = 8      // 小间距：紧密相关元素
+        static let medium: CGFloat = 12    // 中间距：卡片垂直内边距（12pt，总间距24pt）
+        static let large: CGFloat = 20     // 大间距：主要模块间
+        static let section: CGFloat = 24   // 章节间距：卡片边缘
+    }
+
+    // MARK: - 字体系统 (Typography Scale) - Oreo 排版校对
+    private enum Typography {
+        static let title = Font.system(size: 17, weight: .bold, design: .default)
+        static let metadata = Font.system(size: 11, weight: .medium, design: .default)
+        static let quote = Font.system(size: 13, weight: .medium, design: .default)
+        static let badge = Font.system(size: 11, weight: .semibold, design: .default)
+    }
     
-    @State private var showCheckInSheet = false
-    
+    // Oreo: 标题字间距
+    private var titleTracking: CGFloat { 0.5 }
+
     private func distanceText(from: CLLocation, to restaurant: Restaurant) -> String {
         let distance = from.distance(from: CLLocation(latitude: restaurant.latitude, longitude: restaurant.longitude))
-        if distance < 1000 {
-            return String(format: "%.0fm", distance)
-        } else {
-            return String(format: "%.1fkm", distance / 1000)
-        }
+        return distance < 1000 ? String(format: "%.0fm", distance) : String(format: "%.1fkm", distance / 1000)
     }
-    
+
     private var priceText: String {
-        if restaurant.averagePrice > 0 {
-            return "¥\(Int(restaurant.averagePrice))/人"
-        } else {
-            return "暂无消费数据"
-        }
+        restaurant.averagePrice > 0 ? "¥\(Int(restaurant.averagePrice))" : "-"
     }
-    
+
+    private var metaLine: String {
+        var parts: [String] = []
+        if let userLocation = locationManager.userLocation {
+            parts.append(distanceText(from: userLocation, to: restaurant))
+        }
+        if !restaurant.district.isEmpty { parts.append(restaurant.district) }
+        if !restaurant.type.isEmpty { parts.append(restaurant.type) }
+        parts.append(priceText)
+        return parts.joined(separator: " / ")
+    }
+
     var body: some View {
         Group {
             if restaurant.modelContext != nil {
@@ -35,200 +61,281 @@ struct RestaurantCard: View {
             }
         }
     }
-    
+
+    // MARK: - 杂志级布局 (Magazine Layout)
     private var cardContent: some View {
-        HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
-            coverImage
-            cardInfo
+        HStack(alignment: .center, spacing: Spacing.large) {
+            heroImage
+            editorialContent
         }
+        .padding(.horizontal, Spacing.section)
+        .padding(.vertical, Spacing.medium)
+        .background(Color.clear)
         .contentShape(Rectangle())
-        .padding(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
-        .cardStyle()
+        .offset(y: isPressed ? -2 : 0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isPressed)
     }
+
+    // MARK: - 影像呈现 (Hero Image with Parallax)
+    @State private var imageOffset: CGFloat = 0
     
-    private var coverImage: some View {
-        ZStack {
+    private var heroImage: some View {
+        GeometryReader { geo in
             AsyncImageView(
                 filename: restaurant.coverPhotoFilename,
                 placeholder: AnyView(
                     ZStack {
-                        AppTheme.Colors.primary.opacity(0.1)
-                        Image(systemName: "fork.knife.circle.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(AppTheme.Colors.primary.opacity(0.3))
-                            .symbolRenderingMode(.hierarchical)
+                        Color(hex: "#F5F5F5")
+                        Image(systemName: "fork.knife")
+                            .font(.system(size: 28))
+                            .foregroundColor(Color(hex: "#CCCCCC"))
                     }
                 )
             )
-            .frame(width: AppTheme.Cards.restaurantCoverWidth, height: AppTheme.Cards.restaurantCoverHeight)
-            .cornerRadius(AppTheme.Radius.image)
-            .clipped()
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.image)
-                    .fill(LinearGradient(
-                        colors: [Color.black.opacity(0.05), Color.clear, Color.clear, Color.black.opacity(0.03)],
+            .frame(width: 140, height: 140) // 增大尺寸以容纳视差位移
+            .offset(x: imageOffset)
+            .onAppear {
+                // 根据索引产生不同的初始偏移，创造错落感
+                imageOffset = CGFloat(index % 2 == 0 ? -5 : 5)
+            }
+            // 监听列表滚动产生视差
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: ParallaxPreferenceKey.self, value: proxy.frame(in: .global).minY)
+                }
+            )
+            .onPreferenceChange(ParallaxPreferenceKey.self) { value in
+                // 根据视图在屏幕中的位置计算视差偏移
+                let screenHeight = UIScreen.main.bounds.height
+                let normalizedPosition = value / screenHeight
+                withAnimation(.linear(duration: 0.1)) {
+                    imageOffset = normalizedPosition * 20 - 10 // ±10pt 视差范围
+                }
+            }
+        }
+        .frame(width: 120, height: 120)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.image, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.image, style: .continuous)
+                .stroke(Color.black.opacity(0.04), lineWidth: 0.5)
+        )
+        // Oreo: 内阴影效果 - 高级相框质感
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.image, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.black.opacity(0.08),
+                            Color.clear,
+                            Color.clear,
+                            Color.black.opacity(0.04)
+                        ],
                         startPoint: .top,
                         endPoint: .bottom
-                    ))
-            )
-            .overlay(RoundedRectangle(cornerRadius: AppTheme.Radius.image).stroke(AppTheme.Colors.divider, lineWidth: 1.2))
-        }
-        .shadow(color: Color.black.opacity(0.03), radius: 6, x: 4, y: 6)
-    }
-    
-    private var cardInfo: some View {
-        ZStack(alignment: .topTrailing) {
-            infoContent
-            checkInButton
-        }
-    }
-    
-    private var infoContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(restaurant.name)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Color.clear.frame(height: 12)
-
-            metaInfo
-
-            Color.clear.frame(height: 6)
-
-            tagsRow
-
-            Color.clear.frame(height: 6)
-
-            if !restaurant.review.isEmpty {
-                reviewView
-            }
-        }
-        .frame(height: AppTheme.Cards.restaurantCoverHeight, alignment: .center)
-    }
-    
-    private var metaInfo: some View {
-        HStack(spacing: AppTheme.Spacing.sm) {
-            Text(priceText)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundColor(AppTheme.Colors.price)
-
-            Text(restaurant.district)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundColor(Color(hex: "#6B7280"))
-
-            if let userLocation = locationManager.userLocation {
-                Text(distanceText(from: userLocation, to: restaurant))
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundColor(Color(hex: "#6B7280"))
-                    .lineLimit(1)
-            } else {
-                Text("未定位")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundColor(Color(hex: "#6B7280"))
-                    .lineLimit(1)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(metaBackground)
-    }
-    
-    private var metaBackground: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(AppTheme.Colors.softBackground)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
-            )
-    }
-    
-    private var tagsRow: some View {
-        HStack(spacing: AppTheme.Spacing.sm) {
-            ratingView
-            
-            Text(restaurant.type)
-                .font(.system(size: 12, weight: .regular, design: .rounded))
-                .foregroundColor(Color(hex: "#6B7280"))
-            
-            ForEach(restaurant.tags.prefix(2), id: \.self) { tag in
-                TagView(tag: tag)
-            }
-        }
-    }
-    
-    private var ratingView: some View {
-        HStack(spacing: 2) {
-            Image(systemName: "star.fill")
-                .font(.system(size: 11))
-                .foregroundColor(AppTheme.Colors.secondary)
-                .symbolRenderingMode(.hierarchical)
-            Text("\(Int(restaurant.rating))")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.secondary)
-        }
-    }
-    
-    private var reviewView: some View {
-        HStack(spacing: 6) {
-            Rectangle()
-                .fill(AppTheme.Colors.accent)
-                .frame(width: 1.5, height: 12)
-                .cornerRadius(0.75)
-
-            Text("\(restaurant.review)")
-                .font(.system(size: 12, weight: .regular, design: .rounded))
-                .foregroundColor(Color(hex: "#6B7280"))
-                .lineLimit(1)
-                .multilineTextAlignment(.leading)
-                .tracking(0.3)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(AppTheme.Colors.softBackground)
-        .cornerRadius(6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    
-    private var checkInButton: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(Color(hex: "#FF6B6B"))
-            Text("\(restaurant.checkInCount)")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(AppTheme.Colors.textSecondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(AppTheme.Colors.card)
-                .overlay(
-                    Capsule()
-                        .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
+                    )
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
         )
-        .onTapGesture {
-            showCheckInSheet = true
+        .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 3)
+    }
+    
+    // MARK: - 视差偏移 PreferenceKey
+    struct ParallaxPreferenceKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = nextValue()
+        }
+    }
+
+    // MARK: - 编辑内容 (Editorial Content)
+    private var editorialContent: some View {
+        ZStack(alignment: .topTrailing) {
+            // 主要内容：标题 + 元数据 + 评论
+            VStack(alignment: .leading, spacing: 0) {
+                // 标题（带淡出遮罩，防止被打卡图标遮挡）
+                titleWithFade
+
+                // 元数据：距离 / 区域 / 品类 / 价格
+                metadataRow
+                    .padding(.top, Spacing.micro)
+
+                // 评分（如果有）
+                if restaurant.rating > 0 {
+                    ratingRow
+                        .padding(.top, Spacing.small)
+                }
+
+                // 评论（如果有）
+                if !restaurant.review.isEmpty {
+                    quoteSection
+                        .padding(.top, Spacing.medium)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // 打卡勋章固定在右上方
+            checkInBadge
+        }
+    }
+
+    // MARK: - 标题（带淡出遮罩）- Oreo 排版校对
+    private var titleWithFade: some View {
+        GeometryReader { geometry in
+            Text(restaurant.name)
+                .font(Typography.title)
+                .foregroundColor(Color(hex: "#1A1A1A"))
+                .tracking(titleTracking) // Oreo: 17pt 以上标题增加字间距
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .mask(
+                    HStack(spacing: 0) {
+                        // 主要文字区域（不透明）
+                        Rectangle()
+                            .fill(Color.black)
+                            .frame(width: max(0, geometry.size.width - 40))
+                        // 右侧淡出区域（渐变透明）
+                        LinearGradient(
+                            colors: [Color.black, Color.clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: 40)
+                    }
+                )
+        }
+        .frame(height: 22) // Typography.title 的高度
+    }
+
+    // MARK: - 打卡勋章（圆形带次数，32pt）
+    private var checkInBadge: some View {
+        Button(action: { onCheckInTap?() }) {
+            ZStack {
+                // 圆形背景（更透明）
+                Circle()
+                    .fill(Color.white.opacity(0.7))
+                    .frame(width: 32, height: 32)
+                    .shadow(
+                        color: Color.black.opacity(0.06),
+                        radius: 2,
+                        x: 0,
+                        y: 1
+                    )
+
+                // 对勾图标（有打卡次数时显示数字）
+                if restaurant.checkInCount > 0 {
+                    HStack(spacing: 1) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("\(restaurant.checkInCount)")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(AppTheme.Colors.accent)
+                } else {
+                    // 无打卡时只显示勾
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(AppTheme.Colors.accent)
+                }
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .pressableButton(scale: 0.9)
+    }
+
+    // MARK: - 元数据行
+    private var metadataRow: some View {
+        Text(metaLine)
+            .font(Typography.metadata)
+            .foregroundColor(AppTheme.Colors.mediumGray)
+    }
+
+    // MARK: - 评论区域
+    private var quoteSection: some View {
+        HStack(alignment: .top, spacing: Spacing.small) {
+            // 指示条
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(AppTheme.Colors.babyBlue)
+                .frame(width: 3, height: 12)
+                .padding(.top, 2)
+
+            // 评论文字 - Oreo: 统一行间距 5pt
+            Text(restaurant.review)
+                .font(Typography.quote)
+                .foregroundColor(AppTheme.Colors.darkText.opacity(0.85))
+                .lineLimit(2)
+                .lineSpacing(5) // Oreo: 画报阅读感
+        }
+    }
+
+    // MARK: - 评分和标签行
+    private var ratingRow: some View {
+        HStack(spacing: 8) {
+            // 评分星星
+            // 评分星星
+            HStack(spacing: 4) {
+                ForEach(0..<5) { index in
+                    Image(systemName: index < Int(restaurant.rating) ? "star.fill" : "star")
+                        .font(.system(size: 10))
+                        .foregroundColor(index < Int(restaurant.rating) ? AppTheme.Colors.secondary : Color.gray.opacity(0.3))
+                }
+            }
+
+            // 标签（靠近评分，Baby Blue 背景，最多显示2个）
+            HStack(spacing: 4) {
+                ForEach(restaurant.tags.prefix(2), id: \.self) { tag in
+                    Text(tag)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.Colors.babyBlue.opacity(0.15))
+                        )
+                }
+            }
+
+            Spacer()
         }
     }
 }
 
-// MARK: - 辅助视图
-private struct TagView: View {
-    let tag: String
-    
-    var body: some View {
-        Text(tag)
-            .font(.system(size: 11, weight: .medium, design: .rounded))
-            .foregroundColor(Color(hex: "#89CFF0"))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(Color(hex: "#89CFF0").opacity(0.1))
+// MARK: - 预览
+#Preview {
+    struct PreviewWrapper: View {
+        var body: some View {
+            let config = ModelConfiguration(isStoredInMemoryOnly: true)
+            let container = try! ModelContainer(for: Restaurant.self, configurations: config)
+
+            let restaurant = Restaurant(
+                name: "厚道烤肉",
+                type: "烧烤",
+                district: "两江新区",
+                city: "重庆",
+                rating: 4.5,
+                address: "测试地址",
+                latitude: 39.9,
+                longitude: 116.4,
+                coverPhotoFilename: nil,
+                review: "一定要老板亲自烤！",
+                tags: [],
+                averagePrice: 48
             )
+
+            for _ in 0..<3 {
+                let log = VisitLog(date: Date(), expense: 200, peopleCount: 2, goodDishes: "", badDishes: "", review: "", mood: "😋", restaurant: restaurant)
+                restaurant.logs.append(log)
+            }
+
+            return RestaurantCard(
+                restaurant: restaurant,
+                locationManager: LocationManager.shared,
+                isExpanded: false,
+                index: 0,
+                onCheckInTap: { print("打卡") }
+            )
+            .modelContainer(container)
+        }
     }
+    return PreviewWrapper()
 }
