@@ -94,7 +94,7 @@ struct LibraryView: View {
                         restaurants: restaurants,
                         districts: currentDistricts
                     )
-                    RestaurantListViewWithOffset(
+                    StackedRestaurantListView(
                         filteredRestaurants: filteredRestaurants,
                         locationManager: locationManager,
                         navigationPath: $navigationPath,
@@ -209,34 +209,36 @@ struct LibraryView: View {
         }
     }
     
-    // MARK: - 带滚动偏移监听的列表视图
-    private struct RestaurantListViewWithOffset: View {
+    // MARK: - iOS 锁屏通知风格堆叠列表视图
+    private struct StackedRestaurantListView: View {
         let filteredRestaurants: [Restaurant]
         let locationManager: LocationManager
         @Binding var navigationPath: NavigationPath
         @Binding var scrollOffset: CGFloat
         @State private var checkInRestaurant: Restaurant? = nil
         @State private var showCheckInSheet = false
+        @State private var cardStates: [UUID: CardStackState] = [:]
 
         var body: some View {
             ScrollView {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: 8) { // 通知中心间距 8pt
                     ForEach(Array(filteredRestaurants.enumerated()), id: \.element.id) { index, restaurant in
-                        ZStack {
-                            NavigationLink(value: restaurant) {
-                                RestaurantCard(
-                                    restaurant: restaurant,
-                                    locationManager: locationManager,
-                                    isExpanded: false,
-                                    index: index,
-                                    onCheckInTap: {
-                                        checkInRestaurant = restaurant
-                                        showCheckInSheet = true
-                                    }
-                                )
+                        StackedCardWrapper(
+                            restaurant: restaurant,
+                            locationManager: locationManager,
+                            index: index,
+                            cardStates: $cardStates,
+                            onCheckInTap: {
+                                checkInRestaurant = restaurant
+                                showCheckInSheet = true
+                            },
+                            onNavigate: {
+                                navigationPath.append(restaurant)
                             }
-                            .buttonStyle(PlainButtonStyle())
-                        }
+                        )
+                        // 关键：越往后的卡片 ZIndex 越低，这样滚动时上方的卡片会压在下方的卡片之上
+                        // 产生"钻入"感
+                        .zIndex(Double(filteredRestaurants.count - index))
                     }
                 }
                 .padding(.bottom, 90)
@@ -262,7 +264,99 @@ struct LibraryView: View {
             }
         }
     }
-    
+
+    // MARK: - 卡片堆叠状态
+    struct CardStackState {
+        var scale: CGFloat = 1.0
+        var offsetY: CGFloat = 0
+        var opacity: CGFloat = 1.0
+        var isStacked: Bool = false
+    }
+
+    // MARK: - 堆叠卡片包装器
+    private struct StackedCardWrapper: View {
+        let restaurant: Restaurant
+        let locationManager: LocationManager
+        let index: Int
+        @Binding var cardStates: [UUID: CardStackState]
+        let onCheckInTap: () -> Void
+        let onNavigate: () -> Void
+
+        @State private var cardGeometry: CGRect = .zero
+        @State private var hasTriggeredHaptic = false
+
+        private var stackState: CardStackState {
+            cardStates[restaurant.id] ?? CardStackState()
+        }
+
+        var body: some View {
+            GeometryReader { geo in
+                StackedRestaurantCard(
+                    restaurant: restaurant,
+                    locationManager: locationManager,
+                    index: index,
+                    stackScale: stackState.scale,
+                    isStacked: stackState.isStacked,
+                    onCheckInTap: onCheckInTap,
+                    onNavigate: onNavigate
+                )
+                .scaleEffect(stackState.scale, anchor: .bottom) // 向底部收缩，增加挤压感
+                .offset(y: stackState.offsetY)
+                .opacity(stackState.opacity)
+                .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.8), value: stackState.scale)
+                .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.8), value: stackState.offsetY)
+                .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.8), value: stackState.opacity)
+                .onChange(of: geo.frame(in: .global)) { oldFrame, newFrame in
+                    updateStackState(frame: newFrame)
+                }
+                .onAppear {
+                    updateStackState(frame: geo.frame(in: .global))
+                }
+            }
+            .frame(height: 140) // 固定卡片高度
+        }
+
+        private func updateStackState(frame: CGRect) {
+            let screenHeight = UIScreen.main.bounds.height
+            // 设定一个"堆叠基准线"，距离底部 120pt 的位置
+            let stackBaseLine = screenHeight - 120
+            let cardBottom = frame.maxY
+            
+            // 计算卡片底部超过基准线多少
+            let distancePastBottom = cardBottom - stackBaseLine
+
+            var newState = CardStackState()
+
+            if distancePastBottom > 0 {
+                // MARK: - 双阶段阈值逻辑
+                
+                // 1. 计算堆叠进度 (用于缩放和位移)
+                // 0.0 -> 1.0 (在 0 到 80pt 之间完成)
+                let stackProgress = min(distancePastBottom / 80, 1.0)
+                
+                // 2. 计算消失进度 (用于透明度)
+                // 只有当距离超过 80pt 时才开始从 0 增长，到 130pt 时达到 1.0
+                let fadeProgress = min(max(distancePastBottom - 80, 0) / 50, 1.0)
+                
+                // 应用参数
+                newState.scale = 1.0 - (stackProgress * 0.1) // 缩放至 0.9
+                newState.offsetY = -distancePastBottom * 0.95 // 强力粘滞位移
+                newState.opacity = 1.0 - fadeProgress // 仅在消失期淡出
+                
+                newState.isStacked = stackProgress > 0.05
+            } else {
+                newState = CardStackState()
+            }
+
+            // 触感反馈：状态变化时触发
+            if newState.isStacked != stackState.isStacked {
+                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            }
+            
+            cardStates[restaurant.id] = newState
+        }
+    }
+
     // MARK: - 滚动偏移 PreferenceKey
     struct ScrollOffsetPreferenceKey: PreferenceKey {
         static var defaultValue: CGFloat = 0
@@ -488,7 +582,7 @@ private struct FilterBarView: View {
             
             if !searchText.isEmpty {
                 let searchLower = searchText.lowercased()
-                return restaurant.name.lowercased().contains(searchLower) || 
+                return restaurant.name.lowercased().contains(searchLower) ||
                        restaurant.type.lowercased().contains(searchLower) ||
                        restaurant.tags.contains { $0.lowercased().contains(searchLower) }
             }
@@ -610,5 +704,4 @@ struct EmptyStateView: View {
 
 
 }
-
 

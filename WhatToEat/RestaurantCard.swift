@@ -64,12 +64,12 @@ struct RestaurantCard: View {
 
     // MARK: - 杂志级布局 (Magazine Layout)
     private var cardContent: some View {
-        HStack(alignment: .center, spacing: Spacing.large) {
+        HStack(alignment: .center, spacing: 16) {
             heroImage
             editorialContent
         }
-        .padding(.horizontal, Spacing.section)
-        .padding(.vertical, Spacing.medium)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
         .background(Color.clear)
         .contentShape(Rectangle())
         .offset(y: isPressed ? -2 : 0)
@@ -149,33 +149,37 @@ struct RestaurantCard: View {
 
     // MARK: - 编辑内容 (Editorial Content)
     private var editorialContent: some View {
-        ZStack(alignment: .topTrailing) {
-            // 主要内容：标题 + 元数据 + 评论
-            VStack(alignment: .leading, spacing: 0) {
-                // 标题（带淡出遮罩，防止被打卡图标遮挡）
-                titleWithFade
-
-                // 元数据：距离 / 区域 / 品类 / 价格
-                metadataRow
-                    .padding(.top, Spacing.micro)
-
-                // 评分（如果有）
-                if restaurant.rating > 0 {
-                    ratingRow
-                        .padding(.top, Spacing.small)
-                }
-
-                // 评论（如果有）
-                if !restaurant.review.isEmpty {
-                    quoteSection
-                        .padding(.top, Spacing.medium)
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            // 标题行：标题 + 打卡徽章
+            HStack(spacing: 8) {
+                Text(restaurant.name)
+                    .font(Typography.title)
+                    .foregroundColor(Color(hex: "#1A1A1A"))
+                    .tracking(titleTracking)
+                    .lineLimit(1)
+                
+                Spacer(minLength: 0)
+                
+                checkInBadge
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 打卡勋章固定在右上方
-            checkInBadge
+            // 元数据：距离 / 区域 / 品类 / 价格
+            metadataRow
+                .padding(.top, Spacing.micro)
+
+            // 评分和标签
+            if restaurant.rating > 0 {
+                ratingRow
+                    .padding(.top, Spacing.small)
+            }
+
+            // 评论
+            if !restaurant.review.isEmpty {
+                quoteSection
+                    .padding(.top, Spacing.medium)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - 标题（带淡出遮罩）- Oreo 排版校对
@@ -269,33 +273,35 @@ struct RestaurantCard: View {
 
     // MARK: - 评分和标签行
     private var ratingRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             // 评分星星
-            // 评分星星
-            HStack(spacing: 4) {
+            HStack(spacing: 2) {
                 ForEach(0..<5) { index in
                     Image(systemName: index < Int(restaurant.rating) ? "star.fill" : "star")
-                        .font(.system(size: 10))
+                        .font(.system(size: 9))
                         .foregroundColor(index < Int(restaurant.rating) ? AppTheme.Colors.secondary : Color.gray.opacity(0.3))
                 }
             }
 
-            // 标签（靠近评分，Baby Blue 背景，最多显示2个）
-            HStack(spacing: 4) {
-                ForEach(restaurant.tags.prefix(2), id: \.self) { tag in
-                    Text(tag)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.babyBlue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(AppTheme.Colors.babyBlue.opacity(0.15))
-                        )
+            // 标签 - 紧凑布局
+            if !restaurant.tags.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(restaurant.tags.prefix(2), id: \.self) { tag in
+                        Text(tag)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.babyBlue)
+                            .lineLimit(1)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(
+                                Capsule()
+                                    .fill(AppTheme.Colors.babyBlue.opacity(0.12))
+                            )
+                    }
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
     }
 }
