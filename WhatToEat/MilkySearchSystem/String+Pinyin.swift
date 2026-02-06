@@ -153,6 +153,12 @@ extension String {
     static func matchScore(text: String, query: String) -> Int {
         return text.pinyin.matchScore(query: query)
     }
+    
+    /// 拼音包含检查（实例方法）
+    /// 检查字符串的拼音是否包含查询词
+    func pinyinContains(_ query: String) -> Bool {
+        return self.pinyin.fuzzyMatch(query: query)
+    }
 }
 
 // MARK: - 拼音匹配器（用于批量匹配和排序）

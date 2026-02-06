@@ -38,18 +38,29 @@ struct StackedRestaurantCard: View {
             .padding(.vertical, 12)
         }
         .buttonStyle(PlainButtonStyle())
-        // 优化底座：纯白背景增强对比度
+        // 奥利奥奶脂瓷感底座：纯白背景 + 物理切痕描边 + 边缘高光
         .background(
-            RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
-                .fill(Color.white)
+            ZStack {
+                // 主背景：纯净白色
+                RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
+                    .fill(AppTheme.Colors.pureWhite)
+                
+                // 内侧高光（Rim Light）：模拟陶瓷边缘反光
+                RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
+                    .stroke(AppTheme.Colors.rimLight, lineWidth: 0.5)
+            }
         )
-
-        // 柔和阴影增加立体感
+        // 物理切痕感描边（极细）
+        .overlay(
+            RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
+                .stroke(AppTheme.Colors.physicalEdge, lineWidth: 0.5)
+        )
+        // 极其弥散的阴影，产生悬浮感
         .shadow(
-            color: Color.black.opacity(0.06),
-            radius: 12,
+            color: AppTheme.Colors.ceramicShadow,
+            radius: 30,
             x: 0,
-            y: 4
+            y: 15
         )
         // 距离屏幕左右边缘 8pt 间距
         .padding(.horizontal, 8)
@@ -181,28 +192,42 @@ struct StackedRestaurantCard: View {
         }
     }
     
-    // MARK: - 打卡勋章
+    // MARK: - 打卡勋章（胶囊样式）
+    @State private var isPressed = false
+    
     private var checkInBadge: some View {
         Button(action: { onCheckInTap?() }) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.Colors.xhsRed)
-                    .frame(width: 24, height: 24)
+            HStack(spacing: 4) {
+                // 打钩图标 - 增大尺寸
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.Colors.accent)
                 
+                // 打卡次数 - 增大尺寸
                 if restaurant.checkInCount > 0 {
-                    Text("\(min(restaurant.checkInCount, 9))")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
-                } else {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
+                    Text("\(restaurant.checkInCount)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppTheme.Colors.accent)
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(Color.white)
+            )
+            // 轻量白色阴影
+            .shadow(color: Color.white.opacity(0.8), radius: 3, x: 0, y: 1)
+            // 灵动的缩放动效
+            .scaleEffect(isPressed ? 0.92 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         }
         .buttonStyle(PlainButtonStyle())
-        .oreoClickEffect(style: .light)
-        .opacity(isStacked ? 0.6 : 1.0) // 堆叠态降低勋章透明度
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 

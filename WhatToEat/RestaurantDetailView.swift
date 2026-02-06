@@ -276,13 +276,22 @@ struct RestaurantDetailView: View {
         }
         .confirmationDialog("选择导航应用", isPresented: $showNavigationMenu, titleVisibility: .visible) {
             Button("高德地图") {
-                openAmapNavigation()
+                // 触感反馈 + NavigationManager 导航
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+                NavigationManager.shared.openMap(type: .amap, restaurant: restaurant)
             }
             Button("百度地图") {
-                openBaiduNavigation()
+                // 触感反馈 + NavigationManager 导航
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+                NavigationManager.shared.openMap(type: .baidu, restaurant: restaurant)
             }
             Button("苹果地图") {
-                openAppleNavigation()
+                // 触感反馈 + NavigationManager 导航
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+                NavigationManager.shared.openMap(type: .apple, restaurant: restaurant)
             }
             Button("取消", role: .cancel) { }
         }
@@ -372,13 +381,13 @@ struct RestaurantDetailView: View {
         .frame(height: 260) // 降低整体高度
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        // 扁平风格：细微边框替代阴影
-        .overlay(
+        // 扁平风格：细微边框替代阴影（放在底层，不遮挡按钮）
+        .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
                 .stroke(Color.black.opacity(0.06), lineWidth: 1)
         )
-        // Oreo: 内阴影效果 - 高级相框质感
-        .overlay(
+        // Oreo: 内阴影效果 - 高级相框质感（放在底层，不遮挡按钮）
+        .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
                 .fill(
                     LinearGradient(
@@ -487,52 +496,6 @@ struct RestaurantDetailView: View {
         // MARK: - 打开导航菜单
         private func openNavigation() {
             showNavigationMenu = true
-        }
-        
-        // MARK: - 打开高德地图
-        private func openAmapNavigation() {
-            let latitude = restaurant.latitude
-            let longitude = restaurant.longitude
-            let name = restaurant.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-            
-            if let amapURL = URL(string: "iosamap://path?sourceApplication=WhatToEat&dlat=\(latitude)&dlon=\(longitude)&dname=\(name)&dev=0&t=0"),
-               UIApplication.shared.canOpenURL(amapURL) {
-                UIApplication.shared.open(amapURL)
-            } else {
-                // 未安装，跳转到 App Store
-                if let appStoreURL = URL(string: "https://apps.apple.com/cn/app/高德地图/id461703208") {
-                    UIApplication.shared.open(appStoreURL)
-                }
-            }
-        }
-        
-        // MARK: - 打开百度地图
-        private func openBaiduNavigation() {
-            let latitude = restaurant.latitude
-            let longitude = restaurant.longitude
-            let name = restaurant.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-            let userLat = locationManager.userLocation?.coordinate.latitude ?? 0
-            let userLon = locationManager.userLocation?.coordinate.longitude ?? 0
-            
-            if let baiduURL = URL(string: "baidumap://map/direction?origin=latlng:\(userLat),\(userLon)|name:我的位置&destination=latlng:\(latitude),\(longitude)|name:\(name)&mode=driving"),
-               UIApplication.shared.canOpenURL(baiduURL) {
-                UIApplication.shared.open(baiduURL)
-            } else {
-                // 未安装，跳转到 App Store
-                if let appStoreURL = URL(string: "https://apps.apple.com/cn/app/百度地图/id452186370") {
-                    UIApplication.shared.open(appStoreURL)
-                }
-            }
-        }
-        
-        // MARK: - 打开苹果地图
-        private func openAppleNavigation() {
-            let latitude = restaurant.latitude
-            let longitude = restaurant.longitude
-            
-            if let appleURL = URL(string: "http://maps.apple.com/?daddr=\(latitude),\(longitude)&dirflg=d") {
-                UIApplication.shared.open(appleURL)
-            }
         }
         
         // MARK: - 计算驾车信息（性能优化：只在页面打开时计算一次）
@@ -831,6 +794,7 @@ struct RestaurantDetailView: View {
                         .multilineTextAlignment(.center)
                         .focused($reviewIsFocused)
                         .scrollContentBackground(.hidden)
+                        .submitLabel(.done)  // 键盘右下角显示"完成"
                         .padding(AppTheme.Card.paddingHorizontal)
                         .padding(.vertical, 14)
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -981,14 +945,12 @@ struct RestaurantDetailView: View {
     }
 
     // MARK: - 新标签输入按钮（点击后进入编辑模式）
+    // MARK: - 新标签输入按钮（点击后进入编辑模式，不自动聚焦）
     private var newTagInputButton: some View {
         Button {
             withAnimation(AppTheme.Animations.editingSpring) {
                 isEditingTags = true
-                // 延迟聚焦，等待布局完成
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    tagInputIsFocused = true
-                }
+                // 注意：不自动聚焦输入框，用户需手动点击输入
             }
         } label: {
             HStack(spacing: 4) {
@@ -1146,6 +1108,7 @@ struct RestaurantDetailView: View {
                     .multilineTextAlignment(.center)
                     .focused($reviewIsFocused)
                     .scrollContentBackground(.hidden)
+                    .submitLabel(.done)  // 键盘右下角显示"完成"
                     .padding(20)
                     .padding(.bottom, 10)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))

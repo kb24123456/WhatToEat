@@ -68,8 +68,8 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ZStack(alignment: .topLeading) {
-                // 使用 MilkyDiffuseBackground 作为背景
-                MilkyDiffuseBackground()
+                // 使用奥利奥渐变背景（黑白撞色）
+                OreoGradientBackground()
                     .ignoresSafeArea()
 
                 // 动态毛玻璃导航条
@@ -123,6 +123,8 @@ struct LibraryView: View {
             .onChange(of: selectedCity) {
                 UserDefaults.standard.set($0, forKey: kSavedCityKey)
             }
+            // 状态栏适配：强制白色文字
+            .preferredColorScheme(.light)
         }
     }
 
@@ -145,9 +147,9 @@ struct LibraryView: View {
                     // 1. 标题"WhatToEat"
                     Text("WhatToEat")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.textPrimary)
+                        .foregroundColor(.white)
 
-                    // 2. 城市选择器 + 搜索框合并一行
+                    // 2. 城市选择器 + 搜索框合并一行（深色磨砂适配黑色背景）
                     HStack(spacing: 0) {
                         // 城市选择按钮
                         Button {
@@ -157,10 +159,10 @@ struct LibraryView: View {
                                 Text(selectedCity)
                                     .font(AppTheme.Fonts.footnote)
                                     .fontWeight(.medium)
-                                    .foregroundColor(AppTheme.Colors.textPrimary)
+                                    .foregroundColor(.white)
                                 Image(systemName: "chevron.down")
                                     .font(.caption2)
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(AppTheme.Colors.babyBlue)
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
@@ -169,43 +171,46 @@ struct LibraryView: View {
 
                         Divider()
                             .frame(height: 20)
-                            .background(Color.gray.opacity(0.2))
+                            .background(Color.white.opacity(0.1))
 
                         // 搜索框
                         HStack(spacing: 6) {
                             Image(systemName: "magnifyingglass")
                                 .font(.caption)
-                                .foregroundColor(.gray)
-                            TextField("搜索餐厅名称、菜系...", text: $searchText)
+                                .foregroundColor(Color.white.opacity(0.7))
+                            TextField("", text: $searchText, prompt: Text("搜索餐厅...").foregroundColor(Color.white.opacity(0.5)))
                                 .font(AppTheme.Fonts.footnote)
+                                .foregroundColor(.white)
                                 .focused($isSearchFocused)
+                                .submitLabel(.search)  // 键盘右下角显示"搜索"
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                     }
                     .background(
+                        // 深色磨砂材质
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(isScrolled ? Color.white.opacity(0.8) : Color.black.opacity(0.03))
+                            .fill(Color(hex: "#2C2C2E"))
+                    )
+                    // 微妙的白色描边
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                    )
+                    // 轻量白色阴影
+                    .shadow(
+                        color: Color.white.opacity(0.05),
+                        radius: 10,
+                        x: 0,
+                        y: 2
                     )
                     .withFocusedInputEffects(isFocused: $isSearchFocused)
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, AppTheme.Spacing.sm)
-                
-                // 底部分隔线（滚动时显示）
-                Rectangle()
-                    .fill(Color.black.opacity(0.05))
-                    .frame(height: 0.5)
-                    .opacity(isScrolled ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.2), value: isScrolled)
             }
-            // Oreo: 动态背景 - 滚动时显示毛玻璃
-            .background(
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .opacity(isScrolled ? 1 : 0)
-            )
-            .animation(.easeInOut(duration: 0.2), value: isScrolled)
+            // Header 全透明背景，沉浸式适配
+            .background(Color.clear)
         }
     }
     
@@ -413,6 +418,7 @@ struct LibraryView: View {
                         TextField("搜索餐厅名称、菜系...", text: $searchText)
                             .font(AppTheme.Fonts.footnote)
                             .focused($isSearchFocused)
+                            .submitLabel(.search)  // 键盘右下角显示"搜索"
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
@@ -441,7 +447,7 @@ enum SortOption: String, CaseIterable {
     }
 }
 
-// MARK: - 筛选按钮栏子视图 (去容器化)
+// MARK: - 筛选按钮栏子视图 (奥利奥黑白平衡)
 private struct FilterBarView: View {
     let selectedCity: String
     @Binding var selectedDistrict: String?
@@ -451,8 +457,8 @@ private struct FilterBarView: View {
     let districts: [String]
 
     var body: some View {
-        HStack(spacing: 24) { // 增加按钮之间的水平间距
-            // 1. 地区筛选
+        HStack(spacing: 12) {
+            // 1. 地区筛选胶囊
             Menu {
                 Button("全区") { selectedDistrict = nil }
                 Divider()
@@ -460,18 +466,13 @@ private struct FilterBarView: View {
                     Button(district) { selectedDistrict = district }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(selectedDistrict ?? "地区")
-                        .font(.system(size: 14, weight: .semibold)) // 字号 14，字重 semibold
-                        .foregroundColor(.black) // 纯黑色
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8)) // 极小的 chevron
-                        .foregroundColor(AppTheme.Colors.babyBlue) // Baby Blue 颜色
-                }
+                filterCapsuleLabel(
+                    title: selectedDistrict ?? "地区",
+                    isSelected: selectedDistrict != nil
+                )
             }
-            .buttonStyle(.plain)
 
-            // 2. 品类筛选
+            // 2. 品类筛选胶囊
             Menu {
                 Button("全部分类") { selectedType = nil }
                 Divider()
@@ -479,38 +480,58 @@ private struct FilterBarView: View {
                     Button(type) { selectedType = type }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(selectedType ?? "品类")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8))
-                        .foregroundColor(AppTheme.Colors.babyBlue)
-                }
+                filterCapsuleLabel(
+                    title: selectedType ?? "品类",
+                    isSelected: selectedType != nil
+                )
             }
-            .buttonStyle(.plain)
 
-            // 3. 排序筛选
+            // 3. 排序筛选胶囊
             Menu {
                 ForEach(SortOption.allCases, id: \.self) { option in
                     Button(option.displayName) { sortOption = option }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(sortOption.displayName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8))
-                        .foregroundColor(AppTheme.Colors.babyBlue)
-                }
+                filterCapsuleLabel(
+                    title: sortOption.displayName,
+                    isSelected: false
+                )
             }
-            .buttonStyle(.plain)
 
             Spacer()
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 8)
+    }
+    
+    // MARK: - 筛选胶囊标签
+    private func filterCapsuleLabel(title: String, isSelected: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                .foregroundColor(isSelected ? .white : .black)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 7))
+                .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.Colors.babyBlue)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(isSelected ? Color.black : Color.white)
+        )
+        // 1.5pt 黑色描边（5% 不透明度）产生悬浮感
+        .overlay(
+            Capsule()
+                .stroke(Color.black.opacity(0.05), lineWidth: 1.5)
+        )
+        // 轻微阴影增加层次
+        .shadow(
+            color: Color.black.opacity(0.04),
+            radius: 8,
+            x: 0,
+            y: 3
+        )
     }
 }
     

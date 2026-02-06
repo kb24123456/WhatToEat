@@ -97,6 +97,7 @@ struct CitySelectionView: View {
             Image(systemName: "magnifyingglass").foregroundColor(.gray)
             TextField("搜索城市", text: $searchText)
                 .font(AppTheme.Fonts.footnote)
+                .submitLabel(.search)  // 键盘右下角显示"搜索"
         }
         .padding(AppTheme.Spacing.md)
         .background(Color(.systemGray6))

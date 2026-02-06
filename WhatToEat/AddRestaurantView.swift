@@ -63,6 +63,9 @@ struct AddRestaurantView: View {
     @FocusState private var reviewIsFocused: Bool
     @FocusState private var tagInputIsFocused: Bool
     
+    // MARK: - Keyboard Performance Optimization
+    @State private var anyFieldFocused = false  // 追踪是否有输入框聚焦
+    
     // MARK: - Keyboard Animation Delay
     private let keyboardAnimationDelay: TimeInterval = 0.25  // 展开动画完成后再弹出键盘
     
@@ -161,11 +164,27 @@ struct AddRestaurantView: View {
             // 视图消失时停止呼吸动画，防止后台继续震动
             stopCategoryBreathingAnimation()
         }
+        // 监听焦点状态变化，优化背景渲染
+        .onChange(of: reviewIsFocused) { _, newValue in
+            anyFieldFocused = newValue || tagInputIsFocused
+        }
+        .onChange(of: tagInputIsFocused) { _, newValue in
+            anyFieldFocused = newValue || reviewIsFocused
+        }
     }
     
-    // MARK: - Background
+    // MARK: - Background（键盘开启时使用纯色优化性能）
     private var backgroundGradient: some View {
-        MilkyDiffuseBackground()
+        Group {
+            if anyFieldFocused {
+                // 键盘开启时：使用纯色背景，禁用复杂渲染
+                AppTheme.Colors.milkyBase
+                    .ignoresSafeArea()
+            } else {
+                // 正常状态：使用弥散背景
+                MilkyDiffuseBackground()
+            }
+        }
     }
     
     // MARK: - Scroll Content（无父容器，组件直接显示）
@@ -624,6 +643,7 @@ struct AddRestaurantView: View {
                         .multilineTextAlignment(.leading)
                         .focused($reviewIsFocused)
                         .scrollContentBackground(.hidden)
+                        .submitLabel(.done)  // 键盘右下角显示"完成"
                         .padding(.vertical, 12)
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
                         .onDisappear {
@@ -761,15 +781,12 @@ struct AddRestaurantView: View {
         }
     }
     
-    // MARK: - 新标签输入按钮（点击后进入编辑模式）
+    // MARK: - 新标签输入按钮（点击后进入编辑模式，不自动聚焦）
     private var newTagInputButton: some View {
         Button {
             withAnimation(AppTheme.Animations.editingSpring) {
                 isEditingTags = true
-                // 延迟聚焦，等待布局完成
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    tagInputIsFocused = true
-                }
+                // 注意：不自动聚焦输入框，用户需手动点击输入
             }
         } label: {
             HStack(spacing: 4) {
@@ -919,6 +936,7 @@ struct AddRestaurantView: View {
                     .multilineTextAlignment(.center)
                     .focused($reviewIsFocused)
                     .scrollContentBackground(.hidden)
+                    .submitLabel(.done)  // 键盘右下角显示"完成"
                     .padding(20)
                     .padding(.bottom, 10)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))

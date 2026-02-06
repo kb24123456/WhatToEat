@@ -551,15 +551,12 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - 新标签输入按钮（点击后进入编辑模式）
+    // MARK: - 新标签输入按钮（点击后进入编辑模式，不自动聚焦）
     private var newTagInputButton: some View {
         Button {
             withAnimation(AppTheme.Animations.editingSpring) {
                 isEditingTags = true
-                // 延迟聚焦，等待布局完成
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    tagInputIsFocused = true
-                }
+                // 注意：不自动聚焦输入框，用户需手动点击输入
             }
         } label: {
             HStack(spacing: 4) {

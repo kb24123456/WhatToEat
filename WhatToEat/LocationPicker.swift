@@ -18,6 +18,7 @@ struct LocationPicker: View {
                     TextField("输入地名 (如: 重庆)", text: $searchText)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled() // 关闭自动纠错，避免干扰
+                        .submitLabel(.search)  // 键盘右下角显示"搜索"
                         .onSubmit {
                             // 允许按回车键搜索
                             startSearch()

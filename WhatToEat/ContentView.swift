@@ -42,12 +42,16 @@ struct ContentView: View {
     @State private var lastRestaurantCount: Int = 0
     @State private var lastRestaurantUpdate: Date = Date.distantPast
     
+    // MARK: - 输入代理管理器
+    @StateObject private var inputProxyManager = InputProxyManager.shared
+    
     var body: some View {
         ZStack {
             // 背景层：弥散背景铺满整个屏幕（包括安全区域）
             MilkyDiffuseBackground()
                 .ignoresSafeArea()
             
+            // MARK: - 主内容区域（性能冻结保护）
             Group {
                 switch selectedTab {
                 case .library:
@@ -64,6 +68,8 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 性能冻结：当代理激活时冻结底层渲染
+            .performanceFreeze()
             .sheet(isPresented: $isAdding) {
                 AddRestaurantView(onClose: {
                     withAnimation {
@@ -81,6 +87,10 @@ struct ContentView: View {
                     customTabBar
                 }
             }
+            
+            // MARK: - 键盘吸附栏（全局输入代理）
+            AccessoryInputView()
+                .zIndex(100)  // 确保在最上层
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onReceive(NotificationCenter.default.publisher(for: .hideTabBar)) { _ in

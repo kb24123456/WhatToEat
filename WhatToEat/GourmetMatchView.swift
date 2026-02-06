@@ -18,6 +18,9 @@ struct GourmetMatchView: View {
     @State private var isDragging: Bool = false
     @State private var nextCardOpacity: Double = 0.0
     
+    // 随机排序后的餐厅列表
+    @State private var shuffledRestaurants: [Restaurant] = []
+    
     // 状态反馈
     @State private var showEatConfirmation: Bool = false
     @State private var selectedRestaurant: Restaurant? = nil
@@ -35,12 +38,16 @@ struct GourmetMatchView: View {
         return types
     }
     
+    // 根据筛选条件获取餐厅列表
     private var filteredRestaurants: [Restaurant] {
-        restaurants.filter { restaurant in
+        let filtered = restaurants.filter { restaurant in
             let districtMatch = selectedDistrict == "全部" || restaurant.district == selectedDistrict
             let typeMatch = selectedType == "全部" || restaurant.type == selectedType
             return districtMatch && typeMatch
         }
+        // 如果 shuffledRestaurants 为空或需要更新，返回过滤后的列表
+        // 实际使用 shuffledRestaurants 作为数据源
+        return shuffledRestaurants.isEmpty ? filtered : shuffledRestaurants
     }
     
     var body: some View {
@@ -78,6 +85,27 @@ struct GourmetMatchView: View {
                 )
             }
         }
+        .onAppear {
+            // 初始加载时随机排序
+            shuffleRestaurants()
+        }
+        .onChange(of: selectedDistrict) { _, _ in
+            shuffleRestaurants()
+        }
+        .onChange(of: selectedType) { _, _ in
+            shuffleRestaurants()
+        }
+    }
+    
+    // MARK: - 随机排序餐厅
+    private func shuffleRestaurants() {
+        let filtered = restaurants.filter { restaurant in
+            let districtMatch = selectedDistrict == "全部" || restaurant.district == selectedDistrict
+            let typeMatch = selectedType == "全部" || restaurant.type == selectedType
+            return districtMatch && typeMatch
+        }
+        shuffledRestaurants = filtered.shuffled()
+        currentIndex = 0  // 重置卡片索引
     }
     
     // MARK: - 顶部筛选器 (与 LibraryView 完全一致)

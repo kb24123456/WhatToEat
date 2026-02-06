@@ -183,6 +183,7 @@ struct RestaurantMapView: View {
     @State private var searchText: String = ""
     @State private var selectedCity: String = "重庆"
     @State private var showCityPicker: Bool = false
+    @State private var showSearchSheet: Bool = false  // 显示搜索 Sheet
     
     // 地图状态
     @State private var cameraPosition: MapCameraPosition = .automatic
@@ -278,11 +279,20 @@ struct RestaurantMapView: View {
         // 过滤无效坐标（latitude == 0 表示尚未获取坐标）
         let validRestaurants = restaurants.filter { $0.latitude != 0 || $0.longitude != 0 }
         
-        // 搜索筛选（如果有搜索文本，不使用空间索引）
+        // 搜索筛选（模糊搜索，支持拼音）
         if !searchText.isEmpty {
+            let searchLower = searchText.lowercased()
             return validRestaurants.filter { r in
-                r.name.localizedCaseInsensitiveContains(searchText) ||
-                r.type.localizedCaseInsensitiveContains(searchText)
+                // 名称匹配（支持拼音）
+                let nameMatch = r.name.localizedCaseInsensitiveContains(searchText) ||
+                               r.name.pinyinContains(searchLower)
+                // 类型匹配
+                let typeMatch = r.type.localizedCaseInsensitiveContains(searchText) ||
+                               r.type.pinyinContains(searchLower)
+                // 区域匹配
+                let districtMatch = r.district.localizedCaseInsensitiveContains(searchText) ||
+                                   r.district.pinyinContains(searchLower)
+                return nameMatch || typeMatch || districtMatch
             }
         }
         
@@ -359,6 +369,29 @@ struct RestaurantMapView: View {
         }
         .sheet(isPresented: $showCityPicker) {
             CityPickerView(selectedCity: $selectedCity)
+        }
+        // 搜索 Sheet
+        .sheet(isPresented: $showSearchSheet) {
+            MapSearchSheet(
+                restaurants: restaurants.filter { $0.latitude != 0 || $0.longitude != 0 },
+                onSelectRestaurant: { restaurant in
+                    // 更新搜索文本
+                    searchText = restaurant.name
+                    // 移动地图到选中餐厅
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        let offsetLatitude = 0.008
+                        cameraPosition = .region(MKCoordinateRegion(
+                            center: CLLocationCoordinate2D(
+                                latitude: restaurant.latitude - offsetLatitude,
+                                longitude: restaurant.longitude
+                            ),
+                            span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+                        ))
+                    }
+                    // 选中该餐厅
+                    selectedRestaurant = restaurant
+                }
+            )
         }
         // 导航模式下不显示餐厅详情抽屉
         .sheet(item: Binding(
@@ -514,7 +547,10 @@ struct RestaurantMapView: View {
             Spacer()
             
             if let restaurant = navigatingRestaurant {
-                ZStack(alignment: .topTrailing) {
+                VStack(spacing: 12) {
+                    // 第三方导航按钮（使用 NavigationManager）
+                    ThirdPartyNavigationButtons(restaurant: restaurant)
+                    
                     // 导航信息卡片主体
                     VStack(spacing: 0) {
                         NavigationInfoCard(
@@ -551,32 +587,36 @@ struct RestaurantMapView: View {
                                 y: 4
                             )
                     )
-                    
-                    // 退出按钮 - 放在卡片右上边缘，叠放样式
-                    Button {
-                        exitNavigation()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 12, weight: .bold))
-                            Text("退出")
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color.black)
-                        )
-                        .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
-                    }
-                    .offset(x: 8, y: -12) // 向右上偏移，形成叠放效果
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
             }
         }
+        // 右上角退出按钮（与天气组件对齐）
+        .overlay(
+            Button {
+                exitNavigation()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11))
+                    Text("退出")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.black)
+                )
+                .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+            .padding(.top, 50),  // 与天气组件对齐
+            alignment: .topTrailing
+        )
     }
     
     // MARK: - 计算到餐厅的距离（用于导航信息卡片）
@@ -615,13 +655,16 @@ struct RestaurantMapView: View {
         }
     }
     
-    // MARK: - 开始导航
+    // MARK: - 开始导航（放慢动画）
     private func startNavigation(to destination: CLLocationCoordinate2D) {
         // 保存当前餐厅到导航餐厅
         navigatingRestaurant = selectedRestaurant
         
-        isNavigating = true
-        showExitNavigationButton = true
+        // 放慢进入导航动画
+        withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
+            isNavigating = true
+            showExitNavigationButton = true
+        }
         
         // 关闭抽屉
         selectedRestaurant = nil
@@ -634,8 +677,8 @@ struct RestaurantMapView: View {
             await calculateRoute(to: destination)
         }
         
-        // 调整视角以显示完整路线
-        adjustCameraForNavigation()
+        // 调整视角以显示完整路线（放慢动画）
+        adjustCameraForNavigationSlow()
         
         // 启动定时器，每30秒更新一次路线
         routeUpdateTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
@@ -645,17 +688,17 @@ struct RestaurantMapView: View {
         }
     }
     
-    // MARK: - 退出导航（带流畅动画）
+    // MARK: - 退出导航（放慢动画）
     private func exitNavigation() {
-        // 动画退出导航状态
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+        // 放慢退出导航动画
+        withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
             isNavigating = false
             route = nil
             showExitNavigationButton = false
         }
         
         // 延迟清除导航餐厅，让动画更流畅
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             navigatingRestaurant = nil
         }
         
@@ -664,13 +707,13 @@ struct RestaurantMapView: View {
         routeUpdateTimer = nil
         
         // 恢复底部导航条（带延迟动画）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             NotificationCenter.default.post(name: .restoreTabBar, object: nil)
         }
         
-        // 恢复相机位置到用户当前位置
+        // 恢复相机位置到用户当前位置（放慢动画）
         if let userLocation = locationManager.userLocation {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 1.0, dampingFraction: 0.8)) {
                 cameraPosition = .region(MKCoordinateRegion(
                     center: userLocation.coordinate,
                     span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
@@ -734,6 +777,42 @@ struct RestaurantMapView: View {
         )
         
         withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+            cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
+        }
+    }
+    
+    // MARK: - 调整相机视角（放慢动画版本）
+    private func adjustCameraForNavigationSlow() {
+        guard let userLocation = locationManager.userLocation?.coordinate,
+              let destination = navigatingRestaurant else { return }
+        
+        let destinationCoordinate = CLLocationCoordinate2D(
+            latitude: destination.latitude,
+            longitude: destination.longitude
+        )
+        
+        // 计算包含起点和终点的区域
+        let minLat = min(userLocation.latitude, destinationCoordinate.latitude)
+        let maxLat = max(userLocation.latitude, destinationCoordinate.latitude)
+        let minLon = min(userLocation.longitude, destinationCoordinate.longitude)
+        let maxLon = max(userLocation.longitude, destinationCoordinate.longitude)
+        
+        // 添加边距，确保起点和终点都能在视野内
+        let latPadding = (maxLat - minLat) * 0.3 + 0.01
+        let lonPadding = (maxLon - minLon) * 0.3 + 0.01
+        
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+        
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) + latPadding * 2, 0.02),
+            longitudeDelta: max((maxLon - minLon) + lonPadding * 2, 0.02)
+        )
+        
+        // 放慢动画
+        withAnimation(.spring(response: 1.0, dampingFraction: 0.8)) {
             cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
         }
     }
@@ -821,7 +900,7 @@ struct RestaurantMapView: View {
         .overlay(
             // 顶部控件
             VStack(spacing: 12) {
-                // 第一行：城市选择器 + 搜索框
+                // 第一行：城市选择器 + 搜索框（导航模式下隐藏搜索框）
                 HStack(spacing: 12) {
                     // 左侧城市选择器
                     Button {
@@ -854,28 +933,36 @@ struct RestaurantMapView: View {
                     
                     Spacer()
                     
-                    // 右侧搜索框
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 13))
-                            .foregroundColor(.gray)
-                        
-                        TextField("搜索餐厅", text: $searchText)
-                            .font(.system(size: 13))
-                            .foregroundColor(AppTheme.Colors.textPrimary)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .frame(width: 130)
-                    .background(
-                        Capsule()
-                            .fill(.white)
-                            .overlay(
+                    // 右侧搜索按钮（导航模式下隐藏）
+                    if !isNavigating {
+                        Button {
+                            showSearchSheet = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.gray)
+                                
+                                Text(searchText.isEmpty ? "搜索餐厅" : searchText)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(searchText.isEmpty ? .gray : AppTheme.Colors.textPrimary)
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .frame(width: 130, alignment: .leading)
+                            .background(
                                 Capsule()
-                                    .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                                    .fill(.white)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                                    )
                             )
-                    )
-                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 
                 // 天气信息
@@ -1463,6 +1550,7 @@ struct CityPickerView: View {
             Image(systemName: "magnifyingglass").foregroundColor(.gray)
             TextField("搜索城市", text: $searchText)
                 .font(AppTheme.Fonts.footnote)
+                .submitLabel(.search)  // 键盘右下角显示"搜索"
         }
         .padding(AppTheme.Spacing.md)
         .background(Color(.systemGray6))

@@ -54,6 +54,13 @@ struct AppTheme {
         static let milkyWhite = Color.white.opacity(0.2) // 极淡 0.2 透明度
         static let shadowColor = Color.black.opacity(0.04)
         
+        // MARK: - 奥利奥奶脂专用 (Oreo Cream)
+        static let milkyBase = Color(hex: "#F7F8FA")      // 大背景色，比纯白深一点
+        static let pureWhite = Color(hex: "#FFFFFF")      // 用于卡片和容器
+        static let rimLight = Color.white.opacity(0.8)    // 卡片边缘高光
+        static let ceramicShadow = Color.black.opacity(0.02)  // 极其弥散的阴影
+        static let physicalEdge = Color.black.opacity(0.03)   // 物理切痕感描边
+        
         // MARK: - 语义化补齐
         /// 破坏性颜色，用于删除、取消等警示操作
         static let destructive = Color(hex: "#FF3B30")
@@ -61,8 +68,7 @@ struct AppTheme {
         static let warning = Color(hex: "#FF9500")
         
         // MARK: - 极致细节专用
-        /// 极致边缘高光色 (Rim Light)，用于 overlay 描边，提升物理厚度感
-        static let rimLight = Color.white.opacity(0.6)
+        // rimLight 已在奥利奥奶脂专用中定义：Color.white.opacity(0.8)
         /// 玻璃边框色，用于玻璃态效果
         static let glassBorder = Color.white.opacity(0.5)
         /// 玻璃白色，用于玻璃态背景
@@ -313,14 +319,14 @@ struct FocusedInputEffectModifier: ViewModifier {
     
     func body(content: Content) -> some View {
         content
-            // 1. 动态边框：聚焦时显示强调色边框，失焦时隐藏
+            // 1. 动态边框：聚焦时显示 Baby Blue 边框（适配黑色背景），失焦时隐藏
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.base)
-                    .stroke(isFocused ? AppTheme.Colors.accent : Color.clear, lineWidth: 1.5)
+                    .stroke(isFocused ? AppTheme.Colors.babyBlue : Color.clear, lineWidth: 1.5)
             )
-            // 2. 动态阴影：聚焦时增强阴影效果，失焦时恢复默认
+            // 2. 动态阴影：聚焦时增强白色光晕效果，失焦时恢复默认
             .shadow(
-                color: isFocused ? AppTheme.Colors.accent.opacity(0.1) : Color.black.opacity(0.05),
+                color: isFocused ? AppTheme.Colors.babyBlue.opacity(0.3) : Color.black.opacity(0.05),
                 radius: isFocused ? 15 : 5,
                 x: 0,
                 y: isFocused ? 8 : 2
