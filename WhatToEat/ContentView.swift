@@ -122,7 +122,7 @@ struct ContentView: View {
         }
     }
     
-    // 自定义导航栏组件 - 沉底样式
+    // 自定义导航栏组件 - 毛玻璃效果
     private var customTabBar: some View {
         HStack(spacing: 0) {
             // 1. 食库按钮
@@ -157,7 +157,7 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
-            .oreoClickEffect(style: .medium) // Oreo: 黑色按钮用 medium 震动
+            .oreoClickEffect(style: .medium)
             
             // 4. 食记按钮
             tabButton(
@@ -174,7 +174,9 @@ struct ContentView: View {
             )
         }
         .frame(height: 64)
-        .background(Color.white)
+        // 毛玻璃背景
+        .background(.ultraThinMaterial.opacity(0.9))
+        // 取消边框线
         .zIndex(100)
     }
     

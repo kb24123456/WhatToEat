@@ -68,8 +68,8 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ZStack(alignment: .topLeading) {
-                // 使用奥利奥渐变背景（黑白撞色）
-                OreoGradientBackground()
+                // 背景层：使用 MilkyDiffuseBackground 奶牛纹理背景
+                MilkyDiffuseBackground()
                     .ignoresSafeArea()
 
                 // 动态毛玻璃导航条
@@ -94,6 +94,15 @@ struct LibraryView: View {
                         restaurants: restaurants,
                         districts: currentDistricts
                     )
+                    // 筛选栏底部横线：硬核视觉切分点
+                    .overlay(
+                        Rectangle()
+                            .fill(Color.white.opacity(0.05))
+                            .frame(height: 0.5)
+                            .offset(y: 8), // 位于筛选栏下方
+                        alignment: .bottom
+                    )
+                    
                     StackedRestaurantListView(
                         filteredRestaurants: filteredRestaurants,
                         locationManager: locationManager,
@@ -128,14 +137,14 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - 动态毛玻璃导航条 (Oreo)
+    // MARK: - 动态毛玻璃导航条 (适配浅色奶牛纹理背景)
     private struct DynamicHeaderView: View {
         let selectedCity: String
         @Binding var showCityPicker: Bool
         @Binding var searchText: String
         @FocusState var isSearchFocused: Bool
         let scrollOffset: CGFloat
-        
+
         // 滚动超过 20pt 时触发毛玻璃效果
         private var isScrolled: Bool {
             scrollOffset > 20
@@ -144,12 +153,20 @@ struct LibraryView: View {
         var body: some View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    // 1. 标题"WhatToEat"
-                    Text("WhatToEat")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                    // 1. 标题"WhatToEat" + 红色圆点
+                    HStack(spacing: 2) {
+                        Text("WhatToEat")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundColor(.black)
+                        
+                        // 红色圆点符号
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 8, height: 8)
+                            .offset(y: 8) // 稍微下移，与文字基线对齐
+                    }
 
-                    // 2. 城市选择器 + 搜索框合并一行（深色磨砂适配黑色背景）
+                    // 2. 城市选择器 + 搜索框合并一行（适配浅色背景）
                     HStack(spacing: 0) {
                         // 城市选择按钮
                         Button {
@@ -159,7 +176,7 @@ struct LibraryView: View {
                                 Text(selectedCity)
                                     .font(AppTheme.Fonts.footnote)
                                     .fontWeight(.medium)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.black)
                                 Image(systemName: "chevron.down")
                                     .font(.caption2)
                                     .foregroundColor(AppTheme.Colors.babyBlue)
@@ -171,45 +188,44 @@ struct LibraryView: View {
 
                         Divider()
                             .frame(height: 20)
-                            .background(Color.white.opacity(0.1))
+                            .background(Color.black.opacity(0.1))
 
                         // 搜索框
                         HStack(spacing: 6) {
                             Image(systemName: "magnifyingglass")
                                 .font(.caption)
-                                .foregroundColor(Color.white.opacity(0.7))
-                            TextField("", text: $searchText, prompt: Text("搜索餐厅...").foregroundColor(Color.white.opacity(0.5)))
+                                .foregroundColor(Color.black.opacity(0.5))
+                            TextField("", text: $searchText, prompt: Text("搜索餐厅...").foregroundColor(Color.black.opacity(0.4)))
                                 .font(AppTheme.Fonts.footnote)
-                                .foregroundColor(.white)
+                                .foregroundColor(.black)
                                 .focused($isSearchFocused)
-                                .submitLabel(.search)  // 键盘右下角显示"搜索"
+                                .submitLabel(.search)
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                     }
                     .background(
-                        // 深色磨砂材质
+                        // 白色背景（适配浅色背景）
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(hex: "#2C2C2E"))
+                            .fill(Color.white.opacity(0.9))
                     )
-                    // 微妙的白色描边
+                    // 微妙阴影
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
                     )
-                    // 轻量白色阴影
                     .shadow(
-                        color: Color.white.opacity(0.05),
-                        radius: 10,
+                        color: Color.black.opacity(0.08),
+                        radius: 12,
                         x: 0,
-                        y: 2
+                        y: 4
                     )
                     .withFocusedInputEffects(isFocused: $isSearchFocused)
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, AppTheme.Spacing.sm)
             }
-            // Header 全透明背景，沉浸式适配
+            // Header 全透明背景
             .background(Color.clear)
         }
     }
@@ -244,6 +260,12 @@ struct LibraryView: View {
                         // 关键：越往后的卡片 ZIndex 越低，这样滚动时上方的卡片会压在下方的卡片之上
                         // 产生"钻入"感
                         .zIndex(Double(filteredRestaurants.count - index))
+                        // scrollTransition: 向上滑出时平滑消融
+                        .scrollTransition { content, phase in
+                            content
+                                .opacity(phase.isIdentity ? 1 : 0)
+                                .scaleEffect(phase.isIdentity ? 1 : 0.92)
+                        }
                     }
                 }
                 .padding(.bottom, 90)
@@ -504,7 +526,7 @@ private struct FilterBarView: View {
         .padding(.vertical, 8)
     }
     
-    // MARK: - 筛选胶囊标签
+    // MARK: - 筛选胶囊标签（毛玻璃效果）
     private func filterCapsuleLabel(title: String, isSelected: Bool) -> some View {
         HStack(spacing: 4) {
             Text(title)
@@ -518,19 +540,21 @@ private struct FilterBarView: View {
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(isSelected ? Color.black : Color.white)
+                .fill(.ultraThinMaterial) // 毛玻璃背景
+                .opacity(isSelected ? 0.9 : 0.7)
         )
-        // 1.5pt 黑色描边（5% 不透明度）产生悬浮感
-        .overlay(
+        // 选中时添加深色填充覆盖
+        .background(
             Capsule()
-                .stroke(Color.black.opacity(0.05), lineWidth: 1.5)
+                .fill(isSelected ? Color.black.opacity(0.8) : Color.clear)
         )
+        // 取消边框
         // 轻微阴影增加层次
         .shadow(
-            color: Color.black.opacity(0.04),
-            radius: 8,
+            color: Color.black.opacity(0.1),
+            radius: 4,
             x: 0,
-            y: 3
+            y: 2
         )
     }
 }

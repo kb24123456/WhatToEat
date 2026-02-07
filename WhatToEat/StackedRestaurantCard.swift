@@ -15,10 +15,9 @@ struct StackedRestaurantCard: View {
     
     // MARK: - 动力学参数
     private enum Metrics {
-        static let cornerRadius: CGFloat = 28
-        static let strokeWidth: CGFloat = 1
-        static let strokeOpacity: CGFloat = 0.4
-        static let materialOpacity: CGFloat = 0.8
+        static let cornerRadius: CGFloat = 32  // 保持32pt圆角
+        static let strokeWidth: CGFloat = 0.5
+        static let strokeOpacity: CGFloat = 0.04  // 4%黑色描边
     }
     
     private var isCheckedIn: Bool {
@@ -38,32 +37,32 @@ struct StackedRestaurantCard: View {
             .padding(.vertical, 12)
         }
         .buttonStyle(PlainButtonStyle())
-        // 奥利奥奶脂瓷感底座：纯白背景 + 物理切痕描边 + 边缘高光
+        // 物理质感实色系统：压住背景流动感
         .background(
+            RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
+                .fill(Color.white.opacity(0.96))  // 96%不透明度白色背景
+        )
+        // 双层描边系统：白色高光 + 黑色物理边框
+        .overlay(
             ZStack {
-                // 主背景：纯净白色
+                // 内层：白色高光描边（顶部/左侧光源效果）
                 RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
-                    .fill(AppTheme.Colors.pureWhite)
+                    .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
                 
-                // 内侧高光（Rim Light）：模拟陶瓷边缘反光
+                // 外层：极淡黑色物理边框
                 RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
-                    .stroke(AppTheme.Colors.rimLight, lineWidth: 0.5)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
             }
         )
-        // 物理切痕感描边（极细）
-        .overlay(
-            RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
-                .stroke(AppTheme.Colors.physicalEdge, lineWidth: 0.5)
-        )
-        // 极其弥散的阴影，产生悬浮感
+        // 增强浮动阴影
         .shadow(
-            color: AppTheme.Colors.ceramicShadow,
-            radius: 30,
+            color: Color.black.opacity(0.03),
+            radius: 20,
             x: 0,
-            y: 15
+            y: 10
         )
-        // 距离屏幕左右边缘 8pt 间距
-        .padding(.horizontal, 8)
+        // 距离屏幕左右边缘 16pt 间距
+        .padding(.horizontal, 16)
     }
     
     // MARK: - 图片区域
@@ -94,7 +93,7 @@ struct StackedRestaurantCard: View {
             HStack {
                 Text(restaurant.name)
                     .font(.system(size: 19, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(Color(hex: "#1A1A1A"))  // 店名使用 #1A1A1A
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
@@ -186,7 +185,7 @@ struct StackedRestaurantCard: View {
             // 评论文字
             Text(restaurant.review)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(AppTheme.Colors.darkText.opacity(0.85))
+                .foregroundColor(Color(hex: "#7F8C8D"))  // 评论使用 #7F8C8D
                 .lineLimit(2)
                 .lineSpacing(2)
         }
