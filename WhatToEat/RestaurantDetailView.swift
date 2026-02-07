@@ -166,6 +166,7 @@ struct RestaurantDetailView: View {
     
     @State private var isEditingReview = false
     @State private var editedReview = ""
+    @State private var showCommentInput = false
     @FocusState private var reviewIsFocused: Bool
     
     @State private var isEditingTags = false
@@ -180,6 +181,9 @@ struct RestaurantDetailView: View {
     
     // MARK: - Keyboard Animation Delay
     private let keyboardAnimationDelay: TimeInterval = 0.25  // 展开动画完成后再弹出键盘
+    
+    // MARK: - 评论输入模糊效果
+    @State private var isCommentEditing = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -219,6 +223,20 @@ struct RestaurantDetailView: View {
                             }
                         }
                     }
+                }
+                
+                // 评论输入时的高斯模糊效果
+                if isCommentEditing {
+                    Color.black.opacity(0.01)  // 几乎透明的黑色，用于捕获点击
+                        .ignoresSafeArea()
+                        .background(.ultraThinMaterial)  // 高斯模糊效果
+                        .ignoresSafeArea()
+                        .opacity(isCommentEditing ? 1 : 0)  // 平滑透明度过渡
+                        .animation(.linear(duration: 0.8), value: isCommentEditing)  // 0.8秒线性动画，均匀过渡
+                        .onTapGesture {
+                            // 点击模糊区域退出键盘
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        }
                 }
             }
             // 视图合成优化
@@ -746,100 +764,35 @@ struct RestaurantDetailView: View {
         }
     }
 
-    // MARK: - 点评行（画报化版）
+    // MARK: - 点评行（内联输入框，点击直接弹出键盘）
     private var unifiedReviewRow: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // 标题栏：包含标题和取消/完成按钮
+            // 标题栏
             HStack(alignment: .center, spacing: 0) {
                 Text("一句话点评")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(AppTheme.Colors.darkText.opacity(0.4))
                     .tracking(0.5)
-                
-                Spacer()
-                
-                // 编辑状态下的取消/完成按钮
-                if isEditingReview {
-                    HStack(spacing: 16) {
-                        Button {
-                            cancelReview()
-                        } label: {
-                            Text("取消")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.textSecondary)
-                        }
-                        .oreoClickEffect(style: .light)
 
-                        Button {
-                            saveReview()
-                        } label: {
-                            Text("完成")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.xhsRed)
-                        }
-                        .oreoClickEffect(style: .light) // Oreo: 小红书红用 light 震动
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .trailing)))
-                }
+                Spacer()
             }
             .padding(.horizontal, AppTheme.Card.paddingHorizontal)
 
-            // 点评内容（画报化样式）
-            if isEditingReview {
-                ZStack(alignment: .center) {
-                    TextField(restaurant.review.isEmpty ? "添加你的点评..." : restaurant.review, text: $editedReview, axis: .vertical)
-                        .font(.body)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineSpacing(6) // 增加行间距
-                        .multilineTextAlignment(.center)
-                        .focused($reviewIsFocused)
-                        .scrollContentBackground(.hidden)
-                        .submitLabel(.done)  // 键盘右下角显示"完成"
-                        .padding(AppTheme.Card.paddingHorizontal)
-                        .padding(.vertical, 14)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                        .onDisappear {
-                            reviewIsFocused = false
-                        }
+            // 内联评论输入框（点击直接弹出带 inputAccessoryView 的键盘）
+            InlineCommentInputView(
+                text: $editedReview,
+                placeholder: "点击添加点评...",
+                onSave: {
+                    saveReview()
+                },
+                onEditingChanged: { isEditing in
+                    isCommentEditing = isEditing
                 }
-                .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(AppTheme.Colors.softBackground)
-                )
-                .padding(.horizontal, AppTheme.Card.paddingHorizontal)
-            } else {
-                // 画报化展示：左侧高亮条 + 斜体文字（与餐厅卡片同款样式）
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    // 指示条 - 与 RestaurantCard 同款样式，与文字第一行基线对齐
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(AppTheme.Colors.babyBlue)
-                        .frame(width: 3, height: 12)
-                    
-                    Text(restaurant.review.isEmpty ? "点击添加点评..." : restaurant.review)
-                        .font(.body)
-                        .italic() // 斜体
-                        .foregroundColor(restaurant.review.isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.textPrimary)
-                        .lineSpacing(5) // Oreo: 统一行间距 5pt
-                        .padding(.vertical, 14)
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, AppTheme.Card.paddingHorizontal)
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-            }
-        }
-        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
-        .onTapGesture {
-            if !isEditingReview {
-                editedReview = restaurant.review
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
-                    isEditingReview = true
-                }
-            }
+            )
+            .padding(.horizontal, AppTheme.Card.paddingHorizontal)
         }
     }
-    
+
     // MARK: - 标签区域（画报化版）
     private var unifiedTagsRow: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1041,91 +994,28 @@ struct RestaurantDetailView: View {
         .padding(.vertical, 14)
     }
 
+    // MARK: - 点评区域（内联输入框，点击直接弹出键盘）
     private var reviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // 标题栏：包含标题和取消/完成按钮
+            // 标题栏
             HStack(alignment: .center, spacing: 0) {
                 Text("一句话点评")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(isEditingReview ? AppTheme.Colors.textSecondary : AppTheme.Colors.darkText)
-                
+                    .foregroundColor(AppTheme.Colors.darkText)
+
                 Spacer()
-                
-                // 编辑状态下的取消/完成按钮
-                if isEditingReview {
-                    HStack(spacing: 16) {
-                        Button {
-                            cancelReview()
-                        } label: {
-                            Text("取消")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.mediumGray)
-                        }
-                        
-                        Button {
-                            saveReview()
-                        } label: {
-                            Text("完成")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.accent)
-                        }
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .trailing)))
-                }
             }
             .padding(.horizontal, 24)
 
-            reviewCardContent
-        }
-        .onTapGesture {
-            if !isEditingReview {
-                editedReview = restaurant.review
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
-                    isEditingReview = true
+            // 内联评论输入框（点击直接弹出带 inputAccessoryView 的键盘）
+            InlineCommentInputView(
+                text: $editedReview,
+                placeholder: "添加你的点评...",
+                onSave: {
+                    saveReview()
                 }
-            }
-        }
-    }
-
-    private var reviewCardContent: some View {
-        VStack(spacing: 0) {
-            reviewContent
-                .frame(minHeight: isEditingReview ? 150 : 60)
-                .id(isEditingReview)
-        }
-        .cardStyle()
-        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
-    }
-
-    @ViewBuilder
-    private var reviewContent: some View {
-        if isEditingReview {
-            ZStack(alignment: .center) {
-                TextField(restaurant.review.isEmpty ? "添加你的点评..." : restaurant.review, text: $editedReview, axis: .vertical)
-                    .font(.body)
-                    .foregroundColor(AppTheme.Colors.brownText)
-                    .lineSpacing(4)
-                    .multilineTextAlignment(.center)
-                    .focused($reviewIsFocused)
-                    .scrollContentBackground(.hidden)
-                    .submitLabel(.done)  // 键盘右下角显示"完成"
-                    .padding(20)
-                    .padding(.bottom, 10)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    // 移除自动聚焦，避免键盘自动弹出
-                    .onDisappear {
-                        reviewIsFocused = false
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
-        } else {
-            Text(restaurant.review.isEmpty ? "添加你的点评..." : restaurant.review)
-                .font(.body)
-                .foregroundColor(restaurant.review.isEmpty ? AppTheme.Colors.lighterGray : AppTheme.Colors.mediumGray)
-                .lineSpacing(4)
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            )
+            .cardStyle()
         }
     }
     

@@ -36,12 +36,16 @@ struct AddRestaurantView: View {
     @State private var showLocationPicker = false
     @State private var showConfetti = false
     @State private var showSuccessToast = false
+    @State private var showCommentInput = false
 
     // MARK: - Editing States
     @State private var isEditingReview = false
     @State private var editedReview = ""
     @State private var isEditingTags = false
     @State private var newTagInput = ""
+    
+    // MARK: - 评论输入模糊效果
+    @State private var isCommentEditing = false
     
     // MARK: - Animation States
     @State private var isAppeared = false
@@ -111,6 +115,20 @@ struct AddRestaurantView: View {
                 if showSuccessToast {
                     SuccessToastView()
                         .transition(.scale.combined(with: .opacity))
+                }
+                
+                // 评论输入时的高斯模糊效果
+                if isCommentEditing {
+                    Color.black.opacity(0.01)  // 几乎透明的黑色，用于捕获点击
+                        .ignoresSafeArea()
+                        .background(.ultraThinMaterial)  // 高斯模糊效果
+                        .ignoresSafeArea()
+                        .opacity(isCommentEditing ? 1 : 0)  // 平滑透明度过渡
+                        .animation(.linear(duration: 0.8), value: isCommentEditing)  // 0.8秒线性动画，均匀过渡
+                        .onTapGesture {
+                            // 点击模糊区域退出键盘
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        }
                 }
                 
             }
@@ -592,7 +610,7 @@ struct AddRestaurantView: View {
         }
     }
     
-    // MARK: - 评价行（去框化 Clean Input）
+    // MARK: - 评价行（内联输入框，点击直接弹出键盘）
     private var unifiedReviewRow: some View {
         VStack(alignment: .leading, spacing: 12) {
             // 标题栏
@@ -603,90 +621,19 @@ struct AddRestaurantView: View {
                     .tracking(1.5)
 
                 Spacer()
-
-                // 编辑状态下的取消/完成按钮
-                if isEditingReview {
-                    HStack(spacing: 16) {
-                        Button {
-                            withAnimation(AppTheme.Animations.editingSpring) {
-                                isEditingReview = false
-                                editedReview = review
-                            }
-                        } label: {
-                            Text("取消")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.mediumGray)
-                        }
-
-                        Button {
-                            withAnimation(AppTheme.Animations.editingSpring) {
-                                review = editedReview
-                                isEditingReview = false
-                            }
-                        } label: {
-                            Text("完成")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.accent)
-                        }
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .trailing)))
-                }
             }
 
-            // 评价内容（去框化：仅保留底线）
-            if isEditingReview {
-                ZStack(alignment: .bottom) {
-                    TextField(review.isEmpty ? "添加你的点评..." : review, text: $editedReview, axis: .vertical)
-                        .font(.body)
-                        .foregroundColor(AppTheme.Colors.textPrimary)
-                        .lineSpacing(6)
-                        .multilineTextAlignment(.leading)
-                        .focused($reviewIsFocused)
-                        .scrollContentBackground(.hidden)
-                        .submitLabel(.done)  // 键盘右下角显示"完成"
-                        .padding(.vertical, 12)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                        .onDisappear {
-                            reviewIsFocused = false
-                        }
-
-                    // 底线
-                    Rectangle()
-                        .fill(AppTheme.Colors.separatorGray)
-                        .frame(height: 1)
+            // 内联评论输入框（点击直接弹出带 inputAccessoryView 的键盘）
+            InlineCommentInputView(
+                text: $review,
+                placeholder: "点击添加点评...",
+                onEditingChanged: { isEditing in
+                    isCommentEditing = isEditing
                 }
-                .frame(maxWidth: .infinity, minHeight: 100)
-            } else {
-                // 非编辑状态：带高亮条的画报风格（与餐厅卡片同款样式）
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    // 指示条 - 与 RestaurantCard 同款样式，与文字第一行基线对齐
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(AppTheme.Colors.babyBlue)
-                        .frame(width: 3, height: 12)
-
-                    Text(review.isEmpty ? "点击添加点评..." : review)
-                        .font(.body)
-                        .italic()
-                        .foregroundColor(review.isEmpty ? AppTheme.Colors.textTertiary : AppTheme.Colors.textPrimary)
-                        .lineSpacing(5) // Oreo: 统一行间距 5pt
-                        .padding(.vertical, 12)
-
-                    Spacer()
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-            }
-        }
-        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: isEditingReview)
-        .onTapGesture {
-            if !isEditingReview {
-                withAnimation(AppTheme.Animations.editingSpring) {
-                    isEditingReview = true
-                    editedReview = review
-                }
-            }
+            )
         }
     }
-    
+
     // MARK: - 标签行（Clean Input 风格）
     private var unifiedTagsRow: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -862,7 +809,7 @@ struct AddRestaurantView: View {
         .premiumCard()
     }
     
-    // MARK: - Review Section（Premium Soft UI）
+    // MARK: - Review Section（使用 inputAccessoryView）
     private var reviewSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("评价")
@@ -871,92 +818,25 @@ struct AddRestaurantView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
                 .padding(.bottom, 12)
-            
-            reviewCardContent
-                .overlay(alignment: .bottomTrailing) {
-                    if isEditingReview {
-                        reviewBubbleButtons
-                    }
+
+            // 内联评论输入框（点击直接弹出带 inputAccessoryView 的键盘）
+            InlineCommentInputView(
+                text: $review,
+                placeholder: "添加你的点评...",
+                onEditingChanged: { isEditing in
+                    isCommentEditing = isEditing
                 }
+            )
+            .glassmorphism(tint: .white)
+            .overlay(
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(AppTheme.Colors.glassBorder, lineWidth: 0.5)
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 10)
+            .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
         }
-        .onTapGesture {
-            if !isEditingReview {
-                withAnimation(AppTheme.Animations.editingSpring) {
-                    isEditingReview = true
-                    editedReview = review
-                }
-            }
-        }
-        .animation(AppTheme.Animations.standardSpring, value: isEditingReview)
     }
 
-    private var reviewCardContent: some View {
-        VStack(spacing: 0) {
-            reviewContent
-                .frame(minHeight: isEditingReview ? 150 : 80)
-                .id(isEditingReview)
-        }
-        .glassmorphism(tint: .white)
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(AppTheme.Colors.glassBorder, lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 10)
-        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
-        .animation(AppTheme.Animations.standardSpring, value: isEditingReview)
-    }
-
-    private var reviewBubbleButtons: some View {
-        EditActionButtons(
-            onCancel: {
-                withAnimation(AppTheme.Animations.editingSpring) {
-                    isEditingReview = false
-                    editedReview = review
-                }
-            },
-            onConfirm: {
-                withAnimation(AppTheme.Animations.editingSpring) {
-                    review = editedReview
-                    isEditingReview = false
-                }
-            }
-        )
-        .padding(.trailing, 12)
-        .padding(.bottom, 12)
-    }
-    
-    @ViewBuilder
-    private var reviewContent: some View {
-        if isEditingReview {
-            ZStack(alignment: .center) {
-                TextField(review.isEmpty ? "添加你的点评..." : review, text: $editedReview, axis: .vertical)
-                    .font(.body)
-                    .foregroundColor(AppTheme.Colors.brownText)
-                    .lineSpacing(4)
-                    .multilineTextAlignment(.center)
-                    .focused($reviewIsFocused)
-                    .scrollContentBackground(.hidden)
-                    .submitLabel(.done)  // 键盘右下角显示"完成"
-                    .padding(20)
-                    .padding(.bottom, 10)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    // 移除自动聚焦，避免键盘自动弹出
-                    .onDisappear {
-                        reviewIsFocused = false
-                    }
-            }
-            .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
-        } else {
-            Text(review.isEmpty ? "添加你的点评..." : review)
-                .font(.body)
-                .foregroundColor(review.isEmpty ? AppTheme.Colors.lighterGray : AppTheme.Colors.mediumGray)
-                .lineSpacing(4)
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-        }
-    }
-    
     // MARK: - Tags Section（详情页同款）
     // MARK: - Tags Section（Premium Soft UI）
     private var tagsSection: some View {

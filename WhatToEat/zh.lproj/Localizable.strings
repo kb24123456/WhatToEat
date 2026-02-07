@@ -1,0 +1,124 @@
+/* 
+  Localizable.strings
+  WhatToEat
+
+  中文本地化文件
+*/
+
+// MARK: - 通用
+"cancel" = "取消";
+"save" = "保存";
+"delete" = "删除";
+"edit" = "编辑";
+"done" = "完成";
+"send" = "发送";
+"confirm" = "确定";
+"close" = "关闭";
+"back" = "返回";
+"next" = "下一步";
+"loading" = "加载中...";
+"error" = "错误";
+"success" = "成功";
+"warning" = "警告";
+"info" = "提示";
+
+// MARK: - 底部导航
+"tab_library" = "食库";
+"tab_eat" = "吃啥";
+"tab_add" = "添加";
+"tab_gourmet" = "食图";
+"tab_profile" = "我的";
+
+// MARK: - 餐厅相关
+"restaurant" = "餐厅";
+"restaurant_name" = "餐厅名称";
+"restaurant_name_placeholder" = "输入餐厅名称";
+"cuisine" = "菜系";
+"price" = "人均";
+"price_placeholder" = "¥人均消费";
+"address" = "地址";
+"address_placeholder" = "输入地址";
+"phone" = "电话";
+"phone_placeholder" = "输入电话号码";
+"rating" = "评分";
+"review" = "点评";
+"review_placeholder" = "添加你的点评...";
+"one_sentence_review" = "一句话点评";
+"tags" = "标签";
+"add_tag" = "添加标签";
+"new_tag" = "新标签";
+
+// MARK: - 操作按钮
+"add_restaurant" = "添加餐厅";
+"check_in" = "去打卡";
+"checked_in" = "已打卡";
+"navigate" = "去这里";
+"call" = "打电话";
+"share" = "分享";
+"favorite" = "收藏";
+"unfavorite" = "取消收藏";
+
+// MARK: - 统计信息
+"visit_count" = "已造访";
+"times" = "次";
+"total_spent" = "总消费";
+"yuan" = "元";
+"distance" = "驾车距离";
+"km" = "km";
+"navigation" = "导航";
+
+// MARK: - 打卡相关
+"check_in_title" = "打卡";
+"check_in_success" = "打卡成功！";
+"check_in_note" = "备注";
+"check_in_note_placeholder" = "添加打卡备注...";
+"check_in_spent" = "本次消费";
+"check_in_date" = "打卡日期";
+"check_in_history" = "打卡记录";
+
+// MARK: - 筛选与搜索
+"search" = "搜索";
+"search_placeholder" = "搜索餐厅...";
+"filter" = "筛选";
+"filter_region" = "筛选地区";
+"filter_cuisine" = "筛选菜系";
+"filter_price" = "价格区间";
+"sort" = "排序";
+"all" = "全部";
+
+// MARK: - 地区选择
+"select_city" = "选择城市";
+"current_location" = "当前定位";
+"hot_cities" = "热门城市";
+"all_cities" = "所有城市";
+
+// MARK: - 数据导入
+"import_data" = "导入数据";
+"import_csv" = "导入 CSV";
+"export_csv" = "导出 CSV";
+"import_success" = "导入成功";
+"import_failed" = "导入失败";
+"export_success" = "导出成功";
+
+// MARK: - 错误提示
+"error_empty_name" = "餐厅名称不能为空";
+"error_save_failed" = "保存失败，请重试";
+"error_location_failed" = "定位失败";
+"error_no_restaurants" = "还没有添加任何餐厅";
+
+// MARK: - 确认提示
+"confirm_delete" = "确定要删除吗？";
+"confirm_delete_message" = "删除后将无法恢复";
+"confirm_cancel" = "确定要取消吗？";
+"confirm_cancel_message" = "未保存的内容将丢失";
+
+// MARK: - 空状态
+"empty_title" = "暂无数据";
+"empty_message" = "点击添加按钮开始记录美食吧";
+"empty_search" = "没有找到相关餐厅";
+"empty_search_message" = "试试其他关键词";
+
+// MARK: - 食图页面
+"gourmet_title" = "食图";
+"gourmet_empty" = "还没有食图";
+"gourmet_empty_message" = "打卡时添加照片，记录美食瞬间";
