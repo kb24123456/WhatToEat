@@ -874,21 +874,32 @@ struct RestaurantMapView: View {
         return loc1.distance(from: loc2)
     }
     
-    // MARK: - 顶部遮罩与控件（参考图1：柔和渐变效果）
+    // MARK: - 顶部遮罩与控件（使用 MeshGradient 无级渐变）
     private var topOverlay: some View {
         VStack(spacing: 0) {
-            // 顶部渐变遮罩 - 参考图1的柔和过渡
-            LinearGradient(
-                stops: [
-                    .init(color: Color.white, location: 0.0),
-                    .init(color: Color.white.opacity(0.98), location: 0.15),
-                    .init(color: Color.white.opacity(0.85), location: 0.35),
-                    .init(color: Color.white.opacity(0.5), location: 0.6),
-                    .init(color: Color.white.opacity(0.2), location: 0.8),
-                    .init(color: Color.white.opacity(0), location: 1.0)
+            // 顶部 MeshGradient 渐变遮罩 - 真正的无级顺滑过渡
+            MeshGradient(
+                width: 3,
+                height: 4,
+                points: [
+                    // 第1行（顶部）：纯白色
+                    .init(x: 0, y: 0),     .init(x: 0.5, y: 0),     .init(x: 1, y: 0),
+                    // 第2行：保持白色
+                    .init(x: 0, y: 0.3),   .init(x: 0.5, y: 0.3),   .init(x: 1, y: 0.3),
+                    // 第3行：开始衰减
+                    .init(x: 0, y: 0.6),   .init(x: 0.5, y: 0.6),   .init(x: 1, y: 0.6),
+                    // 第4行（底部）：完全透明
+                    .init(x: 0, y: 1),     .init(x: 0.5, y: 1),     .init(x: 1, y: 1),
                 ],
-                startPoint: .top,
-                endPoint: .bottom
+                colors: [
+                    // 第1-2行：纯白色（状态栏和控件区域）
+                    Color.white, Color.white, Color.white,
+                    Color.white, Color.white, Color.white,
+                    // 第3行：指数衰减
+                    Color.white.opacity(0.7), Color.white.opacity(0.6), Color.white.opacity(0.7),
+                    // 第4行：完全透明
+                    Color.clear, Color.clear, Color.clear,
+                ]
             )
             .frame(height: 280)
             .ignoresSafeArea()
@@ -989,35 +1000,10 @@ struct RestaurantMapView: View {
         )
     }
     
-    // MARK: - 底部遮罩（导航栏上方的渐变过渡区域）
+    // MARK: - 底部遮罩（已取消渐变效果）
     private var bottomOverlay: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                Spacer()
-                
-                // 渐变过渡区域：从地图到底部导航栏的白色
-                // 这个区域位于导航栏上方，实现平滑过渡效果
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.white.opacity(0.25), location: 0.0),       // 最上方完全透明（显示地图）
-                        .init(color: Color.white.opacity(0.65), location: 0.2),   // 20%位置轻微白色
-                        .init(color: Color.white.opacity(0.85), location: 0.65),    // 65%位置较明显
-                        .init(color: Color.white, location: 0.95),   // 85%位置开始几乎纯白
-                        .init(color: Color.white, location: 1.0)                  // 最下方纯白色（与导航栏衔接）
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 120)  // 过渡区域高度120pt
-                
-                // 纯白色区域，与导航栏背景颜色一致
-                Color.white
-                    .frame(height: geometry.safeAreaInsets.bottom + 64)  // 安全区 + 导航栏高度
-            }
-        }
-        .ignoresSafeArea()
-        // 修复：允许触摸事件穿透到地图
-        .allowsHitTesting(false)
+        // 返回空视图，彻底取消底部渐变
+        EmptyView()
     }
     
     // MARK: - 设置初始相机位置
@@ -1504,10 +1490,14 @@ struct CityPickerView: View {
             }
         }
         .edgesIgnoringSafeArea(.all)
-        .background(MilkyDiffuseBackground())
+        .background(AppTheme.Colors.milkWhite)
         .onAppear {
-            // 确保位置管理器已启动
-            locationManager.requestLocationPermission()
+            // 启动持续定位（地图视图专用）
+            locationManager.startContinuousLocation()
+        }
+        .onDisappear {
+            // 停止持续定位
+            locationManager.stopContinuousLocation()
         }
     }
     

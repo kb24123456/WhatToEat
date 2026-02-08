@@ -51,10 +51,15 @@ struct CitySelectionView: View {
             }
         }
         .edgesIgnoringSafeArea(.all)
-        .background(MilkyDiffuseBackground())
+        .background(AppTheme.Colors.milkWhite)
         .onAppear {
-            // 确保位置管理器已启动
+            // 请求定位权限并获取当前城市
             locationManager.requestLocationPermission()
+            locationManager.getCurrentCity { cityName in
+                if let city = cityName {
+                    print("当前定位城市: \(city)")
+                }
+            }
         }
     }
     

@@ -193,24 +193,16 @@ struct AddRestaurantView: View {
     
     // MARK: - Background（键盘开启时使用纯色优化性能）
     private var backgroundGradient: some View {
-        Group {
-            if anyFieldFocused {
-                // 键盘开启时：使用纯色背景，禁用复杂渲染
-                AppTheme.Colors.milkyBase
-                    .ignoresSafeArea()
-            } else {
-                // 正常状态：使用弥散背景
-                MilkyDiffuseBackground()
-            }
-        }
+        AppTheme.Colors.milkWhite
+            .ignoresSafeArea()
     }
     
     // MARK: - Scroll Content（无父容器，组件直接显示）
     private func scrollContent(geometry: GeometryProxy) -> some View {
         ScrollView(showsIndicators: false) {
             ScrollViewReader { proxy in
-                VStack(spacing: 24) {
-                    Spacer().frame(height: 70)
+                VStack(spacing: 20) {
+                    Spacer().frame(height: 60)
 
                     // 基础信息（照片 + 名称/区域/品类）
                     HStack(spacing: 12) {
@@ -258,10 +250,10 @@ struct AddRestaurantView: View {
                     // 保存按钮
                     saveButton
                         .padding(.horizontal, AppTheme.Layout.pagePadding)
-                        .padding(.top, 20)
-                        .padding(.bottom, 40)
+                        .padding(.top, 16)
+                        .padding(.bottom, 32)
 
-                    Spacer().frame(height: 40)
+                    Spacer().frame(height: 20)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -577,36 +569,14 @@ struct AddRestaurantView: View {
 
     // MARK: - 评分行（奶脂风格颗粒条）
     private var unifiedRatingRow: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("评分")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(AppTheme.Colors.mediumGray)
                 .tracking(1.5)
 
-            // 奶脂风格评分条
-            MilkyRatingView(rating: $rating)
-                .padding(.top, 16)
-                .padding(.bottom, 4)
-
-            // 评分文字反馈
-            Text(ratingText)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(AppTheme.Colors.mediumGray)
-                .tracking(1.0)
-                .padding(.top, 8)
-        }
-    }
-
-    // 评分文字映射
-    private var ratingText: String {
-        switch rating {
-        case 0: return "点击评分"
-        case 1: return "踩雷"
-        case 2: return "一般"
-        case 3: return "还行"
-        case 4: return "推荐"
-        case 5: return "惊艳"
-        default: return ""
+            // Dock 栏评分系统
+            DockRatingView(rating: $rating)
         }
     }
     
@@ -757,26 +727,13 @@ struct AddRestaurantView: View {
         .buttonStyle(PlainButtonStyle())
     }
     
-    // MARK: - 新标签输入框（去框化：仅保留 Baby Blue 底线）
+    // MARK: - 新标签输入框（带透明 inputAccessoryView）
     private var newTagInputField: some View {
-        ZStack(alignment: .bottom) {
-            TextField("新标签...", text: $newTagInput)
-                .font(.system(size: 14, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .focused($tagInputIsFocused)
-                .frame(minWidth: 80)
-                .submitLabel(.done)
-                .onSubmit {
-                    addNewTag()
-                }
-
-            // Baby Blue 细底线
-            Rectangle()
-                .fill(AppTheme.Colors.babyBlue.opacity(0.5))
-                .frame(height: 1)
-        }
+        NewTagInputWithAccessoryView(
+            text: $newTagInput,
+            isEditing: $isEditingTags,
+            onSubmit: addNewTag
+        )
     }
 
     // MARK: - Rating Section（Premium Soft UI）
@@ -1259,6 +1216,254 @@ struct AddRestaurantView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             closeAction()
         }
+    }
+}
+
+// MARK: - Dock 栏评分系统（macOS Dock 风格）
+struct DockRatingView: View {
+    @Binding var rating: Double
+    
+    // 评价映射体系
+    private let ratingItems: [RatingItem] = [
+        RatingItem(score: 1.0, emoji: "🤮", slang: "拉完了"),
+        RatingItem(score: 2.0, emoji: "🤔", slang: "NPC"),
+        RatingItem(score: 3.0, emoji: "😋", slang: "人上人"),
+        RatingItem(score: 4.0, emoji: "😍", slang: "顶级"),
+        RatingItem(score: 5.0, emoji: "🤩", slang: "夯！")
+    ]
+    
+    var body: some View {
+        // 奶脂 Dock 容器
+        HStack(spacing: 0) {
+            ForEach(ratingItems, id: \.score) { item in
+                DockItemView(
+                    item: item,
+                    isSelected: rating == item.score,
+                    onTap: { selectRating(item.score) }
+                )
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(Color.white.opacity(0.85))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+                )
+        )
+        .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
+    }
+    
+    // 选择评分
+    private func selectRating(_ score: Double) {
+        rating = score
+        triggerHaptic(for: score)
+    }
+    
+    // 触感反馈
+    private func triggerHaptic(for score: Double) {
+        let generator = UIImpactFeedbackGenerator(style: score >= 3 ? .medium : .light)
+        
+        switch score {
+        case 1...2:
+            generator.impactOccurred()
+        case 3...4:
+            generator.impactOccurred()
+        case 5:
+            // 5分：连续两次震动
+            generator.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                generator.impactOccurred()
+            }
+        default:
+            break
+        }
+    }
+}
+
+// MARK: - 评分项数据
+struct RatingItem {
+    let score: Double
+    let emoji: String
+    let slang: String
+}
+
+// MARK: - 新标签输入组件（带透明 inputAccessoryView）
+struct NewTagInputWithAccessoryView: View {
+    @Binding var text: String
+    @Binding var isEditing: Bool
+    let onSubmit: () -> Void
+    
+    @FocusState private var isFocused: Bool
+    @State private var showInputBar = false
+    
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            // 输入框
+            TextField("新标签...", text: $text)
+                .font(.system(size: 14, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .focused($isFocused)
+                .frame(minWidth: 80)
+                .submitLabel(.done)
+                .onSubmit {
+                    onSubmit()
+                }
+                .onChange(of: isFocused) { _, focused in
+                    showInputBar = focused
+                }
+            
+            // Baby Blue 细底线
+            Rectangle()
+                .fill(AppTheme.Colors.babyBlue.opacity(0.5))
+                .frame(height: 1)
+        }
+        .overlay(
+            // 自定义 inputAccessoryView
+            Group {
+                if showInputBar {
+                    VStack {
+                        Spacer()
+                        
+                        HStack {
+                            Spacer()
+                            
+                            // 输入胶囊 - 宽度为屏幕1/3
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(AppTheme.Colors.babyBlue)
+                                
+                                Text(text.isEmpty ? "新标签" : text)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(text.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.darkText)
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white)
+                                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            )
+                            .frame(width: UIScreen.main.bounds.width / 3)
+                            
+                            Spacer()
+                        }
+                        .padding(.bottom, 8)
+                        .background(Color.clear) // 彻底透明背景
+                    }
+                    .transition(.move(edge: .bottom))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showInputBar)
+                }
+            }
+        )
+        .onAppear {
+            // 自动聚焦
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isFocused = true
+            }
+        }
+    }
+}
+
+// MARK: - Dock 单项视图
+struct DockItemView: View {
+    let item: RatingItem
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    // 动画状态
+    @State private var isPressed = false
+    // 视图可见性状态
+    @State private var isVisible = false
+    
+    // 计算最终缩放：选中态 1.2x，点按态 0.92x
+    private var finalScale: CGFloat {
+        let baseScale = isSelected ? 1.2 : 1.0
+        let pressScale = isPressed ? 0.92 : 1.0
+        let visibilityScale = isVisible ? 1.0 : 0.8
+        return baseScale * pressScale * visibilityScale
+    }
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            // Emoji - 使用纯色背景替代模糊光晕
+            ZStack {
+                // 选中态背景圆（无模糊）
+                if isSelected {
+                    Circle()
+                        .fill(glowColor)
+                        .frame(width: 44, height: 44)
+                }
+                
+                Text(item.emoji)
+                    .font(.system(size: 26))
+                    .grayscale(isSelected ? 0 : 0.2)
+            }
+            .scaleEffect(finalScale)
+            .offset(y: isSelected && isVisible ? -3 : 0)
+            
+            // 俚语文字
+            Text(item.slang)
+                .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
+                .foregroundColor(isSelected ? AppTheme.Colors.textPrimary : AppTheme.Colors.textSecondary)
+                .lineLimit(1)
+        }
+        .frame(width: 58, height: 60)
+        .contentShape(Rectangle())
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.2)) {
+                isVisible = true
+            }
+        }
+        .onDisappear {
+            isVisible = false
+        }
+        .onTapGesture {
+            withAnimation(.easeOut(duration: 0.2)) {
+                onTap()
+            }
+        }
+        .pressEvents {
+            withAnimation(.easeInOut(duration: 0.06)) {
+                isPressed = true
+            }
+        } onRelease: {
+            withAnimation(.easeInOut(duration: 0.06)) {
+                isPressed = false
+            }
+        }
+    }
+    
+    // 选中态背景色：3-5分使用小红书红
+    private var glowColor: Color {
+        item.score <= 2 ? Color.gray.opacity(0.12) : AppTheme.Colors.xhsRed.opacity(0.15)
+    }
+}
+
+// MARK: - 按压事件修饰符
+struct PressEventsModifier: ViewModifier {
+    var onPress: () -> Void
+    var onRelease: () -> Void
+    
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in onPress() }
+                    .onEnded { _ in onRelease() }
+            )
+    }
+}
+
+extension View {
+    func pressEvents(onPress: @escaping () -> Void, onRelease: @escaping () -> Void) -> some View {
+        modifier(PressEventsModifier(onPress: onPress, onRelease: onRelease))
     }
 }
 

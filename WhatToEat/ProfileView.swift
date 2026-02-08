@@ -79,7 +79,7 @@ struct ProfileView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 40)
                 }
-                .useMilkyDiffuseBackground()
+                .background(AppTheme.Colors.milkWhite)
                 // 自动滚动到标签区域当键盘弹出时
                 .onChange(of: tagInputIsFocused) { _, isFocused in
                     if isFocused {

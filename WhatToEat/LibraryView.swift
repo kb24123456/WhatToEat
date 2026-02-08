@@ -68,11 +68,15 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ZStack(alignment: .topLeading) {
-                // 背景层：使用 MilkyDiffuseBackground 奶牛纹理背景
-                MilkyDiffuseBackground()
+                // 最底层：奶白背景
+                Color(hex: "#fdf9f3")
                     .ignoresSafeArea()
+                
+                // 中间层：流体黑色弥散背景（置顶）
+                LiquidDarkHeaderBackground()
+                    .zIndex(0)
 
-                // 动态毛玻璃导航条
+                // 顶层：HeaderView + FilterBarView（内容层）
                 DynamicHeaderView(
                     selectedCity: selectedCity,
                     showCityPicker: $showCityPicker,
@@ -137,7 +141,7 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - 动态毛玻璃导航条 (适配浅色奶牛纹理背景)
+    // MARK: - 动态毛玻璃导航条 (适配深色流体背景)
     private struct DynamicHeaderView: View {
         let selectedCity: String
         @Binding var showCityPicker: Bool
@@ -153,20 +157,26 @@ struct LibraryView: View {
         var body: some View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    // 1. 标题"WhatToEat" + 红色圆点
+                    // 1. 标题"WhatToEat" + 红色圆点（Inverse Branding）
                     HStack(spacing: 2) {
-                        Text("WhatToEat")
+                        // "What" - 60%白色
+                        Text("What")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundColor(.black)
+                            .foregroundColor(Color.white.opacity(0.6))
                         
-                        // 红色圆点符号
+                        // "ToEat" - 纯白高亮
+                        Text("ToEat")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        // 红色圆点符号（赛博感）
                         Circle()
                             .fill(Color.red)
                             .frame(width: 8, height: 8)
-                            .offset(y: 8) // 稍微下移，与文字基线对齐
+                            .offset(y: 8)
                     }
 
-                    // 2. 城市选择器 + 搜索框合并一行（适配浅色背景）
+                    // 2. 城市选择器 + 搜索框（黑夜中的微光）
                     HStack(spacing: 0) {
                         // 城市选择按钮
                         Button {
@@ -176,10 +186,10 @@ struct LibraryView: View {
                                 Text(selectedCity)
                                     .font(AppTheme.Fonts.footnote)
                                     .fontWeight(.medium)
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.white)  // 纯白文字
                                 Image(systemName: "chevron.down")
                                     .font(.caption2)
-                                    .foregroundColor(AppTheme.Colors.babyBlue)
+                                    .foregroundColor(AppTheme.Colors.babyBlue)  // Baby Blue图标
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
@@ -188,16 +198,16 @@ struct LibraryView: View {
 
                         Divider()
                             .frame(height: 20)
-                            .background(Color.black.opacity(0.1))
+                            .background(Color.white.opacity(0.2))
 
                         // 搜索框
                         HStack(spacing: 6) {
                             Image(systemName: "magnifyingglass")
                                 .font(.caption)
-                                .foregroundColor(Color.black.opacity(0.5))
-                            TextField("", text: $searchText, prompt: Text("搜索餐厅...").foregroundColor(Color.black.opacity(0.4)))
+                                .foregroundColor(AppTheme.Colors.babyBlue)  // Baby Blue图标
+                            TextField("", text: $searchText, prompt: Text("搜索餐厅...").foregroundColor(Color.white.opacity(0.5)))
                                 .font(AppTheme.Fonts.footnote)
-                                .foregroundColor(.black)
+                                .foregroundColor(.white)  // 输入文字纯白
                                 .focused($isSearchFocused)
                                 .submitLabel(.search)
                         }
@@ -205,20 +215,20 @@ struct LibraryView: View {
                         .padding(.vertical, 10)
                     }
                     .background(
-                        // 白色背景（适配浅色背景）
+                        // 使用纯色替代毛玻璃，避免灰色矩形问题
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.white.opacity(0.9))
+                            .fill(Color.white.opacity(0.12))
                     )
-                    // 微妙阴影
+                    // 发光描边
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.25), lineWidth: 0.5)
                     )
                     .shadow(
-                        color: Color.black.opacity(0.08),
-                        radius: 12,
+                        color: Color.black.opacity(0.15),
+                        radius: 10,
                         x: 0,
-                        y: 4
+                        y: 3
                     )
                     .withFocusedInputEffects(isFocused: $isSearchFocused)
                 }
@@ -526,35 +536,37 @@ private struct FilterBarView: View {
         .padding(.vertical, 8)
     }
     
-    // MARK: - 筛选胶囊标签（毛玻璃效果）
+    // MARK: - 筛选胶囊标签（方案A：反转高亮 - 黑底白字）
     private func filterCapsuleLabel(title: String, isSelected: Bool) -> some View {
-        HStack(spacing: 4) {
-            Text(title)
+        // 截断文本：超过4个字显示省略号
+        let displayTitle = title.count > 4 ? String(title.prefix(3)) + "…" : title
+        
+        return HStack(spacing: 4) {
+            Text(displayTitle)
                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? .white : .black)
+                // 未选中：深黑文字 | 选中：白色文字
+                .foregroundColor(isSelected ? .white : Color(hex: "#1A1A1A"))
+                // 固定宽度和高度，不随内容变化
+                .frame(width: 52, height: 18, alignment: .center)
+                .lineLimit(1)
             Image(systemName: "chevron.down")
                 .font(.system(size: 7))
+                // 未选中：Baby Blue | 选中：白色
                 .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.Colors.babyBlue)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(.ultraThinMaterial) // 毛玻璃背景
-                .opacity(isSelected ? 0.9 : 0.7)
+                // 未选中：纯白实色 | 选中：纯黑实色
+                .fill(isSelected ? Color.black : Color.white)
         )
-        // 选中时添加深色填充覆盖
-        .background(
-            Capsule()
-                .fill(isSelected ? Color.black.opacity(0.8) : Color.clear)
-        )
-        // 取消边框
-        // 轻微阴影增加层次
+        // 轻微阴影增加悬浮感
         .shadow(
-            color: Color.black.opacity(0.1),
-            radius: 4,
+            color: Color.black.opacity(0.08),
+            radius: 6,
             x: 0,
-            y: 2
+            y: 3
         )
     }
 }

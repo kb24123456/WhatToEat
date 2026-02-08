@@ -121,7 +121,7 @@ struct ImportDataView: View {
     
     // MARK: - Background
     private var backgroundGradient: some View {
-        MilkyDiffuseBackground()
+        AppTheme.Colors.milkWhite
             .ignoresSafeArea()
     }
     

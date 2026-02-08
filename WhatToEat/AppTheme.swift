@@ -61,6 +61,9 @@ struct AppTheme {
         static let ceramicShadow = Color.black.opacity(0.02)  // 极其弥散的阴影
         static let physicalEdge = Color.black.opacity(0.03)   // 物理切痕感描边
         
+        // MARK: - LibraryView 专用
+        static let milkWhite = Color(hex: "#fdf9f3")  // 奶白背景色
+        
         // MARK: - 语义化补齐
         /// 破坏性颜色，用于删除、取消等警示操作
         static let destructive = Color(hex: "#FF3B30")

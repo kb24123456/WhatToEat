@@ -333,7 +333,7 @@ struct RestaurantDetailView: View {
     }
     
     private var backgroundGradient: some View {
-        MilkyDiffuseBackground()
+        AppTheme.Colors.milkWhite
     }
     
     // Hero Card Content (Apple Music 风格渐变模糊)

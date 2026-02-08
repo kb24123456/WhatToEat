@@ -40,7 +40,7 @@ struct StackedRestaurantCard: View {
         // 物理质感实色系统：压住背景流动感
         .background(
             RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
-                .fill(Color.white.opacity(0.96))  // 96%不透明度白色背景
+                .fill(AppTheme.Colors.milkWhite)  // 奶白背景，防止透视
         )
         // 双层描边系统：白色高光 + 黑色物理边框
         .overlay(

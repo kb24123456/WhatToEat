@@ -10,76 +10,334 @@ import CoreLocation
 import Combine
 import MapKit
 
+// MARK: - 定位缓存模型
+struct LocationCache {
+    let location: CLLocation
+    let timestamp: Date
+    let cityName: String?
+    
+    var isValid: Bool {
+        // 缓存有效期：30分钟
+        Date().timeIntervalSince(timestamp) < 1800
+    }
+}
+
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
-    // 单例实例
+    // MARK: - 单例实例
     static let shared = LocationManager()
     
-    // 位置管理器
+    // MARK: - 位置管理器
     private let locationManager = CLLocationManager()
-    
-    // 发布用户当前位置
-    @Published var userLocation: CLLocation?
-    
-    // 发布当前位置对应的城市名
-    @Published var currentCity: String?
-    
-    // 地理编码器
     private let geocoder = CLGeocoder()
     
-    // 初始化方法
+    // MARK: - 缓存系统
+    private var locationCache: LocationCache?
+    private var isLocating = false
+    
+    // MARK: - 发布状态
+    @Published var userLocation: CLLocation?
+    @Published var currentCity: String?
+    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    
+    // MARK: - 持续定位控制（地图专用）
+    private var continuousLocationTimer: Timer?
+    private var isContinuousLocating = false
+    
+    // MARK: - 初始化
     override init() {
         super.init()
-        
-        // 配置位置管理器
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters // 精度设置为百米级，为了省电
-        locationManager.distanceFilter = 100 // 位置变化超过100米时更新
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.distanceFilter = 100
         
-        // 请求位置权限
-        requestLocationPermission()
+        // 从本地存储恢复城市名
+        currentCity = UserDefaults.standard.string(forKey: "cachedCityName")
+        
+        // 检查当前权限状态
+        authorizationStatus = locationManager.authorizationStatus
     }
     
-    // 请求位置权限
+    // MARK: - 权限管理
+    
+    /// 请求位置权限
     func requestLocationPermission() {
         switch locationManager.authorizationStatus {
         case .notDetermined:
-            // 用户尚未决定，请求权限
             locationManager.requestWhenInUseAuthorization()
         case .restricted, .denied:
-            // 权限被拒绝或限制
             print("位置权限被拒绝或限制")
         case .authorizedWhenInUse, .authorizedAlways:
-            // 已获得权限，开始更新位置
-            startUpdatingLocation()
+            // 获得权限后，静默获取一次位置（不强制）
+            refreshLocationIfNeeded()
         @unknown default:
-            print("未知的权限状态")
+            break
         }
     }
     
-    // 开始更新位置
-    func startUpdatingLocation() {
+    // MARK: - 智能定位 API
+    
+    /// 获取当前位置（带缓存检查）
+    func getCurrentLocation(completion: @escaping (CLLocation?) -> Void) {
+        // 1. 检查缓存
+        if let cache = locationCache, cache.isValid {
+            completion(cache.location)
+            return
+        }
+        
+        // 2. 检查权限
+        guard locationManager.authorizationStatus == .authorizedWhenInUse ||
+              locationManager.authorizationStatus == .authorizedAlways else {
+            completion(nil)
+            return
+        }
+        
+        // 3. 启动单次定位
+        performSingleLocationUpdate { [weak self] location in
+            completion(location)
+        }
+    }
+    
+    /// 获取当前城市（带缓存检查）
+    func getCurrentCity(completion: @escaping (String?) -> Void) {
+        // 1. 检查内存缓存
+        if let cache = locationCache, cache.isValid, let city = cache.cityName {
+            completion(city)
+            return
+        }
+        
+        // 2. 检查本地缓存
+        if let cachedCity = UserDefaults.standard.string(forKey: "cachedCityName") {
+            completion(cachedCity)
+            // 后台刷新位置
+            refreshLocationIfNeeded()
+            return
+        }
+        
+        // 3. 需要重新定位
+        getCurrentLocation { [weak self] location in
+            guard let location = location else {
+                completion(nil)
+                return
+            }
+            
+            // 反编码获取城市名
+            self?.performGeocoding(for: location) { cityName in
+                completion(cityName)
+            }
+        }
+    }
+    
+    /// 强制刷新位置
+    func refreshLocation(completion: @escaping (CLLocation?) -> Void) {
+        // 清除缓存
+        locationCache = nil
+        
+        guard locationManager.authorizationStatus == .authorizedWhenInUse ||
+              locationManager.authorizationStatus == .authorizedAlways else {
+            completion(nil)
+            return
+        }
+        
+        performSingleLocationUpdate { location in
+            completion(location)
+        }
+    }
+    
+    /// 如果需要则刷新位置（静默）
+    private func refreshLocationIfNeeded() {
+        // 只在缓存无效时刷新
+        guard locationCache == nil || !locationCache!.isValid else { return }
+        
+        guard locationManager.authorizationStatus == .authorizedWhenInUse ||
+              locationManager.authorizationStatus == .authorizedAlways else {
+            return
+        }
+        
+        performSingleLocationUpdate { _ in
+            // 静默更新，不处理回调
+        }
+    }
+    
+    // MARK: - 持续定位（地图专用）
+    
+    /// 开始持续定位（地图视图使用）
+    func startContinuousLocation() {
+        guard !isContinuousLocating else { return }
+        
+        isContinuousLocating = true
         locationManager.startUpdatingLocation()
+        
+        // 地图视图持续定位最长60秒
+        continuousLocationTimer?.invalidate()
+        continuousLocationTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: false) { [weak self] _ in
+            self?.stopContinuousLocation()
+        }
     }
     
-    // 停止更新位置
-    func stopUpdatingLocation() {
+    /// 停止持续定位
+    func stopContinuousLocation() {
+        isContinuousLocating = false
         locationManager.stopUpdatingLocation()
+        continuousLocationTimer?.invalidate()
+        continuousLocationTimer = nil
     }
     
-    // 计算直线距离
-    func distanceTo(lat: Double, long: Double) -> String {
-        // 检查用户位置是否可用
-        guard let userLocation = userLocation else {
-            return "定位中..."
+    // MARK: - 单次定位实现
+    
+    private var singleLocationCompletion: ((CLLocation?) -> Void)?
+    private var singleLocationTimer: Timer?
+    
+    private func performSingleLocationUpdate(completion: @escaping (CLLocation?) -> Void) {
+        // 防止重复定位
+        guard !isLocating else {
+            // 如果正在定位，等待结果
+            let checkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+                if let cache = self?.locationCache, cache.isValid {
+                    completion(cache.location)
+                    timer.invalidate()
+                }
+            }
+            // 5秒后超时
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                checkTimer.invalidate()
+                completion(nil)
+            }
+            return
         }
         
-        // 创建目标位置
-        let targetLocation = CLLocation(latitude: lat, longitude: long)
+        isLocating = true
+        singleLocationCompletion = completion
         
-        // 计算距离（米）
-        let distance = userLocation.distance(from: targetLocation)
+        // 启动定位
+        locationManager.startUpdatingLocation()
         
-        // 格式化距离显示
+        // 设置超时（5秒）
+        singleLocationTimer?.invalidate()
+        singleLocationTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
+            self?.finishSingleLocationUpdate()
+        }
+    }
+    
+    private func finishSingleLocationUpdate() {
+        // 停止定位
+        if !isContinuousLocating {
+            locationManager.stopUpdatingLocation()
+        }
+        
+        // 回调结果
+        singleLocationCompletion?(locationCache?.location)
+        singleLocationCompletion = nil
+        singleLocationTimer?.invalidate()
+        singleLocationTimer = nil
+        isLocating = false
+    }
+    
+    // MARK: - 地理编码（节流控制）
+    
+    private var lastGeocodeTime: Date?
+    private var geocodeCompletions: [(String?) -> Void] = []
+    
+    private func performGeocoding(for location: CLLocation, completion: @escaping (String?) -> Void) {
+        // 节流控制：至少间隔10秒
+        if let lastTime = lastGeocodeTime, Date().timeIntervalSince(lastTime) < 10 {
+            // 使用缓存的城市名
+            completion(locationCache?.cityName)
+            return
+        }
+        
+        lastGeocodeTime = Date()
+        
+        geocoder.reverseGeocodeLocation(location) { [weak self] (placemarks, error) in
+            guard let placemark = placemarks?.first else {
+                completion(nil)
+                return
+            }
+            
+            let cityName = placemark.locality?.replacingOccurrences(of: "市", with: "")
+            
+            // 更新缓存
+            if let cache = self?.locationCache {
+                self?.locationCache = LocationCache(
+                    location: cache.location,
+                    timestamp: cache.timestamp,
+                    cityName: cityName
+                )
+            }
+            
+            // 持久化城市名
+            if let city = cityName {
+                UserDefaults.standard.set(city, forKey: "cachedCityName")
+                self?.currentCity = city
+            }
+            
+            completion(cityName)
+        }
+    }
+    
+    // MARK: - CLLocationManagerDelegate
+    
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        authorizationStatus = manager.authorizationStatus
+        
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            // 获得权限后，静默获取一次位置
+            refreshLocationIfNeeded()
+        case .restricted, .denied:
+            print("位置权限被拒绝或限制")
+        default:
+            break
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        
+        // 更新缓存
+        let cache = LocationCache(
+            location: location,
+            timestamp: Date(),
+            cityName: nil
+        )
+        locationCache = cache
+        userLocation = location
+        
+        // 反编码获取城市名（节流）
+        performGeocoding(for: location) { [weak self] cityName in
+            if let city = cityName {
+                self?.currentCity = city
+            }
+        }
+        
+        // 如果是单次定位，完成更新
+        if singleLocationCompletion != nil && !isContinuousLocating {
+            finishSingleLocationUpdate()
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("位置更新失败: \(error.localizedDescription)")
+        finishSingleLocationUpdate()
+    }
+    
+    // MARK: - 距离计算（带缓存）
+    
+    func distanceTo(lat: Double, long: Double) -> String {
+        // 优先使用缓存
+        if let cache = locationCache, cache.isValid {
+            return calculateDistance(from: cache.location, to: CLLocation(latitude: lat, longitude: long))
+        }
+        
+        // 无缓存时启动定位
+        getCurrentLocation { _ in
+            // 定位完成后会自动更新 UI（通过 @Published）
+        }
+        
+        return "定位中..."
+    }
+    
+    private func calculateDistance(from: CLLocation, to: CLLocation) -> String {
+        let distance = from.distance(from: to)
         if distance < 1000 {
             return String(format: "%.0f m", distance)
         } else {
@@ -87,104 +345,52 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
-    // 获取真实驾车距离和时间
+    // MARK: - 路线规划
+    
     func fetchRoute(to lat: Double, long: Double) async -> (distance: String, time: String)? {
-        // 检查用户位置是否可用
-        guard let userLocation = userLocation else {
+        // 优先使用缓存位置
+        let location: CLLocation?
+        if let cache = locationCache, cache.isValid {
+            location = cache.location
+        } else {
+            // 需要等待定位完成
+            location = await withCheckedContinuation { continuation in
+                getCurrentLocation { loc in
+                    continuation.resume(returning: loc)
+                }
+            }
+        }
+        
+        guard let userLocation = location else {
             return nil
         }
         
-        // 创建起点和终点
         let sourcePlacemark = MKPlacemark(coordinate: userLocation.coordinate)
         let destinationPlacemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: long))
         
-        // 创建起点和终点的 map item
-        let sourceItem = MKMapItem(placemark: sourcePlacemark)
-        let destinationItem = MKMapItem(placemark: destinationPlacemark)
-        
-        // 创建路线请求
         let request = MKDirections.Request()
-        request.source = sourceItem
-        request.destination = destinationItem
-        request.transportType = .automobile // 使用驾车方式
+        request.source = MKMapItem(placemark: sourcePlacemark)
+        request.destination = MKMapItem(placemark: destinationPlacemark)
+        request.transportType = .automobile
         
         do {
-            // 计算路线
             let directions = MKDirections(request: request)
             let response = try await directions.calculate()
             
-            // 获取第一条路线
-            guard let route = response.routes.first else {
-                return nil
-            }
+            guard let route = response.routes.first else { return nil }
             
-            // 格式化距离
-            let distance = route.distance
-            let distanceText: String
-            if distance < 1000 {
-                distanceText = String(format: "%.0f m", distance)
-            } else {
-                distanceText = String(format: "%.1f km", distance / 1000)
-            }
+            let distanceText = route.distance < 1000
+                ? String(format: "%.0f m", route.distance)
+                : String(format: "%.1f km", route.distance / 1000)
             
-            // 格式化时间
-            let time = route.expectedTravelTime
-            let timeText: String
-            if time < 60 {
-                timeText = String(format: "%.0f 秒", time)
-            } else {
-                timeText = String(format: "%.0f 分钟", time / 60)
-            }
+            let timeText = route.expectedTravelTime < 60
+                ? String(format: "%.0f 秒", route.expectedTravelTime)
+                : String(format: "%.0f 分钟", route.expectedTravelTime / 60)
             
             return (distance: distanceText, time: timeText)
         } catch {
             print("获取路线失败: \(error.localizedDescription)")
             return nil
         }
-    }
-    
-    // MARK: - CLLocationManagerDelegate
-    
-    // 位置权限变化时调用
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        switch manager.authorizationStatus {
-        case .authorizedWhenInUse, .authorizedAlways:
-            // 权限已获得，开始更新位置
-            startUpdatingLocation()
-        case .restricted, .denied:
-            // 权限被拒绝或限制
-            print("位置权限被拒绝或限制")
-        default:
-            break
-        }
-    }
-    
-    // 位置更新时调用
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        if let location = locations.last {
-            userLocation = location
-            // 获取城市名称
-            getCityName(from: location)
-        }
-    }
-    
-    // 根据位置获取城市名称
-    private func getCityName(from location: CLLocation) {
-        geocoder.reverseGeocodeLocation(location) { [weak self] (placemarks, error) in
-            guard let self = self, let placemark = placemarks?.first else {
-                return
-            }
-            
-            if let city = placemark.locality {
-                // 去除城市名称中的“市”字（如“上海市”→“上海”）
-                let cityName = city.replacingOccurrences(of: "市", with: "")
-                self.currentCity = cityName
-            }
-        }
-    }
-    
-    // 位置更新失败时调用
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("位置更新失败: \(error.localizedDescription)")
     }
 }

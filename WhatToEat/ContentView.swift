@@ -47,8 +47,8 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // 背景层：弥散背景铺满整个屏幕（包括安全区域）
-            MilkyDiffuseBackground()
+            // 背景层：奶白背景铺满整个屏幕（包括安全区域）
+            AppTheme.Colors.milkWhite
                 .ignoresSafeArea()
             
             // MARK: - 主内容区域（性能冻结保护）
