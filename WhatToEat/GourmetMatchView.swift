@@ -11,6 +11,9 @@ struct GourmetMatchView: View {
     // 命名空间用于 Hero 动画
     @Namespace private var animation
     
+    // 今日食签命名空间
+    @Namespace private var fortuneNS
+    
     // 筛选状态
     @State private var selectedDistrict: String = "全部"
     @State private var selectedType: String = "全部"
@@ -26,6 +29,85 @@ struct GourmetMatchView: View {
     
     // AI 文案管理器
     @StateObject private var aiManager = AICopywritingManager.shared
+    
+    // MARK: - 今日食签状态
+    @State private var isFortuneExpanded: Bool = false  // 默认收起态，由自动触发控制
+    @State private var dragOffset: CGSize = .zero       // 拖拽偏移量
+    @State private var dragScale: CGFloat = 1.0         // 拖拽缩放
+    @State private var dragOpacity: Double = 1.0        // 拖拽透明度
+    @State private var hasShownToday: Bool = false      // 今日是否已展示过
+    
+    // 高亮关键词（城市名 + 心情词/食物词）
+    private var highlightKeywords: [String] {
+        var keywords: [String] = []
+        
+        // 添加当前城市
+        if let city = LocationManager.shared.currentCity {
+            keywords.append(city)
+            // 添加城市简称（如重庆->渝）
+            if city.contains("重庆") { keywords.append("渝") }
+            if city.contains("北京") { keywords.append("京") }
+            if city.contains("上海") { keywords.append("沪") }
+            if city.contains("广州") { keywords.append("穗") }
+            if city.contains("深圳") { keywords.append("鹏") }
+            if city.contains("成都") { keywords.append("蓉") }
+            if city.contains("杭州") { keywords.append("杭") }
+            if city.contains("南京") { keywords.append("宁") }
+            if city.contains("武汉") { keywords.append("汉") }
+            if city.contains("西安") { keywords.append("镐") }
+        }
+        
+        // 常见心情词
+        keywords.append(contentsOf: [
+            "快乐", "开心", "幸福", "治愈", "温暖", "感动", "满足", "惬意",
+            "emo", "焦虑", "疲惫", "摸鱼", "续命", "回血", "充电",
+            "纠结", "选择困难", "社死", "摆烂", "躺平", "内卷"
+        ])
+        
+        // 常见食物词
+        keywords.append(contentsOf: [
+            "火锅", "烧烤", "串串", "奶茶", "咖啡", "美式", "拿铁",
+            "拉面", "小面", "抄手", "饺子", "汉堡", "炸鸡", "寿司",
+            "披萨", "意面", "牛排", "日料", "韩餐", "川菜", "粤菜",
+            "湘菜", "江浙菜", "西北菜", "东北菜", "云南菜", "泰国菜",
+            "甜品", "蛋糕", "面包", "冰淇淋", "冰粉", "凉糕", "豆花",
+            "螺蛳粉", "酸辣粉", "麻辣烫", "冒菜", "香锅", "干锅",
+            "早茶", "下午茶", "夜宵", "早餐", "午餐", "晚餐",
+            "碳水", "蛋白质", "脂肪", "热量", "卡路里"
+        ])
+        
+        // 场景词
+        keywords.append(contentsOf: [
+            "工位", "办公室", "会议室", "格子间", "加班", "下班",
+            "地铁", "公交", "打车", "骑车", "走路", "通勤",
+            "解放碑", "洪崖洞", "江北嘴", "观音桥", "九街",
+            "梯坎", "卡卡角角", "苍蝇馆子", "老字号", "网红店"
+        ])
+        
+        return keywords
+    }
+    
+    // 毒舌/吐槽类关键词
+    private var sarcasticKeywords: [String] {
+        [
+            "吐槽", "毒舌", "讽刺", "讽刺", "扎心", "暴击", "伤害", "打击",
+            "社死", "尴尬", "无语", "离谱", "荒谬", "荒唐", "可笑",
+            "摆烂", "躺平", "内卷", "996", "007", "加班", "社畜",
+            "穷", "贵", "坑", "踩雷", "翻车", "暴雷", "避雷",
+            "难吃", "失望", "后悔", "上当", "被骗", "套路",
+            "修仙", "续命", "摸鱼", "划水", "带薪", "偷懒",
+            "饿", "馋", "馋哭", "流口水", "饿死", "饿晕",
+            "胖", "减肥", "罪恶", "罪恶感", "热量炸弹",
+            "纠结", "选择困难", "不知道", "随便", "都行"
+        ]
+    }
+    
+    /// 判断食签是否为毒舌/吐槽类
+    private func isSarcasticFortune() -> Bool {
+        guard let fortune = aiManager.todayFortune else { return false }
+        let text = (fortune.analysis + fortune.yiHighlight + fortune.jiHighlight).lowercased()
+        return sarcasticKeywords.contains { text.contains($0.lowercased()) }
+    }
     
     // 筛选器数据
     private var districts: [String] {
@@ -79,56 +161,6 @@ struct GourmetMatchView: View {
                     Spacer()
                 }
                 
-                // MARK: 画报式文案展示区
-                // 位于筛选器和卡片之间的空白区域
-                // 上下各预留 32pt 留白，左侧对齐 24pt
-                VStack(alignment: .leading, spacing: 8) {
-                    // 判断是否显示加载占位
-                    if aiManager.isLoading && aiManager.sloganPool.isEmpty {
-                        // 加载占位文案
-                        Text(aiManager.getLoadingSlogan().title)
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.darkText)
-                            .tracking(1.5)
-                        
-                        Text(aiManager.getLoadingSlogan().subtitle)
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .italic()
-                            .foregroundColor(AppTheme.Colors.mediumGray)
-                    } else {
-                        // 主标题 - 使用动态切换动效
-                        Text(aiManager.getSlogan(for: currentCenterIndex).title)
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.darkText)
-                            .tracking(1.5)
-                            .id("title_\(currentCenterIndex)") // 用于动效识别
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .bottom).combined(with: .opacity),
-                                removal: .move(edge: .top).combined(with: .opacity)
-                            ))
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: currentCenterIndex)
-                        
-                        // 副标题 - 斜体样式
-                        Text(aiManager.getSlogan(for: currentCenterIndex).subtitle)
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .italic()
-                            .foregroundColor(AppTheme.Colors.mediumGray)
-                            .id("subtitle_\(currentCenterIndex)") // 用于动效识别
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .bottom).combined(with: .opacity),
-                                removal: .move(edge: .top).combined(with: .opacity)
-                            ))
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: currentCenterIndex)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 24)
-                .padding(.vertical, 32)
-                .position(
-                    x: geometry.size.width / 2,
-                    y: (60 + 44 + 32 + screenMidY) / 2  // 筛选器底部和卡片顶部之间的中间位置
-                )
-                
                 // MARK: Cover Flow 卡片轮播
                 // 使用 frame 精确定位卡片位置和大小
                 carouselArea(
@@ -144,6 +176,8 @@ struct GourmetMatchView: View {
                     x: geometry.size.width / 2,
                     y: cardTopY + cardHeight / 2
                 )
+                .blur(radius: isFortuneExpanded ? 20 : 0)
+                .animation(.easeInOut(duration: 0.3), value: isFortuneExpanded)
                 
                 // MARK: 底部详情卡片（非全屏）
                 if let selectedRestaurant {
@@ -160,22 +194,453 @@ struct GourmetMatchView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
+                
+                // MARK: 今日食签视觉交互系统
+                fortuneInteractionSystem
+                    .zIndex(3)
             }
             // MARK: - 生命周期和状态监听
             .onAppear {
-                // 加载本地缓存并触发第一次补货
+                // 加载本地缓存并获取今日食签
                 Task {
                     aiManager.loadFromLocal()
-                    await aiManager.checkAndRefillPool()
-                }
-            }
-            .onChange(of: currentCenterIndex) { _, _ in
-                // 卡片切换时检查是否需要补货
-                Task {
-                    await aiManager.checkAndRefillPool()
+                    // 获取今日食签（带缓存逻辑）
+                    await aiManager.getTodayFortune()
+                    
+                    // 自动触发逻辑：如果是今天第一次查看，自动展开
+                    await checkAndAutoExpandFortune()
                 }
             }
         }
+    }
+    
+    // MARK: - 今日食签视觉交互系统
+    private var fortuneInteractionSystem: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // 背景遮罩（仅在展开时显示）
+                if isFortuneExpanded {
+                    Color.black
+                        .opacity(0.2)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.interpolatingSpring(stiffness: 280, damping: 22)) {
+                                isFortuneExpanded = false
+                            }
+                        }
+                }
+                
+                // 根据状态显示挂坠或全屏卡片
+                if isFortuneExpanded {
+                    // 全屏食签卡片
+                    expandedFortuneCard
+                        .frame(width: geometry.size.width * 0.85)
+                        .offset(dragOffset)
+                        .scaleEffect(dragScale)
+                        .opacity(dragOpacity)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    // 支持向任意方向的拖拽，但优先响应向右上角的拖拽
+                                    dragOffset = value.translation
+                                    
+                                    // 根据拖拽距离计算缩放和透明度
+                                    let distance = sqrt(pow(value.translation.width, 2) + pow(value.translation.height, 2))
+                                    let progress = min(distance / 200, 1.0) // 最大进度为1
+                                    
+                                    // 等比例缩小：从 1.0 到 0.6
+                                    dragScale = 1.0 - (progress * 0.4)
+                                    // 平滑变透明：从 1.0 到 0.3
+                                    dragOpacity = 1.0 - (progress * 0.7)
+                                }
+                                .onEnded { value in
+                                    // 判断是否达到收起阈值（位移超过 100pt）
+                                    let distance = sqrt(pow(value.translation.width, 2) + pow(value.translation.height, 2))
+                                    
+                                    if distance > 100 {
+                                        // 自动归位到右上角 minimized 状态
+                                        withAnimation(.interpolatingSpring(stiffness: 280, damping: 22)) {
+                                            isFortuneExpanded = false
+                                            dragOffset = .zero
+                                            dragScale = 1.0
+                                            dragOpacity = 1.0
+                                        }
+                                    } else {
+                                        // 回弹到原始状态
+                                        withAnimation(.interpolatingSpring(stiffness: 280, damping: 22)) {
+                                            dragOffset = .zero
+                                            dragScale = 1.0
+                                            dragOpacity = 1.0
+                                        }
+                                    }
+                                }
+                        )
+                } else {
+                    // 右上角挂坠
+                    minimizedFortunePendant
+                        .position(
+                            x: geometry.size.width - 44,
+                            y: 100
+                        )
+                }
+            }
+        }
+    }
+    
+    // MARK: - 右上角挂坠 (The Minimized Pendant)
+    private var minimizedFortunePendant: some View {
+        Button(action: {
+            withAnimation(.interpolatingSpring(stiffness: 280, damping: 22)) {
+                isFortuneExpanded = true
+            }
+        }) {
+            ZStack {
+                // 底座：44pt x 44pt 圆角正方形
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: "#1A1A1A"))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 0.5)
+                    )
+                
+                // 内容：星座符号或"籤"字
+                if let zodiac = ZodiacUtil.loadZodiacSign() {
+                    Text(String(zodiac.prefix(1)))
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                } else {
+                    Text("籤")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                }
+                
+                // 红点提醒
+                if aiManager.todayFortune != nil {
+                    Circle()
+                        .fill(AppTheme.Colors.xhsRed)
+                        .frame(width: 8, height: 8)
+                        .position(x: 38, y: 6)
+                }
+            }
+        }
+        .matchedGeometryEffect(id: "fortuneCard", in: fortuneNS)
+    }
+    
+    // MARK: - 全屏食签卡片 (The Expanded Milky Card) - 紧凑版
+    private var expandedFortuneCard: some View {
+        VStack(spacing: 0) {
+            if let fortune = aiManager.todayFortune {
+                // 顶部装饰区域 - 紧凑化
+                VStack(spacing: 0) {
+                    // 星座图标 + 运势标题
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.babyBlue)
+                        
+                        Text("今日食签")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.lightText)
+                        
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.babyBlue)
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 12)
+                    
+                    // Section 1: 星象（紧凑版）
+                    HStack(spacing: 5) {
+                        ForEach(0..<5, id: \.self) { index in
+                            ZStack {
+                                // 外发光效果（激活状态）
+                                if index < fortune.fortuneStars {
+                                    Circle()
+                                        .fill(AppTheme.Colors.babyBlue.opacity(0.15))
+                                        .frame(width: 16, height: 16)
+                                        .blur(radius: 3)
+                                }
+                                
+                                // 主圆球
+                                Circle()
+                                    .fill(index < fortune.fortuneStars ? 
+                                          AppTheme.Colors.babyBlue : 
+                                          Color.gray.opacity(0.08))
+                                    .frame(width: 11, height: 11)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(
+                                                index < fortune.fortuneStars ? 
+                                                Color.white.opacity(0.4) : 
+                                                Color.gray.opacity(0.1),
+                                                lineWidth: 0.5
+                                            )
+                                    )
+                            }
+                        }
+                    }
+                    .padding(.bottom, 6)
+                    
+                    // 运势星级文字
+                    Text("\(fortune.fortuneStars)星运势")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
+                        .padding(.bottom, 16)
+                }
+                
+                // Section 2: 主解析（紧凑版）
+                Text(fortune.analysis)
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 20)
+                
+                // 分隔装饰线 - 简化
+                HStack(spacing: 10) {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.12))
+                        .frame(height: 0.5)
+                    
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 7))
+                        .foregroundColor(Color.gray.opacity(0.25))
+                    
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.12))
+                        .frame(height: 0.5)
+                }
+                .padding(.horizontal, 36)
+                .padding(.bottom, 20)
+                
+                // Section 3: 宜/忌核心（紧凑版）
+                VStack(spacing: 16) {
+                    // 宜
+                    VStack(spacing: 6) {
+                        // 标签 + 内容同行
+                        HStack(spacing: 8) {
+                            // 宜标签
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(AppTheme.Colors.xhsRed)
+                                    .frame(width: 5, height: 5)
+                                
+                                Text("宜")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundColor(AppTheme.Colors.xhsRed)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(AppTheme.Colors.xhsRed.opacity(0.08))
+                            )
+                            
+                            // 宜内容
+                            Text(fortune.yiHighlight)
+                                .font(.system(size: 18, weight: .black, design: .rounded))
+                                .foregroundColor(AppTheme.Colors.xhsRed)
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                        
+                        // 宜说明
+                        Text(fortune.yiSub)
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.lightText)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                            .padding(.horizontal, 28)
+                    }
+                    
+                    // 中间分隔（简化）
+                    Image(systemName: "circle.lefthalf.filled")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color.gray.opacity(0.3))
+                    
+                    // 忌
+                    VStack(spacing: 6) {
+                        // 标签 + 内容同行
+                        HStack(spacing: 8) {
+                            // 忌标签
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .stroke(AppTheme.Colors.darkText.opacity(0.6), lineWidth: 1)
+                                    .frame(width: 5, height: 5)
+                                
+                                Text("忌")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundColor(AppTheme.Colors.darkText.opacity(0.7))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color.gray.opacity(0.08))
+                            )
+                            
+                            // 忌内容
+                            Text(fortune.jiHighlight)
+                                .font(.system(size: 18, weight: .black, design: .rounded))
+                                .foregroundColor(AppTheme.Colors.darkText)
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                        
+                        // 忌说明
+                        Text(fortune.jiSub)
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.lightText)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                            .padding(.horizontal, 28)
+                    }
+                }
+                .padding(.bottom, 20)
+                
+                // 分隔装饰线 - 简化
+                HStack(spacing: 10) {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.12))
+                        .frame(height: 0.5)
+                    
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 9))
+                        .foregroundColor(Color.gray.opacity(0.25))
+                    
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.12))
+                        .frame(height: 0.5)
+                }
+                .padding(.horizontal, 36)
+                .padding(.bottom, 16)
+                
+                // Section 4: 转运食物（紧凑版）
+                HStack(spacing: 6) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
+                    
+                    Text(fortune.luckFood)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule()
+                        .fill(AppTheme.Colors.babyBlue.opacity(0.1))
+                )
+                .padding(.bottom, 16)
+                
+                // Section 5: 背书（紧凑版）
+                VStack(spacing: 4) {
+                    Text("—— 结合你的星盘与今日黄历解析 ——")
+                        .font(.system(size: 10, weight: .regular, design: .rounded))
+                        .italic()
+                        .foregroundColor(AppTheme.Colors.lightText.opacity(0.7))
+                    
+                    Text("基于您的星座与来到这个世界的日子")
+                        .font(.system(size: 8, weight: .regular, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.lightText.opacity(0.45))
+                        .tracking(0.3)
+                }
+                .padding(.bottom, 20)
+                
+            } else {
+                // 加载中状态 - 紧凑版
+                LoadingFortuneView()
+                    .padding(.vertical, 50)
+            }
+        }
+        .background(
+            ZStack {
+                // 白色背景
+                RoundedRectangle(cornerRadius: 28)
+                    .fill(Color.white)
+                
+                // 星轨圆环纹理（占星术神秘感）- 优化后的纹理
+                GeometryReader { geometry in
+                    ZStack {
+                        // 外圈（更淡）
+                        Circle()
+                            .stroke(Color.gray.opacity(0.025), lineWidth: 1)
+                            .frame(width: geometry.size.width * 0.95, height: geometry.size.width * 0.95)
+                            .position(x: geometry.size.width / 2, y: geometry.size.height * 0.4)
+                        
+                        // 中圈
+                        Circle()
+                            .stroke(Color.gray.opacity(0.02), lineWidth: 1)
+                            .frame(width: geometry.size.width * 0.75, height: geometry.size.width * 0.75)
+                            .position(x: geometry.size.width / 2, y: geometry.size.height * 0.4)
+                        
+                        // 内圈
+                        Circle()
+                            .stroke(Color.gray.opacity(0.015), lineWidth: 1)
+                            .frame(width: geometry.size.width * 0.55, height: geometry.size.width * 0.55)
+                            .position(x: geometry.size.width / 2, y: geometry.size.height * 0.4)
+                        
+                        // 偏心小圆（模拟行星轨道）
+                        Circle()
+                            .stroke(Color.gray.opacity(0.02), lineWidth: 0.5)
+                            .frame(width: 80, height: 80)
+                            .position(x: geometry.size.width * 0.85, y: geometry.size.height * 0.15)
+                        
+                        // 柔和连接线
+                        Path { path in
+                            path.move(to: CGPoint(x: geometry.size.width * 0.1, y: geometry.size.height * 0.25))
+                            path.addCurve(
+                                to: CGPoint(x: geometry.size.width * 0.9, y: geometry.size.height * 0.55),
+                                control1: CGPoint(x: geometry.size.width * 0.3, y: geometry.size.height * 0.35),
+                                control2: CGPoint(x: geometry.size.width * 0.7, y: geometry.size.height * 0.45)
+                            )
+                        }
+                        .stroke(Color.gray.opacity(0.02), lineWidth: 0.5)
+                    }
+                }
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 28))
+        .shadow(color: Color.black.opacity(0.12), radius: 24, x: 0, y: 12)
+        .matchedGeometryEffect(id: "fortuneCard", in: fortuneNS)
+    }
+    
+    // MARK: - 自动触发逻辑
+    /// 检查今天是否第一次查看，如果是则自动展开食签
+    private func checkAndAutoExpandFortune() async {
+        // 获取今天的日期字符串
+        let today = getTodayDateString()
+        let lastShownDate = UserDefaults.standard.string(forKey: "last_fortune_shown_date")
+        
+        // 如果今天还没有展示过，自动展开
+        if lastShownDate != today {
+            // 延迟一点时间，让用户先看到页面加载完成
+            try? await Task.sleep(nanoseconds: 800_000_000) // 0.8秒
+            
+            await MainActor.run {
+                withAnimation(.interpolatingSpring(stiffness: 280, damping: 22)) {
+                    isFortuneExpanded = true
+                    hasShownToday = true
+                }
+                
+                // 记录今天已展示
+                UserDefaults.standard.set(today, forKey: "last_fortune_shown_date")
+                print("✨ 自动展开今日食签（首次查看）")
+            }
+        } else {
+            print("📌 今日食签已展示过，保持收起状态")
+        }
+    }
+    
+    /// 获取今天的日期字符串
+    private func getTodayDateString() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
     }
     
     // MARK: - 顶部筛选器 (与 LibraryView 同步)
@@ -377,6 +842,241 @@ struct GourmetMatchView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 40)
+    }
+}
+
+// MARK: - 加载中食签视图（星轨动画视觉暗示）
+struct LoadingFortuneView: View {
+    @State private var isAnimating = false
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            // 星轨动画
+            ZStack {
+                // 外圈轨道
+                Circle()
+                    .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                    .frame(width: 80, height: 80)
+                
+                // 中圈轨道
+                Circle()
+                    .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                    .frame(width: 60, height: 60)
+                
+                // 内圈轨道
+                Circle()
+                    .stroke(Color.gray.opacity(0.08), lineWidth: 1)
+                    .frame(width: 40, height: 40)
+                
+                // 流动的星点（外圈）
+                Circle()
+                    .fill(AppTheme.Colors.babyBlue.opacity(0.6))
+                    .frame(width: 6, height: 6)
+                    .offset(x: 40)
+                    .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                    .animation(
+                        Animation.linear(duration: 3)
+                            .repeatForever(autoreverses: false),
+                        value: isAnimating
+                    )
+                
+                // 流动的星点（中圈，反向）
+                Circle()
+                    .fill(AppTheme.Colors.babyBlue.opacity(0.4))
+                    .frame(width: 4, height: 4)
+                    .offset(x: 30)
+                    .rotationEffect(.degrees(isAnimating ? -360 : 0))
+                    .animation(
+                        Animation.linear(duration: 2)
+                            .repeatForever(autoreverses: false),
+                        value: isAnimating
+                    )
+                
+                // 中心太极卦象（简化版）
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1.5)
+                        .frame(width: 24, height: 24)
+                    
+                    // S曲线简化
+                    Path { path in
+                        path.move(to: CGPoint(x: 12, y: 4))
+                        path.addCurve(
+                            to: CGPoint(x: 12, y: 20),
+                            control1: CGPoint(x: 20, y: 8),
+                            control2: CGPoint(x: 4, y: 16)
+                        )
+                    }
+                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    .frame(width: 24, height: 24)
+                }
+                .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                .animation(
+                    Animation.linear(duration: 8)
+                        .repeatForever(autoreverses: false),
+                    value: isAnimating
+                )
+            }
+            .frame(width: 100, height: 100)
+            
+            // 加载文案
+            VStack(spacing: 8) {
+                Text("正在连接你的星盘，翻阅今日黄历...")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.lightText)
+                    .multilineTextAlignment(.center)
+                
+                // 动态省略号
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .fill(AppTheme.Colors.babyBlue.opacity(0.6))
+                            .frame(width: 4, height: 4)
+                            .opacity(isAnimating ? 1 : 0.3)
+                            .animation(
+                                Animation.easeInOut(duration: 0.5)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(index) * 0.15),
+                                value: isAnimating
+                            )
+                    }
+                }
+            }
+        }
+        .onAppear {
+            isAnimating = true
+        }
+        .onDisappear {
+            isAnimating = false
+        }
+    }
+}
+
+// MARK: - 高亮文本组件
+/// 自动检测并高亮关键词的文本视图
+struct HighlightedText: View {
+    let text: String
+    let highlightWords: [String]
+    let font: Font
+    var tracking: CGFloat = 0
+    var isItalic: Bool = false
+    
+    // 小红书红
+    private let xiaohongshuRed = Color(hex: "#FF2442")
+    
+    var body: some View {
+        // 使用计算属性构建高亮文本
+        highlightedAttributedStringView
+    }
+    
+    private var highlightedAttributedStringView: some View {
+        let attributedString = buildHighlightedAttributedString()
+        return Text(attributedString)
+            .tracking(tracking)
+            .italic(isItalic)
+    }
+    
+    private func buildHighlightedAttributedString() -> AttributedString {
+        var attributedString = AttributedString(text)
+        attributedString.font = font
+        attributedString.foregroundColor = AppTheme.Colors.darkText
+        
+        // 遍历所有关键词，高亮匹配的部分
+        for word in highlightWords {
+            if word.isEmpty { continue }
+            
+            // 查找所有匹配位置
+            var searchRange = attributedString.startIndex..<attributedString.endIndex
+            while let range = attributedString[searchRange].range(of: word) {
+                // 应用高亮样式
+                attributedString[range].foregroundColor = xiaohongshuRed
+                attributedString[range].font = font.weight(.bold)
+                
+                // 更新搜索范围，避免死循环
+                if range.upperBound >= attributedString.endIndex {
+                    break
+                }
+                searchRange = range.upperBound..<attributedString.endIndex
+            }
+        }
+        
+        return attributedString
+    }
+}
+
+// MARK: - 高亮文本组件（支持 Emoji 跳动动画）
+struct HighlightedTextWithEmoji: View {
+    let text: String
+    let highlightWords: [String]
+    let font: Font
+    var tracking: CGFloat = 0
+    var isItalic: Bool = false
+    
+    // 小红书红
+    private let xiaohongshuRed = Color(hex: "#FF2442")
+    
+    // 检测文本末尾是否有 Emoji
+    private var hasTrailingEmoji: Bool {
+        guard let lastChar = text.last else { return false }
+        return lastChar.isEmoji
+    }
+    
+    // 分离文本和末尾 Emoji
+    private var textWithoutEmoji: String {
+        guard hasTrailingEmoji else { return text }
+        return String(text.dropLast())
+    }
+    
+    private var trailingEmoji: String? {
+        guard hasTrailingEmoji else { return nil }
+        return String(text.last!)
+    }
+    
+    var body: some View {
+        HStack(spacing: 2) {
+            // 主文本（带高亮）
+            HighlightedText(
+                text: textWithoutEmoji,
+                highlightWords: highlightWords,
+                font: font,
+                tracking: tracking,
+                isItalic: isItalic
+            )
+            
+            // 末尾 Emoji（带跳动动画）
+            if let emoji = trailingEmoji {
+                Text(emoji)
+                    .font(font)
+                    .offset(y: 0)
+                    .animation(
+                        Animation.easeInOut(duration: 0.6)
+                            .repeatForever(autoreverses: true),
+                        value: true
+                    )
+                    .onAppear {
+                        // 触发跳动动画
+                        withAnimation(
+                            Animation.easeInOut(duration: 0.6)
+                                .repeatForever(autoreverses: true)
+                        ) {
+                            // 动画通过 offset 实现
+                        }
+                    }
+            }
+        }
+    }
+}
+
+// MARK: - Character 扩展：检测 Emoji
+extension Character {
+    var isEmoji: Bool {
+        // 简单的 Emoji 检测：检查 Unicode 范围
+        let scalar = unicodeScalars.first!
+        return scalar.properties.isEmoji || (scalar.value >= 0x1F600 && scalar.value <= 0x1F64F) || // 表情符号
+               (scalar.value >= 0x1F300 && scalar.value <= 0x1F5FF) || // 杂项符号和象形文字
+               (scalar.value >= 0x1F680 && scalar.value <= 0x1F6FF) || // 交通和地图符号
+               (scalar.value >= 0x2600 && scalar.value <= 0x26FF) ||   // 杂项符号
+               (scalar.value >= 0x2700 && scalar.value <= 0x27BF)      // 装饰符号
     }
 }
 

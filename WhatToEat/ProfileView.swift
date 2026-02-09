@@ -65,6 +65,10 @@ struct ProfileView: View {
                         timelineSection
                             .padding(.top, AppTheme.Card.spacingSmall)
 
+                        // Phase 3.5: 味蕾星盘设定
+                        zodiacSettingSection
+                            .padding(.top, AppTheme.Card.spacingSmall)
+
                         // Phase 4: 工具箱、安全与隐私
                         milkyToolList
                             .padding(.top, AppTheme.Card.spacingSmall)
@@ -747,6 +751,72 @@ struct ProfileView: View {
         }
     }
     
+    // MARK: - Phase 3.5: 味蕾星盘设定
+    private var zodiacSettingSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // 标题
+            Text("味蕾星盘设定")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
+                .tracking(1.5)
+            
+            // DatePicker 控件
+            HStack {
+                Text("生辰")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                
+                Spacer()
+                
+                // 使用极简 DatePicker（仅显示日期）
+                DatePicker(
+                    "",
+                    selection: Binding(
+                        get: { ZodiacUtil.loadBirthDate() ?? Date() },
+                        set: { newDate in
+                            ZodiacUtil.saveBirthDate(newDate)
+                        }
+                    ),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.compact)
+                .colorMultiply(AppTheme.Colors.darkText)
+                .labelsHidden()
+            }
+            
+            // 显示当前星座（如果有）
+            if let zodiac = ZodiacUtil.loadZodiacSign() {
+                HStack {
+                    Text("星座")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                    
+                    Spacer()
+                    
+                    Text(zodiac)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.babyBlue)
+                }
+            }
+            
+            // 引导文案
+            Text("生辰仅用于解析每日食签，由 AI 结合星座与黄历算法驱动。")
+                .font(.system(size: 12, design: .rounded))
+                .foregroundColor(AppTheme.Colors.lightText)
+                .lineLimit(2)
+        }
+        .padding(AppTheme.Card.paddingHorizontal)
+        .padding(.vertical, AppTheme.Card.paddingVertical)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(AppTheme.Colors.babyBlue.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(AppTheme.Colors.babyBlue.opacity(0.5), lineWidth: 0.5)
+        )
+    }
+
     // MARK: - Phase 4: Milky Tool List (Editorial List - 奶脂化定制)
     private var milkyToolList: some View {
         VStack(alignment: .leading, spacing: 0) {
