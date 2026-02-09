@@ -94,10 +94,20 @@ struct InlineCommentInput: UIViewRepresentable {
         inputTextView.backgroundColor = UIColor.clear
         inputTextView.isScrollEnabled = true
         inputTextView.showsVerticalScrollIndicator = false
-        inputTextView.textContainerInset = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+        inputTextView.textContainerInset = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 36) // 右侧留出清除按钮空间
         inputTextView.returnKeyType = .send
         inputTextView.translatesAutoresizingMaskIntoConstraints = false
         inputContainer.addSubview(inputTextView)
+        
+        // 创建清除按钮（仿照 UITextField 的 clearButtonMode）
+        let clearButton = UIButton(type: .system)
+        clearButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        clearButton.tintColor = UIColor.placeholderText
+        clearButton.alpha = 0  // 初始隐藏
+        clearButton.translatesAutoresizingMaskIntoConstraints = false
+        clearButton.addTarget(context.coordinator, action: #selector(Coordinator.handleClearButtonTapped), for: .touchUpInside)
+        inputContainer.addSubview(clearButton)
+        context.coordinator.clearButton = clearButton
         
         // 设置约束
         NSLayoutConstraint.activate([
@@ -111,7 +121,13 @@ struct InlineCommentInput: UIViewRepresentable {
             inputTextView.topAnchor.constraint(equalTo: inputContainer.topAnchor, constant: 4),
             inputTextView.bottomAnchor.constraint(equalTo: inputContainer.bottomAnchor, constant: -4),
             inputTextView.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
-            inputTextView.heightAnchor.constraint(lessThanOrEqualToConstant: 80)
+            inputTextView.heightAnchor.constraint(lessThanOrEqualToConstant: 80),
+            
+            // 清除按钮约束 - 垂直居中，右侧对齐
+            clearButton.centerYAnchor.constraint(equalTo: inputContainer.centerYAnchor),
+            clearButton.trailingAnchor.constraint(equalTo: inputContainer.trailingAnchor, constant: -8),
+            clearButton.widthAnchor.constraint(equalToConstant: 24),
+            clearButton.heightAnchor.constraint(equalToConstant: 24)
         ])
         
         // 保存引用
@@ -128,6 +144,7 @@ struct InlineCommentInput: UIViewRepresentable {
         weak var textView: UITextView?
         weak var inputContainer: UIView?
         weak var accessoryContainer: UIView?
+        weak var clearButton: UIButton?  // 清除按钮引用
         
         // 草稿文本（只在 inputAccessoryView 中编辑）
         private var draftText: String = ""
@@ -136,6 +153,28 @@ struct InlineCommentInput: UIViewRepresentable {
             self.parent = parent
             // 初始化草稿为当前外部文本
             self.draftText = parent.text
+        }
+        
+        // MARK: - 清除按钮处理
+        @objc func handleClearButtonTapped() {
+            guard let inputTextView = inputTextView else { return }
+            
+            // 清空输入框
+            inputTextView.text = ""
+            draftText = ""
+            
+            // 隐藏清除按钮
+            updateClearButtonVisibility()
+        }
+        
+        // 更新清除按钮可见性
+        private func updateClearButtonVisibility() {
+            guard let clearButton = clearButton else { return }
+            
+            let hasText = !(inputTextView?.text ?? "").isEmpty
+            UIView.animate(withDuration: 0.2) {
+                clearButton.alpha = hasText ? 1.0 : 0.0
+            }
         }
         
         deinit {
@@ -193,6 +232,9 @@ struct InlineCommentInput: UIViewRepresentable {
         func textViewDidChange(_ textView: UITextView) {
             // 只更新草稿，不更新外部 text
             draftText = textView.text ?? ""
+            
+            // 更新清除按钮可见性
+            updateClearButtonVisibility()
             
             // 动态调整高度
             updateInputAccessoryViewHeight()
@@ -276,8 +318,24 @@ struct InlineCommentInputView: View {
         InlineCommentInput(text: $text, placeholder: placeholder, onSave: onSave, onEditingChanged: onEditingChanged)
             .frame(minHeight: 80, maxHeight: 120)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(AppTheme.Colors.softBackground)
+                ZStack {
+                    // 底部阴影层（营造立体感）
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.black.opacity(0.03))
+                        .offset(y: 2)
+                    
+                    // 主背景层
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppTheme.Colors.milkWhite)
+                    
+                    // 顶部高光（营造凸起感）
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.8), lineWidth: 1)
+                    
+                    // 内阴影效果
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.black.opacity(0.04), lineWidth: 0.5)
+                }
             )
     }
 }

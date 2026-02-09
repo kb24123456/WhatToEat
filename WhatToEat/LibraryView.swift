@@ -68,8 +68,8 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ZStack(alignment: .topLeading) {
-                // 最底层：奶白背景
-                Color(hex: "#fdf9f3")
+                // 最底层：全局背景色
+                AppTheme.Colors.pageBackground
                     .ignoresSafeArea()
                 
                 // 中间层：流体黑色弥散背景（置顶）
@@ -716,6 +716,8 @@ private struct RestaurantListView: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
+                        .padding(.horizontal, 16)  // 卡片与屏幕边缘间距
+                        .padding(.vertical, 6)     // 卡片之间间距，营造呼吸感
                     }
                 }
             }

@@ -70,7 +70,12 @@ struct RestaurantCard: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
-        .background(Color.clear)
+        .background(AppTheme.Colors.milkyBase)  // Misty White 雾白背景 #F7F8FA
+        // 极细边框增强轮廓感 - Misty Oreo 风格
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+        )
         .contentShape(Rectangle())
         .offset(y: isPressed ? -2 : 0)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isPressed)

@@ -64,6 +64,9 @@ struct AppTheme {
         // MARK: - LibraryView 专用
         static let milkWhite = Color(hex: "#fdf9f3")  // 奶白背景色
         
+        // MARK: - 全局背景色（中性灰白，所有视图统一使用）
+        static let pageBackground = Color(hex: "#f9f9f7")  // 全局页面背景色
+        
         // MARK: - 语义化补齐
         /// 破坏性颜色，用于删除、取消等警示操作
         static let destructive = Color(hex: "#FF3B30")

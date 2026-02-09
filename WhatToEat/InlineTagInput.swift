@@ -4,7 +4,7 @@ import Combine
 // MARK: - 内联标签输入框
 /// 实现小红书风格的标签输入体验
 /// 核心逻辑：
-/// 1. 页面显示"新标签..."placeholder
+/// 1. 页面显示"新标签..."placeholder（使用 UITextView，与 InlineCommentInput 统一）
 /// 2. 点击后弹出键盘，inputAccessoryView 作为输入区域
 /// 3. 编辑内容只在 inputAccessoryView 中，不显示在页面上
 /// 4. 点击"完成"才添加标签；点击"返回"不添加，但保留草稿供下次编辑
@@ -14,41 +14,48 @@ struct InlineTagInput: UIViewRepresentable {
     var onSubmit: (() -> Void)? = nil
     var onEditingChanged: ((Bool) -> Void)? = nil
     
-    func makeUIView(context: Context) -> UITextField {
-        let textField = UITextField()
-        textField.delegate = context.coordinator
-        textField.font = UIFont.systemFont(ofSize: 14)
-        textField.backgroundColor = UIColor.clear
-        textField.isEnabled = false  // 页面上的输入框只读
-        textField.textAlignment = .left
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.delegate = context.coordinator
+        textView.font = UIFont.systemFont(ofSize: 14)
+        textView.backgroundColor = UIColor.clear
+        textView.layer.cornerRadius = 16
+        textView.textContainerInset = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+        textView.isScrollEnabled = false
+        textView.isEditable = false  // 页面上的文本视图只读
+        textView.isSelectable = false
         
         // 保存引用
-        context.coordinator.textField = textField
+        context.coordinator.textView = textView
         
-        // 页面上的 UITextField 始终显示 placeholder
-        textField.text = ""
-        textField.placeholder = placeholder
-        textField.textColor = UIColor.placeholderText
+        // 设置初始显示
+        updatePageDisplay(textView: textView)
         
         // 创建 inputAccessoryView
         let accessoryView = createInputAccessoryView(context: context)
-        textField.inputAccessoryView = accessoryView
+        textView.inputAccessoryView = accessoryView
         
         // 添加点击手势
         let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap))
-        textField.addGestureRecognizer(tapGesture)
+        textView.addGestureRecognizer(tapGesture)
         
         // 注册键盘通知
         context.coordinator.registerKeyboardNotifications()
         
-        return textField
+        return textView
     }
     
-    func updateUIView(_ uiView: UITextField, context: Context) {
-        // 页面上的 UITextField 始终显示 placeholder，不显示实际内容
-        uiView.text = ""
-        uiView.placeholder = placeholder
-        uiView.textColor = UIColor.placeholderText
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        // 只有在非编辑状态下才更新页面显示
+        if !uiView.isFirstResponder {
+            updatePageDisplay(textView: uiView)
+        }
+    }
+    
+    private func updatePageDisplay(textView: UITextView) {
+        // 页面始终显示 placeholder，不显示实际内容
+        textView.text = placeholder
+        textView.textColor = UIColor.placeholderText
     }
     
     func makeCoordinator() -> Coordinator {
@@ -72,7 +79,7 @@ struct InlineTagInput: UIViewRepresentable {
         inputContainer.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(inputContainer)
         
-        // 创建单行输入框
+        // 创建单行输入框（UITextField）
         let inputTextField = UITextField()
         inputTextField.delegate = context.coordinator
         inputTextField.font = UIFont.systemFont(ofSize: 16)
@@ -81,7 +88,6 @@ struct InlineTagInput: UIViewRepresentable {
         inputTextField.placeholder = placeholder
         inputTextField.returnKeyType = .done
         inputTextField.clearButtonMode = .whileEditing
-        inputTextField.text = ""  // 初始清空，草稿在 Coordinator 中管理
         inputTextField.translatesAutoresizingMaskIntoConstraints = false
         inputContainer.addSubview(inputTextField)
         
@@ -109,10 +115,10 @@ struct InlineTagInput: UIViewRepresentable {
         return container
     }
     
-    class Coordinator: NSObject, UITextFieldDelegate {
+    class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate {
         var parent: InlineTagInput
         weak var inputTextField: UITextField?  // inputAccessoryView 中的输入框
-        weak var textField: UITextField?       // 页面上的 UITextField
+        weak var textView: UITextView?         // 页面上的文本视图
         weak var inputContainer: UIView?       // 输入框容器
         weak var accessoryContainer: UIView?   // 整个 accessoryView 容器
         
@@ -154,15 +160,14 @@ struct InlineTagInput: UIViewRepresentable {
         
         @objc func keyboardWillHide(_ notification: Notification) {
             inputTextField?.resignFirstResponder()
-            textField?.resignFirstResponder()
+            textView?.resignFirstResponder()
             parent.onEditingChanged?(false)
         }
         
         @objc func handleTap() {
-            textField?.becomeFirstResponder()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.inputTextField?.becomeFirstResponder()
-            }
+            // 直接让 inputAccessoryView 的输入框成为第一响应者
+            // 避免让 textView 成为第一响应者，防止触发系统键盘避让
+            inputTextField?.becomeFirstResponder()
         }
         
         // MARK: - UITextFieldDelegate (inputAccessoryView 中的输入框)
@@ -205,7 +210,7 @@ struct InlineTagInput: UIViewRepresentable {
             
             // 退出键盘
             inputTextField.resignFirstResponder()
-            textField?.resignFirstResponder()
+            textView?.resignFirstResponder()
         }
     }
 }

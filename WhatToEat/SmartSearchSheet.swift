@@ -536,6 +536,17 @@ struct SmartSearchSheet: View {
     private func inferCategoryFromName(_ name: String) -> String {
         let lowerName = name.lowercased()
         
+        // 烧烤/烤肉关键词识别（优先检查，避免被归类为"特色餐厅"）
+        let bbqKeywords = [
+            "烧烤", "烤肉", "烤串", "炭烤", "炭火", "烤吧", "烤场",
+            "bbq", "barbecue", "grill", "串吧", "串店", "烤羊", "烤牛"
+        ]
+        for keyword in bbqKeywords {
+            if lowerName.contains(keyword) {
+                return "烧烤"
+            }
+        }
+        
         // 咖啡品牌识别
         let coffeeBrands = [
             "starbucks", "starbuck", "瑞幸", "luckin", "manner",
@@ -795,31 +806,20 @@ struct SmartSearchSheet: View {
             selectPlace(identifiableItem)
         } label: {
             HStack(spacing: 12) {
-                // 图标
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: "#F5F3F0"))
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: iconForCategory(category))
-                        .font(.system(size: 18))
-                        .foregroundColor(colorForCategory(category))
-                }
-                
-                // 信息
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
+                // 信息（移除图标，放大字体）
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
                         Text(name)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(Color(hex: "#1A1A1A"))
                         
-                        // 智能识别标签
+                        // 智能识别标签（放大）
                         if isAutoMatched {
                             Text(category)
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(Color(hex: "#FF6B6B"))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
                                 .background(
                                     Capsule()
                                         .fill(Color(hex: "#FFF0F0"))
@@ -830,7 +830,7 @@ struct SmartSearchSheet: View {
                     
                     if !address.isEmpty {
                         Text(address)
-                            .font(.system(size: 13))
+                            .font(.system(size: 14))
                             .foregroundColor(Color(hex: "#999999"))
                             .lineLimit(1)
                     }
@@ -844,7 +844,7 @@ struct SmartSearchSheet: View {
                     .foregroundColor(Color(hex: "#CCCCCC"))
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color.white)
@@ -928,16 +928,8 @@ struct SmartSearchSheet: View {
                 // 过滤并排序结果
                 let filteredResults = response.mapItems
                     .filter { item in
-                        // 过滤掉非餐饮类地点
-                        if let category = item.pointOfInterestCategory {
-                            let categoryString = String(describing: category)
-                            return categoryString.contains("restaurant") ||
-                                   categoryString.contains("food") ||
-                                   categoryString.contains("cafe") ||
-                                   categoryString.contains("bakery") ||
-                                   categoryString.contains("bar")
-                        }
-                        // 如果没有类别信息，保留结果让语义识别处理
+                        // 保留所有餐饮相关地点，不过滤
+                        // 让后续的 mapPOICategoryToOurCategory 和 inferCategoryFromName 来处理分类
                         return true
                     }
                     .sorted { a, b in

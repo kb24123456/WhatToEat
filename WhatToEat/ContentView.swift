@@ -77,7 +77,6 @@ struct ContentView: View {
                     }
                 })
                 .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
                 .presentationBackground(.white)
             }
 

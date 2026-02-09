@@ -105,7 +105,7 @@ struct CheckInView: View {
     
     // MARK: - Premium Soft UI Background
     private var backgroundOverlay: some View {
-        AppTheme.Colors.milkWhite
+        AppTheme.Colors.pageBackground
     }
     
     private var scrollContent: some View {
@@ -144,21 +144,12 @@ struct CheckInView: View {
                     .padding(.bottom, 20)
                     .padding(.horizontal, 50)
                 
-                moduleDivider
-                    .padding(.horizontal, 50)
-                
                 moodSelectorSection
                     .padding(.vertical, 16)
                     .padding(.horizontal, 50)
                 
-                moduleDivider
-                    .padding(.horizontal, 50)
-                
                 receiptSection
                     .padding(.vertical, 16)
-                    .padding(.horizontal, 50)
-                
-                moduleDivider
                     .padding(.horizontal, 50)
                 
                 tagsSection
@@ -231,12 +222,6 @@ struct CheckInView: View {
     }
     
     // MARK: - 模块分隔线
-    private var moduleDivider: some View {
-        Divider()
-            .background(Color.black.opacity(0.03))
-            .padding(.vertical, 8)
-    }
-    
     // MARK: - 心情模块（无背景）
     private var moodSelectorSection: some View {
         VStack(alignment: .leading, spacing: 12) {
