@@ -21,6 +21,12 @@ struct GourmetMatchView: View {
     // 震动反馈状态
     @State private var lastCenterIndex: Int = -1
     
+    // 当前中心卡片索引
+    @State private var currentCenterIndex: Int = 0
+    
+    // AI 文案管理器
+    @StateObject private var aiManager = AICopywritingManager.shared
+    
     // 筛选器数据
     private var districts: [String] {
         var districts = Array(Set(restaurants.map { $0.district })).sorted()
@@ -73,45 +79,51 @@ struct GourmetMatchView: View {
                     Spacer()
                 }
                 
-                // MARK: 空白区域引导文案
+                // MARK: 画报式文案展示区
                 // 位于筛选器和卡片之间的空白区域
-                VStack(spacing: 0) {
-                    // 装饰分隔线
-                    Rectangle()
-                        .fill(Color(hex: "E5E5E5"))
-                        .frame(width: 40, height: 2)
-                        .padding(.bottom, 40)
-                    
-                    // 主标题：选择困难症？不存在的
-                    VStack(spacing: 4) {
-                        Text("选择困难症？")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(Color(hex: "1A1A1A"))
+                // 上下各预留 32pt 留白，左侧对齐 24pt
+                VStack(alignment: .leading, spacing: 8) {
+                    // 判断是否显示加载占位
+                    if aiManager.isLoading && aiManager.sloganPool.isEmpty {
+                        // 加载占位文案
+                        Text(aiManager.getLoadingSlogan().title)
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.darkText)
+                            .tracking(1.5)
                         
-                        Text("不存在的")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(Color(hex: "1A1A1A"))
-                    }
-                    .padding(.bottom, 16)
-                    
-                    // 副标题：左右滑动一下，让美食自己找上门
-                    VStack(spacing: 2) {
-                        Text("左右滑动一下，")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(Color(hex: "666666"))
+                        Text(aiManager.getLoadingSlogan().subtitle)
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .italic()
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                    } else {
+                        // 主标题 - 使用动态切换动效
+                        Text(aiManager.getSlogan(for: currentCenterIndex).title)
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .foregroundColor(AppTheme.Colors.darkText)
+                            .tracking(1.5)
+                            .id("title_\(currentCenterIndex)") // 用于动效识别
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .move(edge: .top).combined(with: .opacity)
+                            ))
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: currentCenterIndex)
                         
-                        Text("让美食自己找上门")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(Color(hex: "666666"))
+                        // 副标题 - 斜体样式
+                        Text(aiManager.getSlogan(for: currentCenterIndex).subtitle)
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .italic()
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                            .id("subtitle_\(currentCenterIndex)") // 用于动效识别
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .move(edge: .top).combined(with: .opacity)
+                            ))
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: currentCenterIndex)
                     }
-                    .padding(.bottom, 32)
-                    
-                    // 引导箭头（动态效果）
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(Color(hex: "999999"))
-                        .opacity(0.6)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 24)
+                .padding(.vertical, 32)
                 .position(
                     x: geometry.size.width / 2,
                     y: (60 + 44 + 32 + screenMidY) / 2  // 筛选器底部和卡片顶部之间的中间位置
@@ -147,6 +159,20 @@ struct GourmetMatchView: View {
                     )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
+                }
+            }
+            // MARK: - 生命周期和状态监听
+            .onAppear {
+                // 加载本地缓存并触发第一次补货
+                Task {
+                    aiManager.loadFromLocal()
+                    await aiManager.checkAndRefillPool()
+                }
+            }
+            .onChange(of: currentCenterIndex) { _, _ in
+                // 卡片切换时检查是否需要补货
+                Task {
+                    await aiManager.checkAndRefillPool()
                 }
             }
         }
@@ -266,7 +292,7 @@ struct GourmetMatchView: View {
                                     selectedRestaurant = restaurant
                                 }
                             }
-                            // 检测是否滑动到中心，触发震动反馈
+                            // 检测是否滑动到中心，触发震动反馈和文案更新
                             .onGeometryChange(for: CGRect.self) { proxy in
                                 proxy.frame(in: .global)
                             } action: { frame in
@@ -275,10 +301,20 @@ struct GourmetMatchView: View {
                                 let distance = abs(screenCenterX - cardCenterX)
                                 
                                 // 如果距离中心小于阈值，认为是中心卡片
-                                if distance < 10 && lastCenterIndex != index {
-                                    lastCenterIndex = index
-                                    let generator = UIImpactFeedbackGenerator(style: .light)
-                                    generator.impactOccurred()
+                                if distance < 10 {
+                                    // 更新当前中心索引（带动画）
+                                    if currentCenterIndex != index {
+                                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                            currentCenterIndex = index
+                                        }
+                                    }
+                                    
+                                    // 触发震动反馈（只触发一次）
+                                    if lastCenterIndex != index {
+                                        lastCenterIndex = index
+                                        let generator = UIImpactFeedbackGenerator(style: .light)
+                                        generator.impactOccurred()
+                                    }
                                 }
                             }
                         }
