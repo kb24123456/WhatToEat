@@ -117,16 +117,14 @@ struct AddRestaurantView: View {
                         .transition(.scale.combined(with: .opacity))
                 }
                 
-                // 评论输入时的高斯模糊效果
+                // 评论输入时的页面变暗效果（替代高斯模糊，零GPU开销）
                 if isCommentEditing {
-                    Color.black.opacity(0.01)  // 几乎透明的黑色，用于捕获点击
-                        .ignoresSafeArea()
-                        .background(.ultraThinMaterial)  // 高斯模糊效果
+                    Color.black.opacity(0.15)  // 15%黑色遮罩，视觉聚焦
                         .ignoresSafeArea()
                         .opacity(isCommentEditing ? 1 : 0)  // 平滑透明度过渡
-                        .animation(.linear(duration: 0.8), value: isCommentEditing)  // 0.8秒线性动画，均匀过渡
+                        .animation(.easeInOut(duration: 0.25), value: isCommentEditing)  // 0.25秒动画，更轻快
                         .onTapGesture {
-                            // 点击模糊区域退出键盘
+                            // 点击遮罩区域退出键盘
                             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         }
                 }
@@ -501,7 +499,7 @@ struct AddRestaurantView: View {
                 .frame(width: 40, height: 40)
                 .background(
                     Circle()
-                        .fill(.ultraThinMaterial)
+                        .fill(Color.white.opacity(0.9))  // 纯色替代高斯模糊
                         .overlay(
                             Circle()
                                 .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
@@ -727,12 +725,15 @@ struct AddRestaurantView: View {
         .buttonStyle(PlainButtonStyle())
     }
     
-    // MARK: - 新标签输入框（带透明 inputAccessoryView）
+    // MARK: - 新标签输入框（使用 InlineTagInput，与评论输入同款）
     private var newTagInputField: some View {
-        NewTagInputWithAccessoryView(
+        InlineTagInputView(
             text: $newTagInput,
-            isEditing: $isEditingTags,
-            onSubmit: addNewTag
+            placeholder: "新标签...",
+            onSubmit: addNewTag,
+            onEditingChanged: { isEditing in
+                // 可以在这里处理编辑状态变化
+            }
         )
     }
 
@@ -1290,84 +1291,24 @@ struct RatingItem {
     let slang: String
 }
 
-// MARK: - 新标签输入组件（带透明 inputAccessoryView）
-struct NewTagInputWithAccessoryView: View {
-    @Binding var text: String
-    @Binding var isEditing: Bool
-    let onSubmit: () -> Void
+// MARK: - 按压事件修饰符
+struct PressEventsModifier: ViewModifier {
+    var onPress: () -> Void
+    var onRelease: () -> Void
     
-    @FocusState private var isFocused: Bool
-    @State private var showInputBar = false
-    
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            // 输入框
-            TextField("新标签...", text: $text)
-                .font(.system(size: 14, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .focused($isFocused)
-                .frame(minWidth: 80)
-                .submitLabel(.done)
-                .onSubmit {
-                    onSubmit()
-                }
-                .onChange(of: isFocused) { _, focused in
-                    showInputBar = focused
-                }
-            
-            // Baby Blue 细底线
-            Rectangle()
-                .fill(AppTheme.Colors.babyBlue.opacity(0.5))
-                .frame(height: 1)
-        }
-        .overlay(
-            // 自定义 inputAccessoryView
-            Group {
-                if showInputBar {
-                    VStack {
-                        Spacer()
-                        
-                        HStack {
-                            Spacer()
-                            
-                            // 输入胶囊 - 宽度为屏幕1/3
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.Colors.babyBlue)
-                                
-                                Text(text.isEmpty ? "新标签" : text)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(text.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.darkText)
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(
-                                Capsule()
-                                    .fill(Color.white)
-                                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                            )
-                            .frame(width: UIScreen.main.bounds.width / 3)
-                            
-                            Spacer()
-                        }
-                        .padding(.bottom, 8)
-                        .background(Color.clear) // 彻底透明背景
-                    }
-                    .transition(.move(edge: .bottom))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showInputBar)
-                }
-            }
-        )
-        .onAppear {
-            // 自动聚焦
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isFocused = true
-            }
-        }
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in onPress() }
+                    .onEnded { _ in onRelease() }
+            )
+    }
+}
+
+extension View {
+    func pressEvents(onPress: @escaping () -> Void, onRelease: @escaping () -> Void) -> some View {
+        modifier(PressEventsModifier(onPress: onPress, onRelease: onRelease))
     }
 }
 
@@ -1443,27 +1384,6 @@ struct DockItemView: View {
     // 选中态背景色：3-5分使用小红书红
     private var glowColor: Color {
         item.score <= 2 ? Color.gray.opacity(0.12) : AppTheme.Colors.xhsRed.opacity(0.15)
-    }
-}
-
-// MARK: - 按压事件修饰符
-struct PressEventsModifier: ViewModifier {
-    var onPress: () -> Void
-    var onRelease: () -> Void
-    
-    func body(content: Content) -> some View {
-        content
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in onPress() }
-                    .onEnded { _ in onRelease() }
-            )
-    }
-}
-
-extension View {
-    func pressEvents(onPress: @escaping () -> Void, onRelease: @escaping () -> Void) -> some View {
-        modifier(PressEventsModifier(onPress: onPress, onRelease: onRelease))
     }
 }
 

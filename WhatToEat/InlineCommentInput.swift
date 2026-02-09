@@ -3,12 +3,19 @@ import Combine
 
 // MARK: - 内联评论输入框
 /// 实现小红书风格的评论输入体验
-/// 页面显示已有评语，点击后弹出键盘，inputAccessoryView 作为输入区域（支持多行）
+/// 核心逻辑：
+/// 1. 页面显示已有评语（或placeholder）
+/// 2. 点击后弹出键盘，inputAccessoryView 作为输入区域
+/// 3. 编辑内容只在 inputAccessoryView 中，不实时同步到页面
+/// 4. 点击"发送"才保存到页面；点击"返回"不保存，但保留草稿供下次编辑
 struct InlineCommentInput: UIViewRepresentable {
     @Binding var text: String
     var placeholder: String = "点击添加点评..."
     var onSave: (() -> Void)? = nil
-    var onEditingChanged: ((Bool) -> Void)? = nil  // 编辑状态变化回调
+    var onEditingChanged: ((Bool) -> Void)? = nil
+    
+    // 草稿文本（内部状态，不暴露给外部）
+    @State private var draftText: String = ""
     
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
@@ -24,18 +31,11 @@ struct InlineCommentInput: UIViewRepresentable {
         // 保存引用
         context.coordinator.textView = textView
         
-        // 设置初始文本
-        let initialText = text
-        if initialText.isEmpty {
-            textView.text = placeholder
-            textView.textColor = UIColor.placeholderText
-        } else {
-            textView.text = initialText
-            textView.textColor = UIColor.label
-        }
+        // 设置初始显示（显示外部 text 或 placeholder）
+        updatePageDisplay(textView: textView)
         
         // 创建 inputAccessoryView
-        let accessoryView = createInputAccessoryView(context: context, initialText: initialText)
+        let accessoryView = createInputAccessoryView(context: context)
         textView.inputAccessoryView = accessoryView
         
         // 添加点击手势
@@ -49,21 +49,19 @@ struct InlineCommentInput: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UITextView, context: Context) {
+        // 只有在非编辑状态下才更新页面显示
         if !uiView.isFirstResponder {
-            let currentText = uiView.text ?? ""
-            let expectedText = text.isEmpty ? placeholder : text
-            
-            if currentText != expectedText {
-                uiView.text = expectedText
-                uiView.textColor = text.isEmpty ? UIColor.placeholderText : UIColor.label
-            }
+            updatePageDisplay(textView: uiView)
         }
-        
-        // 同步更新 inputAccessoryView 中的文本
-        if let inputTextView = context.coordinator.inputTextView {
-            if inputTextView.text != text {
-                inputTextView.text = text
-            }
+    }
+    
+    private func updatePageDisplay(textView: UITextView) {
+        if text.isEmpty {
+            textView.text = placeholder
+            textView.textColor = UIColor.placeholderText
+        } else {
+            textView.text = text
+            textView.textColor = UIColor.label
         }
     }
     
@@ -71,24 +69,24 @@ struct InlineCommentInput: UIViewRepresentable {
         Coordinator(self)
     }
     
-    private func createInputAccessoryView(context: Context, initialText: String) -> UIView {
+    private func createInputAccessoryView(context: Context) -> UIView {
         // 创建容器视图 - 全透明背景
         let container = UIView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 70))
-        container.backgroundColor = UIColor.clear  // 全透明
+        container.backgroundColor = UIColor.clear
         container.clipsToBounds = true
         
         // 创建输入框容器 - 胶囊样式
         let inputContainer = UIView()
-        inputContainer.backgroundColor = UIColor.systemBackground  // 输入框保持白色背景
+        inputContainer.backgroundColor = UIColor.systemBackground
         inputContainer.layer.cornerRadius = 22
         inputContainer.layer.shadowColor = UIColor.black.cgColor
         inputContainer.layer.shadowOffset = CGSize(width: 0, height: 2)
         inputContainer.layer.shadowRadius = 8
-        inputContainer.layer.shadowOpacity = 0.15  // 增加阴影让胶囊更突出
+        inputContainer.layer.shadowOpacity = 0.15
         inputContainer.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(inputContainer)
         
-        // 创建多行输入框（UITextView 替代 UITextField）
+        // 创建多行输入框
         let inputTextView = UITextView()
         inputTextView.delegate = context.coordinator
         inputTextView.font = UIFont.systemFont(ofSize: 16)
@@ -97,8 +95,7 @@ struct InlineCommentInput: UIViewRepresentable {
         inputTextView.isScrollEnabled = true
         inputTextView.showsVerticalScrollIndicator = false
         inputTextView.textContainerInset = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
-        inputTextView.returnKeyType = .send  // 回车键显示"发送"
-        inputTextView.text = initialText.isEmpty ? "" : initialText
+        inputTextView.returnKeyType = .send
         inputTextView.translatesAutoresizingMaskIntoConstraints = false
         inputContainer.addSubview(inputTextView)
         
@@ -127,13 +124,18 @@ struct InlineCommentInput: UIViewRepresentable {
     
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: InlineCommentInput
-        weak var inputTextView: UITextView?  // inputAccessoryView 中的输入框
-        weak var textView: UITextView?       // 页面上的文本视图
-        weak var inputContainer: UIView?     // 输入框容器
-        weak var accessoryContainer: UIView? // 整个 accessoryView 容器
+        weak var inputTextView: UITextView?
+        weak var textView: UITextView?
+        weak var inputContainer: UIView?
+        weak var accessoryContainer: UIView?
+        
+        // 草稿文本（只在 inputAccessoryView 中编辑）
+        private var draftText: String = ""
         
         init(_ parent: InlineCommentInput) {
             self.parent = parent
+            // 初始化草稿为当前外部文本
+            self.draftText = parent.text
         }
         
         deinit {
@@ -162,24 +164,20 @@ struct InlineCommentInput: UIViewRepresentable {
         }
         
         @objc func keyboardWillShow(_ notification: Notification) {
-            // 通知外部键盘即将显示
             parent.onEditingChanged?(true)
         }
         
         @objc func keyboardWillHide(_ notification: Notification) {
-            // 当键盘即将收起时，确保所有输入框都退出第一响应者
             inputTextView?.resignFirstResponder()
             textView?.resignFirstResponder()
-            
-            // 通知外部键盘即将隐藏
             parent.onEditingChanged?(false)
         }
         
         @objc func handleTap() {
-            // 点击页面上的文本视图，让 inputAccessoryView 的输入框成为第一响应者
+            // 点击页面上的文本视图，准备编辑
             textView?.becomeFirstResponder()
             
-            // 然后让 inputTextView 成为第一响应者
+            // 延迟后让 inputTextView 成为第一响应者并设置草稿文本
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 self.inputTextView?.becomeFirstResponder()
             }
@@ -187,21 +185,14 @@ struct InlineCommentInput: UIViewRepresentable {
         
         // MARK: - UITextViewDelegate (inputAccessoryView 中的输入框)
         func textViewDidBeginEditing(_ textView: UITextView) {
-            // 设置初始文本
-            let currentText = parent.text
-            if !currentText.isEmpty {
-                textView.text = currentText
-            }
+            // 设置草稿文本到 inputAccessoryView
+            // 如果有草稿就显示草稿，否则显示外部文本
+            textView.text = draftText
         }
         
         func textViewDidChange(_ textView: UITextView) {
-            // 实时更新文本
-            let newText = textView.text ?? ""
-            parent.text = newText
-            
-            // 同步更新页面上的文本视图
-            self.textView?.text = newText.isEmpty ? parent.placeholder : newText
-            self.textView?.textColor = newText.isEmpty ? UIColor.placeholderText : UIColor.label
+            // 只更新草稿，不更新外部 text
+            draftText = textView.text ?? ""
             
             // 动态调整高度
             updateInputAccessoryViewHeight()
@@ -217,18 +208,8 @@ struct InlineCommentInput: UIViewRepresentable {
         }
         
         func textViewDidEndEditing(_ textView: UITextView) {
-            // 同步最终文本
-            let finalText = textView.text ?? ""
-            parent.text = finalText
-            
-            // 更新页面显示
-            if finalText.isEmpty {
-                self.textView?.text = parent.placeholder
-                self.textView?.textColor = UIColor.placeholderText
-            } else {
-                self.textView?.text = finalText
-                self.textView?.textColor = UIColor.label
-            }
+            // 编辑结束，但不保存草稿到外部
+            // 草稿保留在 draftText 中，供下次编辑使用
         }
         
         // MARK: - 动态调整高度
@@ -236,20 +217,16 @@ struct InlineCommentInput: UIViewRepresentable {
             guard let inputTextView = inputTextView,
                   let accessoryContainer = accessoryContainer else { return }
             
-            // 计算文本高度
             let fixedWidth = inputTextView.frame.width
             let newSize = inputTextView.sizeThatFits(CGSize(width: fixedWidth, height: CGFloat.greatestFiniteMagnitude))
             let textHeight = newSize.height
             
-            // 计算新的容器高度（最小70，最大120）
-            let newHeight = min(max(textHeight + 28, 70), 120)  // 28 = 上下padding 12*2 + 容器间距
+            let newHeight = min(max(textHeight + 28, 70), 120)
             
-            // 更新容器高度
             var frame = accessoryContainer.frame
             frame.size.height = newHeight
             accessoryContainer.frame = frame
             
-            // 更新圆角遮罩
             let cornerRadius: CGFloat = 16
             let maskLayer = CAShapeLayer()
             let path = UIBezierPath(
@@ -265,11 +242,11 @@ struct InlineCommentInput: UIViewRepresentable {
         private func handleSendAction() {
             guard let inputTextView = inputTextView else { return }
             
-            // 获取最终文本
-            let finalText = inputTextView.text ?? ""
+            // 保存草稿到外部 text
+            let finalText = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
             parent.text = finalText
             
-            // 更新页面文本视图
+            // 更新页面显示
             if finalText.isEmpty {
                 textView?.text = parent.placeholder
                 textView?.textColor = UIColor.placeholderText
