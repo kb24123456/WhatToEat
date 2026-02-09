@@ -1,0 +1,317 @@
+# SwiftUI 动画性能与能效优化指南 (Expert Standard)
+
+## 核心哲学
+
+SwiftUI 动画的"丝滑感"来自于 60/120 FPS 的稳定输出。发热和卡顿通常不是因为动效太复杂，而是因为主线程的无效计算重绘和 GPU 的离屏渲染压力。
+
+---
+
+## 🔍 TRAE 必须执行的四大核心准则
+
+### 1. 视图局部化与颗粒度控制 (Body Isolation)
+
+**【现象】**：修改一个状态导致整个页面重绘。
+
+**【准则】**：
+
+- [ ] **状态下放**：严禁在父视图（如主 TabView 或 List 容器）中放置频繁变动的动画状态。
+- [ ] **组件拆分**：将动画组件封装在独立的 struct 中。只有受状态影响的"最小单元"才应该重新运行 body。
+- [ ] **显式传参**：向子视图传递基础类型（Bool, Double）而非整个大对象的引用，减少依赖追踪开销。
+
+**示例**：
+
+```swift
+// ❌ 错误：动画状态在父视图中
+struct ParentView: View {
+    @State private var isExpanded = false  // 动画状态在父视图
+    
+    var body: some View {
+        VStack {
+            // 整个 VStack 都会重绘
+            ChildView(isExpanded: $isExpanded)
+        }
+    }
+}
+
+// ✅ 正确：动画状态下放到子视图
+struct ParentView: View {
+    var body: some View {
+        VStack {
+            ExpandableCard()  // 动画状态封装在内部
+        }
+    }
+}
+
+struct ExpandableCard: View {
+    @State private var isExpanded = false  // 状态下放
+    
+    var body: some View {
+        // 只有这个视图重绘
+        Rectangle()
+            .scaleEffect(isExpanded ? 1.2 : 1.0)
+    }
+}
+```
+
+---
+
+### 2. 禁止在 body 中进行任何计算 (No-Logic Body)
+
+**【现象】**：动画执行时 CPU 占用率飙升，风扇狂转。
+
+**【准则】**：
+
+- [ ] **零逻辑计算**：body 内严禁进行 filter, sort, map, DateFormatter 或复杂的数学运算。
+- [ ] **预计算状态**：所有动画所需的位移（Offset）、缩放（Scale）数值应提前在 ViewModel 中计算好，或通过计算属性（Computed Property）缓存，body 只做赋值。
+
+**示例**：
+
+```swift
+// ❌ 错误：在 body 中进行计算
+struct BadView: View {
+    @State private var items: [Item] = []
+    @State private var progress: Double = 0
+    
+    var body: some View {
+        // 每次重绘都执行 filter 和计算
+        let filtered = items.filter { $0.isActive }.sorted { $0.score > $1.score }
+        let scale = 1.0 + (progress * 0.5)  // 实时计算
+        
+        return VStack {
+            ForEach(filtered) { item in
+                ItemView(item: item, scale: scale)
+            }
+        }
+    }
+}
+
+// ✅ 正确：预计算状态
+struct GoodView: View {
+    @StateObject private var viewModel = ViewModel()
+    
+    var body: some View {
+        // 只做赋值，无计算
+        VStack {
+            ForEach(viewModel.filteredItems) { item in
+                ItemView(item: item, scale: viewModel.calculatedScale)
+            }
+        }
+    }
+}
+
+class ViewModel: ObservableObject {
+    @Published var items: [Item] = []
+    @Published var progress: Double = 0
+    
+    // 计算属性缓存
+    var filteredItems: [Item] {
+        items.filter { $0.isActive }.sorted { $0.score > $1.score }
+    }
+    
+    var calculatedScale: Double {
+        1.0 + (progress * 0.5)
+    }
+}
+```
+
+---
+
+### 3. GPU 渲染加速 (Metal Optimization)
+
+**【现象】**：使用模糊、阴影或复杂形变时掉帧。
+
+**【准则】**：
+
+- [ ] **drawingGroup() 强制应用**：对于涉及复杂形变（如 Genie Effect、网格扭曲）、大量子视图渐变、或复杂绘图的组件，必须添加 `.drawingGroup()`。这会将渲染路径从 Core Animation 切换到 Metal GPU 纹理混合，性能提升 3-5 倍。
+- [ ] **compositingGroup() 与阴影优化**：在使用 .shadow 或 .opacity 前，先使用 `.compositingGroup()` 将子视图打组，防止 GPU 对每个子层级重复计算模糊和合成。
+- [ ] **尽量规避 GeometryReader**：除非必须获取坐标系，否则优先使用 `.visualEffect` (iOS 17+) 或布局容器。如果必须使用，确保其内部不嵌套复杂的 View 层级。
+
+**示例**：
+
+```swift
+// ❌ 错误：复杂形变无 GPU 优化
+struct ComplexAnimation: View {
+    @State private var isAnimating = false
+    
+    var body: some View {
+        VStack {
+            ForEach(0..<50) { i in
+                Circle()
+                    .scaleEffect(isAnimating ? 1.5 : 1.0)
+                    .rotationEffect(.degrees(isAnimating ? 360 : 0))
+            }
+        }
+        .shadow(radius: 10)  // 每个子视图都计算阴影
+    }
+}
+
+// ✅ 正确：使用 drawingGroup 和 compositingGroup
+struct OptimizedAnimation: View {
+    @State private var isAnimating = false
+    
+    var body: some View {
+        VStack {
+            ForEach(0..<50) { i in
+                Circle()
+                    .scaleEffect(isAnimating ? 1.5 : 1.0)
+                    .rotationEffect(.degrees(isAnimating ? 360 : 0))
+            }
+        }
+        .compositingGroup()  // 先打组
+        .shadow(radius: 10)  // 只对组计算一次阴影
+        .drawingGroup()      // 切换到 Metal 渲染
+    }
+}
+```
+
+---
+
+### 4. 键盘与交互反馈 (Input Interaction)
+
+**【现象】**：键盘弹出时背景闪烁或掉帧。
+
+**【准则】**：
+
+- [ ] **代理输入模式**：针对评论、搜索场景，使用"伪输入框按钮 + 独立弹出 Overlay"。
+- [ ] **禁用无关避让**：在背景视图上显式使用 `.ignoresSafeArea(.keyboard)`，防止整个视图树在键盘弹出时进行坐标重算。
+
+**示例**：
+
+```swift
+// ❌ 错误：键盘弹出导致整个视图重算
+struct BadInputView: View {
+    @State private var text = ""
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        VStack {
+            // 整个 VStack 都会因键盘避让重算
+            TextField("输入", text: $text)
+                .focused($isFocused)
+        }
+    }
+}
+
+// ✅ 正确：代理输入模式
+struct GoodInputView: View {
+    @State private var showInputOverlay = false
+    
+    var body: some View {
+        ZStack {
+            // 背景视图忽略键盘避让
+            BackgroundView()
+                .ignoresSafeArea(.keyboard)
+            
+            // 主内容
+            ContentView()
+            
+            // 独立输入 Overlay
+            if showInputOverlay {
+                InputOverlay()
+            }
+        }
+    }
+}
+```
+
+---
+
+## TRAE 辅助开发与自检流程
+
+### 第一步：代码修改指令
+
+当要求 TRAE 修改动画代码时，必须包含以下关键词：
+
+> "请优化此动画的渲染性能，确保视图颗粒度最小化，检查是否存在无意义的 body 重绘，并在复杂形变处考虑使用 drawingGroup。"
+
+### 第二步：TRAE 交付后的自检报告格式
+
+Trae 在提交代码后，必须回答以下检查项：
+
+#### 🚀 动画性能审查 (Performance Check)
+
+| 检查项 | 状态 | 说明 |
+|--------|------|------|
+| 重绘范围 | [ ] | 描述是否已将动画状态隔离在子视图中 |
+| Body 复杂度 | [ ] | 确认 body 中无昂贵计算任务 |
+| GPU 优化方案 | [ ] | 是否使用了 .drawingGroup() 或 .compositingGroup()？ |
+| 布局开销 | [ ] | 是否避开了 GeometryReader 的性能陷阱？ |
+
+### 第三步：Xcode 实机调试建议 (Manual Check)
+
+1. **开启 Self._printChanges()**：在可疑视图内添加，观察控制台是否有意外的刷新频率。
+
+```swift
+var body: some View {
+    let _ = Self._printChanges()  // 调试用：打印重绘原因
+    return VStack { ... }
+}
+```
+
+2. **Instruments - Hitches**：使用 Xcode Profiler 检查是否存在高于 5ms 的渲染延迟。
+
+3. **Release 模式测试**：所有发热量和能效测试必须在 Release 配置下进行。
+
+---
+
+## 专家级避坑 Tips
+
+### Opacity vs Hidden
+
+如果你只是想让一个东西消失，`.opacity(0)` 依然会被渲染。使用 `if show { View }` 或 `.hidden()` 配合 transition。
+
+```swift
+// ❌ 错误：opacity(0) 依然占用渲染资源
+.opacity(0)
+
+// ✅ 正确：条件渲染，不占用资源
+if show {
+    MyView()
+        .transition(.opacity)
+}
+```
+
+### Continuous Corner
+
+始终使用 `RoundedRectangle(cornerRadius: 20, style: .continuous)`。这不仅仅是为了好看，系统对平滑圆角的硬件加速更友好。
+
+### Spring 动画参数
+
+优先使用 Response 和 Damping 参数而非秒数，这更符合物理规律，减少系统在插值计算时的震荡。
+
+```swift
+// ❌ 错误：固定时长
+.animation(.easeInOut(duration: 0.3))
+
+// ✅ 正确：物理参数
+.animation(.spring(response: 0.3, dampingFraction: 0.7))
+```
+
+---
+
+## TRAE 指引
+
+请在后续所有涉及动画、手势、键盘吸附及复杂布局的指令中，严格遵守上述 MD 文档中的性能约束。若发现当前项目代码存在上述性能风险，请主动提出重构建议。
+
+---
+
+## 附录：性能优化检查清单
+
+### 提交前必检项
+
+- [ ] 动画状态是否下放到最小单元？
+- [ ] body 中是否存在 filter/sort/map 等计算？
+- [ ] 复杂形变是否使用了 drawingGroup()？
+- [ ] 阴影/透明度是否使用了 compositingGroup()？
+- [ ] 是否避免了不必要的 GeometryReader？
+- [ ] 键盘交互是否使用了代理输入模式？
+- [ ] 是否使用了 .continuous 圆角样式？
+- [ ] 动画是否使用了物理参数（response/damping）？
+
+### 性能测试步骤
+
+1. [ ] 在 Debug 模式下运行，观察控制台是否有频繁重绘
+2. [ ] 使用 Self._printChanges() 检查重绘范围
+3. [ ] 在 Release 模式下测试发热量
+4. [ ] 使用 Instruments - Hitches 检查帧率稳定性
+5. [ ] 在低端设备（如 iPhone SE）上测试流畅度
