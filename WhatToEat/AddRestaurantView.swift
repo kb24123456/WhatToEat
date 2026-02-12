@@ -646,6 +646,7 @@ struct AddRestaurantView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle()) // 关键修复：确保整个区域可点击
         }
         .buttonStyle(ScaleButtonStyle())
         .background(
@@ -1345,9 +1346,9 @@ struct DockItemView: View {
         } label: {
             VStack(spacing: 6) {
                 ZStack {
-                    // 选中态多层光晕效果（参考 moodButton）
+                    // 选中态光晕效果 - 参照 CheckInView moodButton 实现
                     if isSelected {
-                        // 外层光晕
+                        // 外层光晕 - 大范围柔和发光
                         Circle()
                             .fill(glowColor.opacity(0.25))
                             .blur(radius: 20)
@@ -1363,7 +1364,7 @@ struct DockItemView: View {
                             .scaleEffect(isSelected ? 1.0 : 0.85)
                             .animation(AppTheme.Animations.standardSpring, value: isSelected)
                         
-                        // 内层光晕
+                        // 内层高光 - 核心发光区
                         Circle()
                             .fill(glowColor.opacity(0.6))
                             .blur(radius: 6)
@@ -1381,8 +1382,6 @@ struct DockItemView: View {
                         .animation(AppTheme.Animations.standardSpring, value: isSelected)
                 }
                 .frame(height: 70)
-                // GPU 加速：复杂形变和模糊效果使用 Metal 渲染
-                .drawingGroup()
                 
                 // 俚语文字
                 Text(item.slang)

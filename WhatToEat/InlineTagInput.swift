@@ -22,8 +22,9 @@ struct InlineTagInput: UIViewRepresentable {
         textView.layer.cornerRadius = 16
         textView.textContainerInset = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
         textView.isScrollEnabled = false
-        textView.isEditable = false  // 页面上的文本视图只读
+        textView.isEditable = false  // 禁用编辑，使用点击手势
         textView.isSelectable = false
+        textView.isUserInteractionEnabled = true  // 确保可以接收交互
         
         // 保存引用
         context.coordinator.textView = textView
@@ -35,8 +36,10 @@ struct InlineTagInput: UIViewRepresentable {
         let accessoryView = createInputAccessoryView(context: context)
         textView.inputAccessoryView = accessoryView
         
-        // 添加点击手势
-        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap))
+        // 添加点击手势 - 使用更可靠的方式
+        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        tapGesture.numberOfTapsRequired = 1
+        tapGesture.cancelsTouchesInView = false
         textView.addGestureRecognizer(tapGesture)
         
         // 注册键盘通知
@@ -164,10 +167,25 @@ struct InlineTagInput: UIViewRepresentable {
             parent.onEditingChanged?(false)
         }
         
-        @objc func handleTap() {
-            // 直接让 inputAccessoryView 的输入框成为第一响应者
-            // 避免让 textView 成为第一响应者，防止触发系统键盘避让
-            inputTextField?.becomeFirstResponder()
+        // MARK: - 点击处理
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            print("📝 InlineTagInput: 检测到点击")
+            
+            // 确保 inputAccessoryView 已创建
+            guard let textView = textView else {
+                print("❌ textView 为 nil")
+                return
+            }
+            
+            // 让 textView 成为第一响应者以显示 inputAccessoryView
+            // 然后立即让 inputTextField 成为第一响应者
+            textView.becomeFirstResponder()
+            
+            // 延迟一小段时间后让 inputTextField 获取焦点
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.inputTextField?.becomeFirstResponder()
+                print("✅ inputTextField 已成为第一响应者")
+            }
         }
         
         // MARK: - UITextFieldDelegate (inputAccessoryView 中的输入框)
