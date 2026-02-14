@@ -217,6 +217,14 @@ struct AppTheme {
         static let caption = Font.system(.caption, design: .rounded)
         static let caption1 = Font.system(.caption, design: .rounded)
         static let caption2 = Font.system(.caption2, design: .rounded)
+        
+        // 思源圆体 (Resource Han Rounded CN) - 用于卡片中文标题
+        static let titleYuanti = Font.custom("ResourceHanRoundedCN-Bold", size: 22)
+        static let title2Yuanti = Font.custom("ResourceHanRoundedCN-Bold", size: 20)
+        static let title3Yuanti = Font.custom("ResourceHanRoundedCN-Bold", size: 18)
+        static let subheadlineYuanti = Font.custom("ResourceHanRoundedCN-Medium", size: 16)
+        static let bodyYuanti = Font.custom("ResourceHanRoundedCN-Medium", size: 14)
+        static let footnoteYuanti = Font.custom("ResourceHanRoundedCN-Regular", size: 12)
     }
     
     // MARK: - 3. 间距系统

@@ -1272,7 +1272,7 @@ struct TopRestaurantCard: View {
                 
                 // 餐厅名
                 Text(restaurant.name)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.custom("ResourceHanRoundedCN-Medium", size: 12))
                     .foregroundColor(AppTheme.Colors.darkText)
                     .lineLimit(1)
                     .frame(width: 70)

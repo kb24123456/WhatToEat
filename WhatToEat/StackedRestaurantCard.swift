@@ -92,7 +92,7 @@ struct StackedRestaurantCard: View {
             // 第一行：店名 + 打卡勋章
             HStack {
                 Text(restaurant.name)
-                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .font(.custom("ResourceHanRoundedCN-Bold", size: 19))
                     .foregroundColor(Color(hex: "#1A1A1A"))  // 店名使用 #1A1A1A
                     .lineLimit(1)
 

@@ -57,7 +57,8 @@ struct ContentView: View {
                 case .library:
                     LibraryView()
                 case .home:
-                    GourmetMatchView()
+                    // 新的餐厅卡片流视图 - 使用 matchedGeometryEffect 实现无缝转场
+                    RestaurantFlowView()
                 case .add:
                     EmptyView()
                 case .friends:

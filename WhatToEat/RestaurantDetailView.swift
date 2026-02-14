@@ -448,7 +448,7 @@ struct RestaurantDetailView: View {
         HStack(alignment: .bottom, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(restaurant.name)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.custom("ResourceHanRoundedCN-Bold", size: 24))
                     .foregroundColor(AppTheme.Colors.darkText)
 
                 // 品类 + 地区 + 价格

@@ -10,5 +10,10 @@
 		<string>baidumap</string>
 		<string>maps</string>
 	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/ResourceHanRoundedCN-Bold.ttf</string>
+		<string>Fonts/ResourceHanRoundedCN-Medium.ttf</string>
+	</array>
 </dict>
 </plist>

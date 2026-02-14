@@ -44,7 +44,7 @@ struct RestaurantSelectionDetailView: View {
                     VStack(spacing: 24) {
                         // 餐厅名称
                         Text(restaurant.name)
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .font(.custom("ResourceHanRoundedCN-Bold", size: 28))
                             .foregroundColor(AppTheme.Colors.darkText)
                             .multilineTextAlignment(.center)
                             .padding(.top, 20)

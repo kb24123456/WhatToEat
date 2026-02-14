@@ -14,17 +14,29 @@
 		12F656BE2F2E826100FBE87D /* Exceptions for "WhatToEat" folder in "WhatToEat" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Gemini.md,
 				Info.plist,
 			);
 			target = 12B7D1AC2F1A98940021A936 /* WhatToEat */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		1273F3E72F3F50E600674C51 /* Exceptions for "WhatToEat" folder in "Compile Sources" phase from "WhatToEat" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 12B7D1A92F1A98940021A936 /* Sources */;
+			membershipExceptions = (
+				Gemini.md,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		12B7D1AF2F1A98940021A936 /* WhatToEat */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				12F656BE2F2E826100FBE87D /* Exceptions for "WhatToEat" folder in "WhatToEat" target */,
+				1273F3E72F3F50E600674C51 /* Exceptions for "WhatToEat" folder in "Compile Sources" phase from "WhatToEat" target */,
 			);
 			path = WhatToEat;
 			sourceTree = "<group>";
