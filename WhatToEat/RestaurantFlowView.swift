@@ -470,35 +470,20 @@ struct RestaurantFlowView: View {
         }
     }
     
-    // MARK: - 决策助手按钮
+    // MARK: - 决策助手按钮 (iOS原生样式)
     private var decisionAssistantButton: some View {
-        Button(action: {
+        Button("帮我决定吃什么", systemImage: "wand.and.stars") {
             // 触觉反馈：轻微震动
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
             
             showDecisionAssistant = true
-        }) {
-            HStack(spacing: 6) {
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 14, weight: .semibold))
-                Text("帮我决定吃什么")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-            }
-            .foregroundColor(AppTheme.Colors.darkText)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(Color.white)
-            )
-            .overlay(
-                Capsule()
-                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
         }
-        .buttonStyle(PlainButtonStyle())
+        .font(.system(size: 14, weight: .semibold, design: .rounded))
+        .controlSize(.regular)
+        .buttonStyle(.borderedProminent)
+        .tint(.white)
+        .foregroundColor(AppTheme.Colors.darkText)
     }
     
     // MARK: - 列表态卡片图片
@@ -581,60 +566,35 @@ struct RestaurantFlowView: View {
         VStack(spacing: 0) {
             // 顶部按钮栏
             HStack {
-                // 返回按钮
-                Button(action: {
+                // 返回按钮 (iOS原生样式)
+                Button("返回", systemImage: "chevron.backward") {
                     handleCollapseAnimation()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         viewModel.collapse()
                     }
-                }) {
-                    Image(systemName: "chevron.backward")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(Color(hex: "#333333"))
-                        .frame(width: 36, height: 36)
-                        .background(
-                            Circle()
-                                .fill(Color.white)
-                                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
-                        )
                 }
-                .buttonStyle(PlainButtonStyle())
+                .labelStyle(.iconOnly)
+                .font(.system(size: 16, weight: .semibold))
+                .controlSize(.regular)
+                .buttonStyle(.bordered)
+                .tint(.gray)
                 
                 Spacer()
                 
-                // 重新选择按钮（仅在随机选择模式下显示）
+                // 重新选择按钮（仅在随机选择模式下显示）(iOS原生样式)
                 if !filteredRestaurantsForSelection.isEmpty {
-                    Button(action: {
+                    Button("换一家", systemImage: "shuffle") {
                         // 触觉反馈：中等强度震动
                         let generator = UIImpactFeedbackGenerator(style: .medium)
                         generator.impactOccurred()
                         
                         reselectRestaurant()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "shuffle")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("换一家")
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .foregroundColor(AppTheme.Colors.darkText)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color.white)
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-                        )
-                        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .font(.system(size: 13, weight: .medium))
+                    .controlSize(.small)
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+                    .foregroundColor(AppTheme.Colors.darkText)
                 }
             }
             .padding(.horizontal, 20)
@@ -859,9 +819,9 @@ struct RestaurantFlowView: View {
         }
     }
     
-    // MARK: - 导航按钮
+    // MARK: - 导航按钮 (iOS原生样式)
     private func navigationButton(restaurant: Restaurant) -> some View {
-        Button(action: {
+        Button("去这里", systemImage: "location.circle.fill") {
             // 触觉反馈：中等强度震动
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
@@ -873,23 +833,12 @@ struct RestaurantFlowView: View {
             } else {
                 openPreferredMap(for: restaurant)
             }
-        }) {
-            HStack(spacing: 8) {
-                Image(systemName: "location.circle.fill")
-                    .font(.system(size: 16))
-                Text("去这里")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.black)
-            )
-            .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 6)
         }
-        .buttonStyle(PlainButtonStyle())
+        .font(.system(size: 16, weight: .semibold, design: .rounded))
+        .controlSize(.large)
+        .buttonStyle(.borderedProminent)
+        .tint(.black)
+        .frame(maxWidth: .infinity)
         // 首次使用提示
         .alert("选择默认导航应用", isPresented: $showNavigationMenu) {
             Button("苹果地图") {
@@ -944,9 +893,9 @@ struct RestaurantFlowView: View {
         }
     }
     
-    // MARK: - 确认选择按钮
+    // MARK: - 确认选择按钮 (iOS原生样式)
     private var confirmSelectionButton: some View {
-        Button(action: {
+        Button("确认", systemImage: "checkmark.circle.fill") {
             // 触觉反馈：成功反馈
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
@@ -955,27 +904,13 @@ struct RestaurantFlowView: View {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 resetSelectionState()
             }
-        }) {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 16))
-                Text("确认")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-            }
-            .foregroundColor(AppTheme.Colors.darkText)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
         }
-        .buttonStyle(PlainButtonStyle())
+        .font(.system(size: 16, weight: .semibold, design: .rounded))
+        .controlSize(.large)
+        .buttonStyle(.bordered)
+        .tint(.white)
+        .foregroundColor(AppTheme.Colors.darkText)
+        .frame(maxWidth: .infinity)
     }
     
     // MARK: - 获取地图应用名称
