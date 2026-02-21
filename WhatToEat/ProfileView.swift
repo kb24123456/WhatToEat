@@ -218,7 +218,6 @@ struct ProfileView: View {
                 )
         )
         .buttonStyle(PlainButtonStyle())
-        .pressableButton(scale: 0.98)
     }
 
     // MARK: - Phase 1: Grand Stats Dashboard (Floating Metrics - 去容器化)
@@ -1286,7 +1285,6 @@ struct TopRestaurantCard: View {
             .padding(.vertical, 8)
         }
         .buttonStyle(PlainButtonStyle())
-        .pressableButton(scale: 0.95) // 添加缩放反馈
     }
 }
 

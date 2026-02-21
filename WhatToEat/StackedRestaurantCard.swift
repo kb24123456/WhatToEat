@@ -25,7 +25,13 @@ struct StackedRestaurantCard: View {
     }
     
     var body: some View {
-        Button(action: { onNavigate?() }) {
+        Button(action: {
+            // 触觉反馈：轻微震动
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            
+            onNavigate?()
+        }) {
             HStack(alignment: .center, spacing: 16) {
                 // 左侧：图片
                 heroImage
@@ -34,7 +40,7 @@ struct StackedRestaurantCard: View {
                 contentSection
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 16)
         }
         .buttonStyle(PlainButtonStyle())
         // 物理质感实色系统：压住背景流动感
@@ -78,7 +84,7 @@ struct StackedRestaurantCard: View {
                 }
             )
         )
-        .frame(width: 80, height: 80)
+        .frame(width: 80, height: 108)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -88,34 +94,74 @@ struct StackedRestaurantCard: View {
     
     // MARK: - 内容区域 (参照图中布局)
     private var contentSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
+            // 顶部填充：0pt
+            
             // 第一行：店名 + 打卡勋章
-            HStack {
-                Text(restaurant.name)
-                    .font(.custom("ResourceHanRoundedCN-Bold", size: 19))
-                    .foregroundColor(Color(hex: "#1A1A1A"))  // 店名使用 #1A1A1A
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                // 店名带智能淡出效果（仅在需要时显示）
+                GeometryReader { geometry in
+                    ZStack(alignment: .trailing) {
+                        // 店名文字，使用 fixedSize 防止省略号
+                        Text(restaurant.name)
+                            .font(.custom("ResourceHanRoundedCN-Bold", size: 18))
+                            .foregroundColor(Color(hex: "#1A1A1A"))
+                            .fixedSize(horizontal: true, vertical: false)
+                            .background(
+                                // 用于测量文字实际宽度
+                                GeometryReader { textGeometry in
+                                    Color.clear.preference(
+                                        key: TextWidthPreferenceKey.self,
+                                        value: textGeometry.size.width
+                                    )
+                                }
+                            )
+                        
+                        // 右侧淡出渐变遮罩（仅在文字超出时显示）
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0),
+                                AppTheme.Colors.milkWhite
+                            ]),
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: min(60, geometry.size.width * 0.3))
+                        .opacity(restaurant.name.width(withFont: UIFont(name: "ResourceHanRoundedCN-Bold", size: 18) ?? UIFont.systemFont(ofSize: 18)) > geometry.size.width ? 1 : 0)
+                    }
+                    .frame(width: geometry.size.width, height: 20, alignment: .leading)
+                    .clipped()
+                }
 
                 // 小红书红打卡勋章
                 checkInBadge
             }
+            .frame(height: 20) // 固定高度
+            // 店名与其他信息间距：14pt（大幅突出店名）
+            .padding(.bottom, 14)
 
             // 第二行：距离 / 区域 / 品类 / 价格
             metadataRow
+            .frame(height: 16) // 固定高度
+            // 第二行与第三行间距：2pt（紧凑）
+            .padding(.bottom, 2)
 
             // 第三行：评分星星 + 标签（始终显示）
             ratingAndTagsRow
-                .padding(.top, 2)
+            // 第三行与第四行间距：2pt（紧凑）
+            .padding(.bottom, 2)
 
             // 第四行：评论（始终显示）
             if !restaurant.review.isEmpty {
                 reviewRow
-                    .padding(.top, 4)
+                    .frame(height: 32) // 固定2行高度
+            } else {
+                Color.clear.frame(height: 32) // 无评论时占位
             }
+            
+            // 底部填充：0pt
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: 108, alignment: .leading)
     }
     
     // MARK: - 元数据行 (距离 / 区域 / 品类 / 价格)
@@ -142,31 +188,33 @@ struct StackedRestaurantCard: View {
     // MARK: - 评分和标签行
     private var ratingAndTagsRow: some View {
         HStack(spacing: 10) {
-            // 评分星星
+            // 评分星星 - 高度与13pt文本一致
             HStack(spacing: 2) {
                 ForEach(0..<5) { index in
                     Image(systemName: index < Int(restaurant.rating) ? "star.fill" : "star")
-                        .font(.system(size: 9))
+                        .font(.system(size: 11))
                         .foregroundColor(index < Int(restaurant.rating) ? AppTheme.Colors.secondary : Color.gray.opacity(0.3))
                 }
             }
+            .frame(height: 16) // 固定高度与13pt文本行高一致
             
-            // 标签（最多显示2个）
+            // 标签（最多显示2个）- 高度与13pt文本一致
             if !restaurant.tags.isEmpty {
                 HStack(spacing: 4) {
                     ForEach(restaurant.tags.prefix(2), id: \.self) { tag in
                         Text(tag)
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundColor(AppTheme.Colors.babyBlue)
                             .lineLimit(1)
                             .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
+                            .padding(.vertical, 2)
                             .background(
                                 Capsule()
                                     .fill(AppTheme.Colors.babyBlue.opacity(0.12))
                             )
                     }
                 }
+                .frame(height: 16) // 固定高度与13pt文本行高一致
             }
             
             Spacer(minLength: 0)
@@ -191,34 +239,40 @@ struct StackedRestaurantCard: View {
         }
     }
     
-    // MARK: - 打卡勋章（胶囊样式）
+    // MARK: - 打卡勋章（圆形容器样式 - 参考图）
     @State private var isPressed = false
     
     private var checkInBadge: some View {
-        Button(action: { onCheckInTap?() }) {
-            HStack(spacing: 4) {
-                // 打钩图标 - 增大尺寸
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.accent)
+        Button(action: {
+            // 触觉反馈：轻微震动
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            
+            onCheckInTap?()
+        }) {
+            ZStack {
+                // 圆形背景
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 36, height: 36)
                 
-                // 打卡次数 - 增大尺寸
-                if restaurant.checkInCount > 0 {
-                    Text("\(restaurant.checkInCount)")
-                        .font(.system(size: 13, weight: .semibold))
+                // 打钩图标 + 数字
+                HStack(spacing: 2) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.accent)
+                    
+                    if restaurant.checkInCount > 0 {
+                        Text("\(restaurant.checkInCount)")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(AppTheme.Colors.accent)
+                    }
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule()
-                    .fill(Color.white)
-            )
-            // 轻量白色阴影
-            .shadow(color: Color.white.opacity(0.8), radius: 3, x: 0, y: 1)
+            // 轻量阴影
+            .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
             // 灵动的缩放动效
-            .scaleEffect(isPressed ? 0.92 : 1.0)
+            .scaleEffect(isPressed ? 0.88 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         }
         .buttonStyle(PlainButtonStyle())
@@ -227,6 +281,22 @@ struct StackedRestaurantCard: View {
                 .onChanged { _ in isPressed = true }
                 .onEnded { _ in isPressed = false }
         )
+    }
+}
+
+// MARK: - 文字宽度计算扩展
+extension String {
+    func width(withFont font: UIFont) -> CGFloat {
+        let attributes = [NSAttributedString.Key.font: font]
+        return self.size(withAttributes: attributes).width
+    }
+}
+
+// MARK: - 文字宽度 PreferenceKey
+struct TextWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

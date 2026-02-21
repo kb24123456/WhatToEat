@@ -248,7 +248,6 @@ struct RestaurantCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
-        .pressableButton(scale: 0.9)
     }
 
     // MARK: - 元数据行

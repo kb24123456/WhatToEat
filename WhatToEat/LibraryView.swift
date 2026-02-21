@@ -176,7 +176,7 @@ struct LibraryView: View {
                             .offset(y: 8)
                     }
 
-                    // 2. 城市选择器 + 搜索框（黑夜中的微光）
+                    // 2. 城市选择器 + 搜索框（参考图样式：圆角胶囊组合）
                     HStack(spacing: 0) {
                         // 城市选择按钮
                         Button {
@@ -184,51 +184,51 @@ struct LibraryView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Text(selectedCity)
-                                    .font(AppTheme.Fonts.footnote)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.white)  // 纯白文字
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white)
                                 Image(systemName: "chevron.down")
-                                    .font(.caption2)
-                                    .foregroundColor(AppTheme.Colors.babyBlue)  // Baby Blue图标
+                                    .font(.system(size: 10))
+                                    .foregroundColor(AppTheme.Colors.babyBlue)
                             }
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                         }
                         .buttonStyle(.plain)
-
-                        Divider()
-                            .frame(height: 20)
-                            .background(Color.white.opacity(0.2))
-
+                        
+                        // 垂直分隔线
+                        Rectangle()
+                            .fill(Color.white.opacity(0.2))
+                            .frame(width: 1, height: 20)
+                        
                         // 搜索框
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             Image(systemName: "magnifyingglass")
-                                .font(.caption)
-                                .foregroundColor(AppTheme.Colors.babyBlue)  // Baby Blue图标
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.Colors.babyBlue)
+                            
                             TextField("", text: $searchText, prompt: Text("搜索餐厅...").foregroundColor(Color.white.opacity(0.5)))
-                                .font(AppTheme.Fonts.footnote)
-                                .foregroundColor(.white)  // 输入文字纯白
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
                                 .focused($isSearchFocused)
                                 .submitLabel(.search)
                         }
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                     }
                     .background(
-                        // 使用纯色替代毛玻璃，避免灰色矩形问题
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.white.opacity(0.12))
+                        // 深色背景 + 高亮边框（参考图样式）
+                        Capsule()
+                            .fill(Color.white.opacity(0.1))
                     )
-                    // 发光描边
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.25), lineWidth: 0.5)
+                        Capsule()
+                            .stroke(AppTheme.Colors.babyBlue.opacity(0.5), lineWidth: 1)
                     )
                     .shadow(
-                        color: Color.black.opacity(0.15),
-                        radius: 10,
+                        color: AppTheme.Colors.babyBlue.opacity(0.1),
+                        radius: 8,
                         x: 0,
-                        y: 3
+                        y: 2
                     )
                     .withFocusedInputEffects(isFocused: $isSearchFocused)
                 }
@@ -530,13 +530,47 @@ private struct FilterBarView: View {
                 )
             }
 
+            // 4. 清除筛选按钮（有筛选条件时显示）
+            if selectedDistrict != nil || selectedType != nil {
+                Button {
+                    // 触觉反馈
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedDistrict = nil
+                        selectedType = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(AppTheme.Colors.milkWhite)
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(AppTheme.Colors.darkText.opacity(0.2), lineWidth: 0.5)
+                        )
+                }
+                .buttonStyle(LiquidFusionButtonStyle())
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.5).combined(with: .opacity),
+                    removal: .scale(scale: 0.5).combined(with: .opacity)
+                ))
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedDistrict)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedType)
+            }
+
             Spacer()
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 8)
     }
     
-    // MARK: - 筛选胶囊标签（方案A：反转高亮 - 黑底白字）
+    // MARK: - 筛选胶囊标签（奶白背景 + darkText 文本）
     private func filterCapsuleLabel(title: String, isSelected: Bool) -> some View {
         // 截断文本：超过4个字显示省略号
         let displayTitle = title.count > 4 ? String(title.prefix(3)) + "…" : title
@@ -544,29 +578,30 @@ private struct FilterBarView: View {
         return HStack(spacing: 4) {
             Text(displayTitle)
                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                // 未选中：深黑文字 | 选中：白色文字
-                .foregroundColor(isSelected ? .white : Color(hex: "#1A1A1A"))
-                // 固定宽度和高度，不随内容变化
+                .foregroundColor(AppTheme.Colors.darkText) // 深色文本
                 .frame(width: 52, height: 18, alignment: .center)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
-                .font(.system(size: 7))
-                // 未选中：Baby Blue | 选中：白色
-                .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.Colors.babyBlue)
+                .font(.system(size: 8))
+                .foregroundColor(AppTheme.Colors.darkText) // 深色文本
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(
+            // 奶白背景，与 LibraryView 一致
             Capsule()
-                // 未选中：纯白实色 | 选中：纯黑实色
-                .fill(isSelected ? Color.black : Color.white)
+                .fill(AppTheme.Colors.milkWhite)
         )
-        // 轻微阴影增加悬浮感
+        .overlay(
+            // 选中时添加深色边框
+            Capsule()
+                .stroke(isSelected ? AppTheme.Colors.darkText.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
         .shadow(
-            color: Color.black.opacity(0.08),
-            radius: 6,
+            color: Color.black.opacity(0.06),
+            radius: 4,
             x: 0,
-            y: 3
+            y: 2
         )
     }
 }

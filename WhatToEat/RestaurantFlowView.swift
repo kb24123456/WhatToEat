@@ -85,7 +85,6 @@ struct RestaurantFlowView: View {
                 if let selected = viewModel.selectedRestaurant {
                     expandedView(restaurant: selected)
                         .offset(y: expandedViewOffset)
-                        .scaleEffect(reselectionScale)  // 呼吸感动画缩放
                 }
             }
         }
@@ -203,32 +202,15 @@ struct RestaurantFlowView: View {
         performSmoothReselectionTransition(to: newRestaurant)
     }
     
-    // 呼吸感动画缩放比例
-    @State private var reselectionScale: CGFloat = 1.0
-    
-    // MARK: - 呼吸感重新选择过渡（放大回弹动画）
+    // MARK: - 重新选择过渡（无放大动效）
     private func performSmoothReselectionTransition(to newRestaurant: Restaurant) {
-        // 阶段1：所有元素快速放大（呼吸感）
-        withAnimation(.easeOut(duration: 0.15)) {
-            reselectionScale = 1.08  // 放大到108%
+        // 阶段1：展开态淡出
+        withAnimation(.easeOut(duration: 0.2)) {
+            expandedViewOpacity = 0
         }
         
-        // 阶段2：快速缩小回原大小（无额外回弹）
+        // 阶段2：卡片回到列表位置
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            withAnimation(.easeIn(duration: 0.15)) {
-                reselectionScale = 1.0  // 直接缩小到原大小
-            }
-        }
-        
-        // 阶段3：展开态淡出（与回弹同时进行）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.easeOut(duration: 0.2)) {
-                expandedViewOpacity = 0
-            }
-        }
-        
-        // 阶段4：卡片回到列表位置
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             withAnimation(.easeOut(duration: 0.25)) {
                 viewModel.collapse()
                 sideCardsHorizontalOffset = 0
@@ -236,8 +218,8 @@ struct RestaurantFlowView: View {
             }
         }
         
-        // 阶段5：开始快速滚动
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+        // 阶段3：开始快速滚动
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             self.isRandomSelecting = true
             
             withAnimation(.easeOut(duration: 1.0)) {
@@ -245,14 +227,9 @@ struct RestaurantFlowView: View {
             }
         }
         
-        // 阶段6：滚动完成后展开新餐厅（使用与列表态展开相同的动画参数）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
+        // 阶段4：滚动完成后展开新餐厅（使用与列表态展开相同的动画参数）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
             self.isRandomSelecting = false
-            
-            // 先重置缩放
-            withAnimation(.easeOut(duration: 0.2)) {
-                self.reselectionScale = 1.0
-            }
             
             // 使用与列表态选中展开完全相同的动画
             self.handleExpandAnimation(for: newRestaurant)
@@ -470,20 +447,26 @@ struct RestaurantFlowView: View {
         }
     }
     
-    // MARK: - 决策助手按钮 (iOS原生样式)
+    // MARK: - 决策助手按钮（iOS 26 液态玻璃样式）
     private var decisionAssistantButton: some View {
-        Button("帮我决定吃什么", systemImage: "wand.and.stars") {
+        Button(action: {
             // 触觉反馈：轻微震动
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
             
             showDecisionAssistant = true
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("帮我决定吃什么")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .font(.system(size: 14, weight: .semibold, design: .rounded))
+        .buttonStyle(.glass)  // iOS 26 液态玻璃样式
         .controlSize(.regular)
-        .buttonStyle(.borderedProminent)
-        .tint(.white)
-        .foregroundColor(AppTheme.Colors.darkText)
     }
     
     // MARK: - 列表态卡片图片
@@ -566,35 +549,43 @@ struct RestaurantFlowView: View {
         VStack(spacing: 0) {
             // 顶部按钮栏
             HStack {
-                // 返回按钮 (iOS原生样式)
-                Button("返回", systemImage: "chevron.backward") {
+                // 返回按钮（iOS 26 液态玻璃样式）
+                Button(action: {
                     handleCollapseAnimation()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         viewModel.collapse()
                     }
+                }) {
+                    Image(systemName: "chevron.backward")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 36, height: 36)
                 }
-                .labelStyle(.iconOnly)
-                .font(.system(size: 16, weight: .semibold))
-                .controlSize(.regular)
-                .buttonStyle(.bordered)
-                .tint(.gray)
+                .buttonStyle(.glass)  // iOS 26 液态玻璃样式
+                .controlSize(.mini)
+                .clipShape(Circle())
                 
                 Spacer()
                 
-                // 重新选择按钮（仅在随机选择模式下显示）(iOS原生样式)
+                // 重新选择按钮（iOS 26 液态玻璃样式）
                 if !filteredRestaurantsForSelection.isEmpty {
-                    Button("换一家", systemImage: "shuffle") {
+                    Button(action: {
                         // 触觉反馈：中等强度震动
                         let generator = UIImpactFeedbackGenerator(style: .medium)
                         generator.impactOccurred()
                         
                         reselectRestaurant()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "shuffle")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("换一家")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                     }
-                    .font(.system(size: 13, weight: .medium))
+                    .buttonStyle(.glass)  // iOS 26 液态玻璃样式
                     .controlSize(.small)
-                    .buttonStyle(.bordered)
-                    .tint(.white)
-                    .foregroundColor(AppTheme.Colors.darkText)
                 }
             }
             .padding(.horizontal, 20)
@@ -819,9 +810,9 @@ struct RestaurantFlowView: View {
         }
     }
     
-    // MARK: - 导航按钮 (iOS原生样式)
+    // MARK: - 导航按钮
     private func navigationButton(restaurant: Restaurant) -> some View {
-        Button("去这里", systemImage: "location.circle.fill") {
+        Button(action: {
             // 触觉反馈：中等强度震动
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
@@ -833,12 +824,23 @@ struct RestaurantFlowView: View {
             } else {
                 openPreferredMap(for: restaurant)
             }
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "location.circle.fill")
+                    .font(.system(size: 16))
+                Text("去这里")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.black)
+            )
+            .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 6)
         }
-        .font(.system(size: 16, weight: .semibold, design: .rounded))
-        .controlSize(.large)
-        .buttonStyle(.borderedProminent)
-        .tint(.black)
-        .frame(maxWidth: .infinity)
+        .buttonStyle(PlainButtonStyle())
         // 首次使用提示
         .alert("选择默认导航应用", isPresented: $showNavigationMenu) {
             Button("苹果地图") {
@@ -893,9 +895,9 @@ struct RestaurantFlowView: View {
         }
     }
     
-    // MARK: - 确认选择按钮 (iOS原生样式)
+    // MARK: - 确认选择按钮
     private var confirmSelectionButton: some View {
-        Button("确认", systemImage: "checkmark.circle.fill") {
+        Button(action: {
             // 触觉反馈：成功反馈
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
@@ -904,13 +906,27 @@ struct RestaurantFlowView: View {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 resetSelectionState()
             }
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 16))
+                Text("确认")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+            }
+            .foregroundColor(AppTheme.Colors.darkText)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
         }
-        .font(.system(size: 16, weight: .semibold, design: .rounded))
-        .controlSize(.large)
-        .buttonStyle(.bordered)
-        .tint(.white)
-        .foregroundColor(AppTheme.Colors.darkText)
-        .frame(maxWidth: .infinity)
+        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - 获取地图应用名称

@@ -525,6 +525,7 @@ struct RestaurantMapView: View {
         if cluster.isCluster {
             Annotation("", coordinate: cluster.coordinate) {
                 ClusterAnnotationView(count: cluster.restaurants.count)
+                    .frame(minWidth: 50, minHeight: 50) // 确保显示完整
             }
         } else if let restaurant = cluster.restaurants.first {
             let isDest = isNavigating && selectedRestaurant?.id == restaurant.id
@@ -537,6 +538,8 @@ struct RestaurantMapView: View {
                     showBubble: showBubble,
                     onSelect: handleRestaurantSelection
                 )
+                .frame(minWidth: 60, minHeight: simplified ? 50 : 100) // 确保显示完整，特别是气泡和名称
+                .contentShape(Rectangle()) // 扩大点击区域
             }
         }
     }
@@ -946,33 +949,57 @@ struct RestaurantMapView: View {
                     
                     // 右侧搜索按钮（导航模式下隐藏）
                     if !isNavigating {
-                        Button {
-                            showSearchSheet = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.gray)
-                                
-                                Text(searchText.isEmpty ? "搜索餐厅" : searchText)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(searchText.isEmpty ? .gray : AppTheme.Colors.textPrimary)
-                                    .lineLimit(1)
+                        HStack(spacing: 0) {
+                            // 搜索按钮主体
+                            Button {
+                                showSearchSheet = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.gray)
+                                    
+                                    Text(searchText.isEmpty ? "搜索餐厅" : searchText)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(searchText.isEmpty ? .gray : AppTheme.Colors.textPrimary)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .frame(width: 130, alignment: .leading)
-                            .background(
-                                Capsule()
-                                    .fill(.white)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
-                                    )
-                            )
-                            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                            .buttonStyle(.plain)
+                            
+                            // 液体融合清除按钮（有内容时显示）
+                            if !searchText.isEmpty {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        searchText = ""
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.gray)
+                                        .padding(.trailing, 8)
+                                        .padding(.vertical, 8)
+                                }
+                                .buttonStyle(LiquidFusionButtonStyle())
+                                .transition(.asymmetric(
+                                    insertion: .scale.combined(with: .opacity),
+                                    removal: .scale.combined(with: .opacity)
+                                ))
+                            }
                         }
-                        .buttonStyle(.plain)
+                        .frame(width: 130, alignment: .leading)
+                        .background(
+                            Capsule()
+                                .fill(.white)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                                )
+                        )
+                        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                        .animation(.easeInOut(duration: 0.2), value: searchText.isEmpty)
                     }
                 }
                 

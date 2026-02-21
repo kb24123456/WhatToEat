@@ -74,16 +74,27 @@ struct MapSearchSheet: View {
                     }
                 }
             
-            // 清空按钮
+            // 液体融合清除按钮
             if !searchQuery.isEmpty {
                 Button {
-                    searchQuery = ""
-                    searchResults = restaurants
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        searchQuery = ""
+                        searchResults = restaurants
+                    }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 18))
                         .foregroundColor(.gray)
+                        .background(
+                            Circle()
+                                .fill(Color.white)
+                        )
                 }
+                .buttonStyle(LiquidFusionButtonStyle())
+                .transition(.asymmetric(
+                    insertion: .scale.combined(with: .opacity),
+                    removal: .scale.combined(with: .opacity)
+                ))
             }
         }
         .padding(.horizontal, 14)
@@ -266,6 +277,16 @@ struct MapSearchSheet: View {
         }
         
         return score
+    }
+}
+
+// MARK: - 液体融合按钮样式
+struct LiquidFusionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
