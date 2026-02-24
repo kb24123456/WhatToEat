@@ -26,6 +26,7 @@ struct WhatToEatApp: App {
         let schema = Schema([
             Restaurant.self,
             VisitLog.self,
+            UserCategory.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

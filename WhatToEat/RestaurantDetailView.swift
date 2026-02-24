@@ -113,7 +113,7 @@ struct RestaurantDetailView: View {
     @State private var showSheet = false
     @State private var logToEdit: VisitLog? = nil
     
-    @State private var showActionSheet = false
+
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
@@ -122,6 +122,7 @@ struct RestaurantDetailView: View {
     // MARK: - 评论编辑状态
     @State private var isEditingReview = false
     @State private var editedReview = ""
+    @State private var tempReview = "" // 临时存储编辑中的评价
     @FocusState private var reviewIsFocused: Bool
     
     // MARK: - 标签编辑状态
@@ -133,7 +134,7 @@ struct RestaurantDetailView: View {
     @State private var drivingDistance: String = ""
     @State private var drivingTime: String = ""
     @State private var hasCalculatedDrivingInfo = false
-    @State private var showNavigationMenu = false
+
     
     // MARK: - 评论输入模糊效果
     @State private var isCommentEditing = false
@@ -261,38 +262,6 @@ struct RestaurantDetailView: View {
                 showSheet = false
             })
         }
-        // MARK: - 更换封面菜单（无图标）
-        .confirmationDialog("更换封面图", isPresented: $showActionSheet) {
-            Button("拍照") { showCamera = true }
-            Button("从相册选择") { showPhotoPicker = true }
-            if restaurant.coverPhotoFilename != nil {
-                Button("删除封面", role: .destructive) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        restaurant.coverPhotoFilename = nil
-                    }
-                    newCoverImages = []
-                }
-            }
-            Button("取消", role: .cancel) { }
-        }
-        .confirmationDialog("选择导航应用", isPresented: $showNavigationMenu, titleVisibility: .visible) {
-            Button("高德地图") {
-                let impact = UIImpactFeedbackGenerator(style: .medium)
-                impact.impactOccurred()
-                NavigationManager.shared.openMap(type: .amap, restaurant: restaurant)
-            }
-            Button("百度地图") {
-                let impact = UIImpactFeedbackGenerator(style: .medium)
-                impact.impactOccurred()
-                NavigationManager.shared.openMap(type: .baidu, restaurant: restaurant)
-            }
-            Button("苹果地图") {
-                let impact = UIImpactFeedbackGenerator(style: .medium)
-                impact.impactOccurred()
-                NavigationManager.shared.openMap(type: .apple, restaurant: restaurant)
-            }
-            Button("取消", role: .cancel) { }
-        }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView(selectedImages: $newCoverImages)
         }
@@ -331,11 +300,36 @@ struct RestaurantDetailView: View {
             
             Spacer()
             
-            // 更换封面按钮 - iOS 26 液态玻璃样式
-            Button {
-                let generator = UIImpactFeedbackGenerator(style: .light)
-                generator.impactOccurred()
-                showActionSheet = true
+            // 更换封面按钮 - iOS 26 原生液态玻璃 Menu 样式
+            Menu {
+                Button {
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    showCamera = true
+                } label: {
+                    Label("拍照", systemImage: "camera")
+                }
+                
+                Button {
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    showPhotoPicker = true
+                } label: {
+                    Label("从相册选择", systemImage: "photo.on.rectangle")
+                }
+                
+                if restaurant.coverPhotoFilename != nil {
+                    Button(role: .destructive) {
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            restaurant.coverPhotoFilename = nil
+                        }
+                        newCoverImages = []
+                    } label: {
+                        Label("删除封面", systemImage: "trash")
+                    }
+                }
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "photo")
@@ -438,10 +432,31 @@ struct RestaurantDetailView: View {
             .frame(maxWidth: .infinity)
             
             // 右侧圆形图标按钮（仅图标，无文字）- 48pt 直径，4pt 边距
-            Button {
-                let generator = UIImpactFeedbackGenerator(style: .medium)
-                generator.impactOccurred()
-                showNavigationMenu = true
+            // iOS 26 原生液态玻璃 Menu 样式
+            Menu {
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    NavigationManager.shared.openMap(type: .amap, restaurant: restaurant)
+                } label: {
+                    Label("高德地图", systemImage: "arrow.up.right.square")
+                }
+                
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    NavigationManager.shared.openMap(type: .baidu, restaurant: restaurant)
+                } label: {
+                    Label("百度地图", systemImage: "arrow.up.right.square")
+                }
+                
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    NavigationManager.shared.openMap(type: .apple, restaurant: restaurant)
+                } label: {
+                    Label("苹果地图", systemImage: "arrow.up.right.square")
+                }
             } label: {
                 Image(systemName: "location.fill")
                     .font(.system(size: 18, weight: .semibold))
@@ -489,6 +504,7 @@ struct RestaurantDetailView: View {
             .frame(maxWidth: .infinity)
             
             // 右侧圆形图标按钮（仅图标，无文字）- 48pt 直径，4pt 边距
+            // 任务1：打钩图标改为小红书红，背景黑色不变
             Button {
                 let generator = UIImpactFeedbackGenerator(style: .medium)
                 generator.impactOccurred()
@@ -496,11 +512,11 @@ struct RestaurantDetailView: View {
             } label: {
                 Image(systemName: "checkmark")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.Colors.accent) // 小红书红
                     .frame(width: 48, height: 48)
                     .background(
                         Circle()
-                            .fill(AppTheme.Colors.darkText)
+                            .fill(AppTheme.Colors.darkText) // 背景保持黑色
                     )
             }
             .buttonStyle(ScaleButtonStyle())
@@ -516,53 +532,52 @@ struct RestaurantDetailView: View {
     
     // MARK: - 第三行：可编辑数据（评分/品类）
     // 胶囊高度与导航胶囊一致(56pt)，宽度填满可用空间
-    // 评分展开时品类按钮隐藏，评分选择器填满整个宽度
+    // 评分展开时品类按钮隐藏，品类展开时评分按钮隐藏
     @State private var isRatingExpanded = false
+    @State private var isCategoryExpanded = false
     
     private var editableDataRow: some View {
         HStack(spacing: 12) {
             // 评分 - 可编辑（AddRestaurantView同款展开组件）
-            ExpandableRatingView(
-                currentRating: restaurant.rating,
-                onRatingSelected: { newRating in
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
-                    withAnimation(.spring(response: 0.3)) {
-                        restaurant.rating = newRating
-                    }
-                },
-                onExpandStateChanged: { isExpanded in
-                    withAnimation(.spring(response: 0.3)) {
-                        isRatingExpanded = isExpanded
-                    }
-                }
-            )
-            .frame(maxWidth: isRatingExpanded ? .infinity : nil)
-            
-            // 品类 - 可编辑（液态玻璃菜单）
-            // 评分展开时隐藏
-            if !isRatingExpanded {
-                Menu {
-                    let categories = ["火锅", "烧烤", "日料", "西餐", "中餐", "快餐", "甜品", "咖啡", "其他"]
-                    ForEach(categories, id: \.self) { category in
-                        Button(category) {
-                            let generator = UIImpactFeedbackGenerator(style: .light)
-                            generator.impactOccurred()
-                            withAnimation(.spring(response: 0.3)) {
-                                restaurant.type = category
-                            }
+            // 品类展开时隐藏
+            if !isCategoryExpanded {
+                ExpandableRatingView(
+                    currentRating: restaurant.rating,
+                    onRatingSelected: { newRating in
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        withAnimation(.spring(response: 0.3)) {
+                            restaurant.rating = newRating
+                        }
+                    },
+                    onExpandStateChanged: { isExpanded in
+                        withAnimation(.spring(response: 0.3)) {
+                            isRatingExpanded = isExpanded
                         }
                     }
-                } label: {
-                    // 任务1&2：取消彩色边框，品类图标采用babyblue
-                    EditableDataCardNoBorder(
-                        icon: "fork.knife",
-                        value: restaurant.type.isEmpty ? "未分类" : restaurant.type,
-                        label: "品类",
-                        color: AppTheme.Colors.babyBlue
-                    )
-                }
-                .frame(maxWidth: .infinity)
+                )
+                .frame(maxWidth: isRatingExpanded || isCategoryExpanded ? .infinity : nil)
+                .transition(.asymmetric(
+                    insertion: .scale.combined(with: .opacity),
+                    removal: .scale.combined(with: .opacity)
+                ))
+            }
+            
+            // 品类 - 可编辑（展开式选择器，与评分组件同款风格）
+            // 评分展开时隐藏
+            if !isRatingExpanded {
+                ExpandableCategoryView(
+                    currentCategory: restaurant.type,
+                    onCategorySelected: { category in
+                        restaurant.type = category
+                    },
+                    onExpandStateChanged: { isExpanded in
+                        withAnimation(.spring(response: 0.3)) {
+                            isCategoryExpanded = isExpanded
+                        }
+                    }
+                )
+                .frame(maxWidth: isRatingExpanded || isCategoryExpanded ? .infinity : nil)
                 .transition(.asymmetric(
                     insertion: .scale.combined(with: .opacity),
                     removal: .scale.combined(with: .opacity)
@@ -604,8 +619,16 @@ struct RestaurantDetailView: View {
                 Button {
                     let generator = UIImpactFeedbackGenerator(style: .light)
                     generator.impactOccurred()
-                    isEditingReview.toggle()
                     if isEditingReview {
+                        // 点击打钩按钮：保存评价
+                        withAnimation {
+                            restaurant.review = tempReview
+                            isEditingReview = false
+                        }
+                    } else {
+                        // 进入编辑模式：复制当前评价到临时变量
+                        tempReview = restaurant.review
+                        isEditingReview = true
                         reviewIsFocused = true
                     }
                 } label: {
@@ -627,16 +650,15 @@ struct RestaurantDetailView: View {
                         .fill(AppTheme.Colors.babyBlue)
                         .frame(width: 3, height: 14)
                     
-                    TextEditor(text: $editedReview)
-                        .font(.system(size: 14, weight: .medium))
+                    TextEditor(text: $tempReview)
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(AppTheme.Colors.darkText)
                         .frame(minHeight: 60)
                         .focused($reviewIsFocused)
                         .onChange(of: reviewIsFocused) { _, isFocused in
                             if !isFocused && isEditingReview {
-                                // 失去焦点时保存
+                                // 失去焦点时（点击键盘关闭按钮）：不保存，恢复原评价
                                 withAnimation {
-                                    restaurant.review = editedReview
                                     isEditingReview = false
                                 }
                             }
@@ -667,10 +689,10 @@ struct RestaurantDetailView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         RoundedRectangle(cornerRadius: 1.5)
                             .fill(AppTheme.Colors.babyBlue)
-                            .frame(width: 3, height: 14)
+                            .frame(width: 3, height: 16)
                         
                         Text(restaurant.review)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundColor(AppTheme.Colors.darkText)
                             .lineSpacing(2)
                     }
@@ -767,12 +789,12 @@ struct RestaurantDetailView: View {
         }
     }
     
-    // MARK: - 标签贴纸 - 参考ProfileView
+    // MARK: - 标签贴纸 - 参考StackedRestaurantCard同款babyblue样式
     private func tagSticker(_ tag: String) -> some View {
         HStack(spacing: 6) {
             Text(tag)
                 .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
+                .foregroundColor(AppTheme.Colors.babyBlue)
             
             if isEditingTags {
                 // 删除按钮
@@ -785,7 +807,7 @@ struct RestaurantDetailView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.lightText)
+                        .foregroundColor(AppTheme.Colors.babyBlue)
                 }
             }
         }
@@ -793,7 +815,7 @@ struct RestaurantDetailView: View {
         .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(AppTheme.Colors.softBackground)
+                .fill(AppTheme.Colors.babyBlue.opacity(0.12))
         )
         // 任务5：标签添加细微阴影
         .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 2)
@@ -1244,7 +1266,18 @@ struct EditableDataCardNoBorder: View {
 }
 
 // MARK: - FlowLayout 自动换行布局
-struct FlowLayout: Layout {
+struct FlowLayout<Content: View>: View {
+    var spacing: CGFloat = 8
+    @ViewBuilder var content: Content
+    
+    var body: some View {
+        _FlowLayout(spacing: spacing) {
+            content
+        }
+    }
+}
+
+struct _FlowLayout: Layout {
     var spacing: CGFloat = 8
     
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -1427,6 +1460,308 @@ struct RatingItemData {
     let score: Double
     let emoji: String
     let slang: String
+}
+
+// MARK: - 品类展开组件（与评分组件同款展开风格）
+struct ExpandableCategoryView: View {
+    let currentCategory: String
+    let onCategorySelected: (String) -> Void
+    let onExpandStateChanged: ((Bool) -> Void)?
+    
+    @State private var isExpanded = false {
+        didSet {
+            onExpandStateChanged?(isExpanded)
+        }
+    }
+    
+    // 创建新品类相关状态
+    @State private var isCreatingNewCategory = false
+    @State private var newCategoryName = ""
+    @State private var createErrorMessage: String?
+    
+    // 使用动态获取的品类列表（包含用户自定义）
+    @Environment(\.modelContext) private var modelContext
+    
+    private var categories: [String] {
+        CategoryManager.shared.getSelectableCategories(context: modelContext)
+    }
+    
+    // 检查输入的品类是否已存在
+    private var existingCategory: String? {
+        let trimmed = newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return categories.first { $0 == trimmed }
+    }
+    
+    // 是否显示"品类已存在"提示
+    private var showExistingCategoryHint: Bool {
+        existingCategory != nil
+    }
+    
+    // 计算按钮背景色
+    private var buttonBackgroundColor: Color {
+        if newCategoryName.isEmpty {
+            return Color.gray
+        } else if showExistingCategoryHint {
+            return AppTheme.Colors.darkText
+        } else {
+            return AppTheme.Colors.accent
+        }
+    }
+    
+    var body: some View {
+        ZStack {
+            // 展开后的横向矩形
+            if isExpanded {
+                expandedContainer
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.95, anchor: .center).combined(with: .opacity),
+                        removal: .scale(scale: 0.95, anchor: .center).combined(with: .opacity)
+                    ))
+            } else {
+                // 收起状态的胶囊按钮
+                collapsedButton
+                    .transition(.opacity)
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
+    }
+    
+    // MARK: - 收起状态：胶囊按钮
+    private var collapsedButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                isExpanded = true
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "fork.knife")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.Colors.babyBlue)
+                
+                Text(currentCategory.isEmpty ? "未分类" : currentCategory)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                    .lineLimit(1)
+                
+                Text("品类")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(
+                Capsule()
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
+            )
+        }
+        .buttonStyle(ScaleButtonStyle())
+    }
+    
+    // MARK: - 展开状态：自适应高度矩形，横向胶囊选项自动换行
+    private var expandedContainer: some View {
+        VStack(spacing: 16) {
+            // 品类选项网格
+            FlowLayout(spacing: 12) {
+                ForEach(categories, id: \.self) { category in
+                    CategoryOptionButton(
+                        category: category,
+                        isSelected: currentCategory == category || existingCategory == category,
+                        onTap: { selectCategory(category) }
+                    )
+                }
+            }
+            
+            // 创建新品类区域
+            if isCreatingNewCategory {
+                // 输入模式
+                HStack(spacing: 12) {
+                    TextField("输入新品类名称", text: $newCategoryName)
+                        .font(.system(size: 14, weight: .medium))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(createErrorMessage != nil ? Color.red.opacity(0.5) : AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 1)
+                        )
+                    
+                    Button {
+                        if let existing = existingCategory {
+                            // 如果品类已存在，直接选中
+                            selectCategory(existing)
+                            withAnimation(.spring(response: 0.3)) {
+                                isCreatingNewCategory = false
+                                newCategoryName = ""
+                            }
+                        } else {
+                            createNewCategory()
+                        }
+                    } label: {
+                        Text(showExistingCategoryHint ? "选用" : "创建")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, showExistingCategoryHint ? 16 : 20)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .fill(buttonBackgroundColor)
+                            )
+                    }
+                    .disabled(newCategoryName.isEmpty)
+                    
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            isCreatingNewCategory = false
+                            newCategoryName = ""
+                            createErrorMessage = nil
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                Circle()
+                                    .fill(Color.gray.opacity(0.1))
+                            )
+                    }
+                }
+                
+                // 提示信息
+                if showExistingCategoryHint {
+                    Text("该品类已存在，点击「选用」直接选择")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.iconAmber)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                } else if let errorMessage = createErrorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                }
+            } else {
+                // 按钮模式
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        isCreatingNewCategory = true
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("创建新品类")
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                    }
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(
+                        Capsule()
+                            .stroke(AppTheme.Colors.mediumGray.opacity(0.4), lineWidth: 1)
+                            .background(Capsule().fill(Color.white.opacity(0.5)))
+                    )
+                }
+                .buttonStyle(ScaleButtonStyle())
+            }
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
+        )
+    }
+    
+    // MARK: - 选择品类
+    private func selectCategory(_ category: String) {
+        // 触感反馈
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+        
+        onCategorySelected(category)
+        
+        // 延迟收起 - 最短延迟时间，快速收回
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
+                isExpanded = false
+            }
+        }
+    }
+    
+    // MARK: - 创建新品类
+    private func createNewCategory() {
+        createErrorMessage = nil
+        
+        do {
+            let newCategory = try CategoryManager.shared.createCategory(
+                name: newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines),
+                context: modelContext
+            )
+            
+            // 成功触感反馈
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            
+            // 重置状态
+            withAnimation(.spring(response: 0.3)) {
+                isCreatingNewCategory = false
+                newCategoryName = ""
+            }
+            
+            // 立即选中新创建的品类
+            selectCategory(newCategory.name)
+            
+        } catch let error as CategoryError {
+            createErrorMessage = error.errorDescription
+            
+            // 错误触感反馈
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.error)
+            
+        } catch {
+            createErrorMessage = "创建失败，请重试"
+        }
+    }
+}
+
+// MARK: - 品类选项按钮
+struct CategoryOptionButton: View {
+    let category: String
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button {
+            onTap()
+        } label: {
+            Text(category)
+                .font(.system(size: 14, weight: isSelected ? .bold : .medium, design: .rounded))
+                .foregroundColor(isSelected ? AppTheme.Colors.babyBlue : AppTheme.Colors.darkText)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? AppTheme.Colors.babyBlue.opacity(0.12) : Color.gray.opacity(0.08))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? AppTheme.Colors.babyBlue.opacity(0.3) : Color.clear, lineWidth: 1)
+                )
+        }
+        .buttonStyle(ScaleButtonStyle())
+        .scaleEffect(isSelected ? 1.05 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isSelected)
+    }
 }
 
 // MARK: - 评分选项视图

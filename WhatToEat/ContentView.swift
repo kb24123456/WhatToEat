@@ -46,7 +46,7 @@ struct ContentView: View {
     @StateObject private var inputProxyManager = InputProxyManager.shared
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             // 背景层：奶白背景铺满整个屏幕（包括安全区域）
             AppTheme.Colors.milkWhite
                 .ignoresSafeArea()
@@ -80,18 +80,17 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationBackground(.white)
             }
-
+            
+            // 导航条放置在安全区域内，紧贴底部
             if !isTabBarHidden {
-                VStack {
-                    Spacer()
-                    customTabBar
-                }
+                customTabBar
             }
             
             // MARK: - 键盘吸附栏（全局输入代理）
             AccessoryInputView()
                 .zIndex(100)  // 确保在最上层
         }
+        // 忽略键盘安全区域
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onReceive(NotificationCenter.default.publisher(for: .hideTabBar)) { _ in
             withAnimation {
@@ -122,7 +121,8 @@ struct ContentView: View {
         }
     }
     
-    // 自定义导航栏组件 - 毛玻璃效果
+    // 自定义导航栏组件 - 胶囊样式 + 动态背景指示条
+    // 使用 safeAreaInset 嵌入，紧贴安全区域底部
     private var customTabBar: some View {
         HStack(spacing: 0) {
             // 1. 食库按钮
@@ -174,13 +174,23 @@ struct ContentView: View {
             )
         }
         .frame(height: 64)
-        // 毛玻璃背景
-        .background(.ultraThinMaterial.opacity(0.9))
-        // 取消边框线
+        // 任务1：改为胶囊样式（两端半圆）+ 玻璃质感 + 边框高亮与轻量阴影
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            Capsule()
+                .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 8)
+        .padding(.horizontal, 16)
+        // 负值底部间距，让胶囊下边缘紧贴系统导航条（Home Indicator）
+        .padding(.bottom, -12)
         .zIndex(100)
     }
     
-    // MARK: - Tab Button with 奶脂实色风格
+    // MARK: - Tab Button
     private func tabButton(tab: TabItem, icon: String, title: String) -> some View {
         let isSelected = selectedTab == tab
         
@@ -191,18 +201,16 @@ struct ContentView: View {
             // 触感反馈
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } label: {
-            ZStack {
-                VStack(spacing: 4) {
-                    Image(systemName: icon)
-                        .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
-                        .frame(height: 22)
-                    
-                    Text(title)
-                        .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .rounded))
-                        .frame(height: 10)
-                }
-                .foregroundColor(isSelected ? .black : AppTheme.Colors.textSecondary.opacity(0.7))
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
+                    .frame(height: 22)
+                
+                Text(title)
+                    .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .rounded))
+                    .frame(height: 10)
             }
+            .foregroundColor(isSelected ? .black : AppTheme.Colors.textSecondary.opacity(0.7))
             .frame(maxWidth: .infinity, maxHeight: 60)
         }
         .buttonStyle(.plain)

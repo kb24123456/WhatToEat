@@ -28,6 +28,31 @@ struct ProfileView: View {
     @State private var newTagInput = ""
     @FocusState private var tagInputIsFocused: Bool
     
+    // MARK: - 品类管理状态
+    @State private var isEditingCategories = false
+    @State private var newCategoryInput = ""
+    @FocusState private var categoryInputIsFocused: Bool
+    @State private var userCategories: [UserCategory] = []
+    
+    // MARK: - 删除品类相关状态
+    @State private var deleteCategoryData: DeleteCategoryData? = nil
+    @State private var selectedRestaurantNewCategory: [UUID: String] = [:]
+    
+    // 删除品类数据模型
+    struct DeleteCategoryData: Identifiable {
+        let id = UUID()
+        let categoryName: String
+        let restaurants: [Restaurant]
+    }
+    
+    // MARK: - 品类-餐厅映射缓存（优化查询性能）
+    @State private var categoryRestaurantMap: [String: [Restaurant]] = [:]
+    @State private var isLoadingCategoryMap = false
+    
+    // MARK: - 加载提示状态
+    @State private var showLoadingAlert = false
+    @State private var loadingCategoryName = ""
+    
     // MARK: - Keyboard Animation Delay
     private let keyboardAnimationDelay: TimeInterval = 0.25  // 展开动画完成后再弹出键盘
     
@@ -58,6 +83,9 @@ struct ProfileView: View {
                         tagsCloudSection
                             .id("tagsCloudSection")
                             .padding(.top, AppTheme.Card.spacingSmall)
+                        categoryManagementSection
+                            .id("categoryManagementSection")
+                            .padding(.top, AppTheme.Card.spacingSmall)
                         top5RestaurantsSection
                             .padding(.top, AppTheme.Card.spacingSmall)
 
@@ -81,7 +109,8 @@ struct ProfileView: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 40)
+                    // 底部内边距：为导航条留出空间（减少间距让内容更靠近导航栏）
+                    .padding(.bottom, 20)
                 }
                 .background(AppTheme.Colors.milkWhite)
                 // 自动滚动到标签区域当键盘弹出时
@@ -660,6 +689,606 @@ struct ProfileView: View {
     private func saveTags() {
         UserDefaults.standard.set(userTags, forKey: "userCustomTags")
     }
+    
+    // MARK: - Phase 1.5: 品类管理卡片
+    private var categoryManagementSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 标题栏
+            HStack {
+                Text("我的品类")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundColor(AppTheme.Colors.darkText)
+                    .tracking(1.5)
+                
+                Spacer()
+                
+                // 管理/完成按钮
+                Button {
+                    if isEditingCategories {
+                        // 退出编辑模式
+                        withAnimation(.spring(response: 0.3)) {
+                            isEditingCategories = false
+                            newCategoryInput = ""
+                        }
+                    } else {
+                        // 进入编辑模式
+                        withAnimation(.spring(response: 0.3)) {
+                            isEditingCategories = true
+                        }
+                    }
+                } label: {
+                    Text(isEditingCategories ? "完成" : "管理")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(isEditingCategories ? AppTheme.Colors.accent : AppTheme.Colors.mediumGray)
+                }
+            }
+            
+            // 品类标签云
+            FlowLayout(spacing: 10) {
+                // 所有可用品类（预设 + 用户自定义）
+                let allCategories = CategoryManager.shared.getSelectableCategories(context: modelContext)
+                ForEach(allCategories, id: \.self) { category in
+                    let isPreset = CategoryManager.shared.getPresetCategories().contains(category)
+                    categoryChip(category, isPreset: isPreset)
+                }
+                
+                // 添加新品类输入框（编辑模式）
+                if isEditingCategories {
+                    HStack(spacing: 8) {
+                        TextField("输入新品类", text: $newCategoryInput)
+                            .font(.system(size: 14, weight: .medium))
+                            .focused($categoryInputIsFocused)
+                            .submitLabel(.done)
+                            .onSubmit {
+                                addNewCategory()
+                            }
+                        
+                        Button {
+                            addNewCategory()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(newCategoryInput.isEmpty ? Color.gray : AppTheme.Colors.accent)
+                        }
+                        .disabled(newCategoryInput.isEmpty)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+                    )
+                }
+            }
+            
+            // 提示文字
+            if !isEditingCategories {
+                Text("点击「管理」可添加或删除品类")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, AppTheme.Card.paddingHorizontal)
+        .padding(.vertical, AppTheme.Card.paddingVertical)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
+                .fill(AppTheme.Colors.softBackground)
+        )
+        .onAppear {
+            loadUserCategories()
+            // 预构建品类-餐厅映射缓存
+            if categoryRestaurantMap.isEmpty && !isLoadingCategoryMap {
+                buildCategoryRestaurantMap { }
+            }
+        }
+        .onChange(of: restaurants) { _, _ in
+            // 餐厅数据变化时，重建缓存
+            buildCategoryRestaurantMap { }
+        }
+        .sheet(item: $deleteCategoryData) { data in
+            DeleteCategorySheet(
+                categoryName: data.categoryName,
+                restaurants: data.restaurants,
+                selectedNewCategories: $selectedRestaurantNewCategory,
+                onConfirm: { updatedRestaurants in
+                    // 更新餐厅品类
+                    for (restaurantId, newCategory) in updatedRestaurants {
+                        if let restaurant = restaurants.first(where: { $0.id == restaurantId }) {
+                            restaurant.type = newCategory
+                        }
+                    }
+                    // 保存并删除品类
+                    try? modelContext.save()
+                    performDeleteCategory(data.categoryName)
+                    deleteCategoryData = nil
+                },
+                onCancel: {
+                    deleteCategoryData = nil
+                }
+            )
+        }
+        .alert("正在查询", isPresented: $showLoadingAlert) {
+            // 无按钮，自动关闭
+        } message: {
+            Text("正在为你查询哪些餐厅使用「\(loadingCategoryName)」品类...")
+        }
+    }
+    
+    // MARK: - 品类标签 Chip
+    private func categoryChip(_ name: String, isPreset: Bool) -> some View {
+        HStack(spacing: 6) {
+            Text(name)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(isPreset ? AppTheme.Colors.mediumGray : AppTheme.Colors.darkText)
+            
+            // 编辑模式下所有品类都显示删除按钮
+            if isEditingCategories {
+                Button {
+                    prepareDeleteCategory(name)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(AppTheme.Colors.mediumGray.opacity(0.7))
+                        .contentTransition(.symbolEffect(.replace))
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(isPreset ? Color.white.opacity(0.5) : AppTheme.Colors.babyBlue.opacity(0.15))
+        )
+        .overlay(
+            Capsule()
+                .stroke(isPreset ? AppTheme.Colors.mediumGray.opacity(0.2) : AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 0.5)
+        )
+        .scaleEffect(isEditingCategories ? 1.0 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isEditingCategories)
+    }
+    
+    // MARK: - 构建品类-餐厅映射缓存
+    private func buildCategoryRestaurantMap(completion: (() -> Void)? = nil) {
+        guard !isLoadingCategoryMap else { 
+            completion?()
+            return 
+        }
+        isLoadingCategoryMap = true
+        
+        // 使用后台线程构建映射表
+        Task { @MainActor in
+            var map: [String: [Restaurant]] = [:]
+            
+            // 单次遍历构建映射表，O(n) 复杂度
+            for restaurant in restaurants {
+                let category = restaurant.type
+                if map[category] == nil {
+                    map[category] = []
+                }
+                map[category]?.append(restaurant)
+            }
+            
+            categoryRestaurantMap = map
+            isLoadingCategoryMap = false
+            completion?()
+        }
+    }
+    
+    // MARK: - 准备删除品类（使用缓存）
+    private func prepareDeleteCategory(_ categoryName: String) {
+        // 如果缓存正在构建中，等待完成
+        if isLoadingCategoryMap {
+            waitForCacheAndContinue(categoryName)
+            return
+        }
+        
+        // 如果缓存为空，先构建缓存
+        if categoryRestaurantMap.isEmpty {
+            isLoadingCategoryMap = true
+            buildCategoryRestaurantMap {
+                self.isLoadingCategoryMap = false
+                self.continueDeleteCategory(categoryName)
+            }
+            return
+        }
+        
+        // 缓存已就绪，继续处理
+        continueDeleteCategory(categoryName)
+    }
+    
+    // MARK: - 等待缓存构建完成后继续
+    private func waitForCacheAndContinue(_ categoryName: String) {
+        loadingCategoryName = categoryName
+        showLoadingAlert = true
+        
+        // 定时检查缓存是否构建完成
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+            if !self.isLoadingCategoryMap && !self.categoryRestaurantMap.isEmpty {
+                timer.invalidate()
+                DispatchQueue.main.async {
+                    self.showLoadingAlert = false
+                    self.continueDeleteCategory(categoryName)
+                }
+            }
+        }
+    }
+    
+    // MARK: - 继续删除品类流程
+    private func continueDeleteCategory(_ categoryName: String) {
+        // O(1) 查询
+        let matchingRestaurants = categoryRestaurantMap[categoryName] ?? []
+        
+        if matchingRestaurants.isEmpty {
+            // 没有餐厅使用，直接删除
+            performDeleteCategory(categoryName)
+        } else {
+            // 有餐厅使用，显示 Sheet - 使用数据模型保持数据稳定
+            selectedRestaurantNewCategory = [:]
+            deleteCategoryData = DeleteCategoryData(
+                categoryName: categoryName,
+                restaurants: matchingRestaurants
+            )
+        }
+    }
+    
+    // MARK: - 执行删除品类
+    private func performDeleteCategory(_ categoryName: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+            // 从用户自定义品类中删除
+            if let userCategory = userCategories.first(where: { $0.name == categoryName }) {
+                userCategory.isActive = false
+                userCategories.removeAll { $0.id == userCategory.id }
+            }
+            
+            // 如果是预设品类，需要创建一个隐藏的 UserCategory 来标记为已删除
+            // 这样 getSelectableCategories 就不会返回该品类
+            if CategoryManager.shared.getPresetCategories().contains(categoryName) {
+                // 创建一个新的 UserCategory 来标记该预设品类被删除
+                let hiddenCategory = UserCategory(name: "__DELETED_PRESET_\(categoryName)")
+                hiddenCategory.isActive = false
+                modelContext.insert(hiddenCategory)
+            }
+        }
+        
+        do {
+            try modelContext.save()
+            
+            // 成功触感
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            
+        } catch {
+            print("删除品类失败: \(error)")
+        }
+    }
+    
+    // MARK: - 加载用户自定义品类
+    private func loadUserCategories() {
+        let descriptor = FetchDescriptor<UserCategory>(
+            predicate: #Predicate { $0.isActive == true },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        
+        do {
+            userCategories = try modelContext.fetch(descriptor)
+        } catch {
+            print("加载用户品类失败: \(error)")
+        }
+    }
+    
+    // MARK: - 添加新品类
+    private func addNewCategory() {
+        let trimmed = newCategoryInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        
+        // 检查是否已存在
+        let allExisting = CategoryManager.shared.getPresetCategories() + userCategories.map { $0.name }
+        guard !allExisting.contains(trimmed) else {
+            // 已存在，清空输入并提示
+            newCategoryInput = ""
+            return
+        }
+        
+        do {
+            let newCategory = try CategoryManager.shared.createCategory(
+                name: trimmed,
+                context: modelContext
+            )
+            
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+                userCategories.insert(newCategory, at: 0)
+                newCategoryInput = ""
+            }
+            
+            // 成功触感
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            
+        } catch {
+            print("创建品类失败: \(error)")
+            // 错误触感
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.error)
+        }
+    }
+    
+    // MARK: - 删除品类
+    private func deleteCategory(_ category: UserCategory) {
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) {
+            category.isActive = false
+            userCategories.removeAll { $0.id == category.id }
+        }
+        
+        do {
+            try modelContext.save()
+            
+            // 成功触感
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            
+        } catch {
+            print("删除品类失败: \(error)")
+        }
+    }
+}
+
+// MARK: - 删除品类 Sheet
+struct DeleteCategorySheet: View {
+    let categoryName: String
+    let restaurants: [Restaurant]
+    @Binding var selectedNewCategories: [UUID: String]
+    let onConfirm: ([UUID: String]) -> Void
+    let onCancel: () -> Void
+    
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var localSelections: [UUID: String] = [:]
+    @State private var showSuccessAnimation = false
+    
+    // 缓存可用品类列表，避免重复计算
+    private let availableCategories: [String]
+    
+    init(categoryName: String, restaurants: [Restaurant], selectedNewCategories: Binding<[UUID: String]>, onConfirm: @escaping ([UUID: String]) -> Void, onCancel: @escaping () -> Void) {
+        self.categoryName = categoryName
+        self.restaurants = restaurants
+        self._selectedNewCategories = selectedNewCategories
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
+        // 预先计算可用品类
+        self.availableCategories = CategoryManager.shared.getPresetCategories()
+            .filter { $0 != categoryName }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // 顶部提示
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(AppTheme.Colors.iconAmber)
+                        .symbolEffect(.bounce, options: .repeating)
+                    
+                    Text("「\(categoryName)」正在被使用")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                    
+                    Text("以下 \(restaurants.count) 家餐厅正在使用该品类，请为它们选择新的品类")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                }
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                
+                // 餐厅列表
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(restaurants) { restaurant in
+                            RestaurantCategoryRow(
+                                restaurant: restaurant,
+                                selectedCategory: binding(for: restaurant.id),
+                                availableCategories: availableCategories
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                }
+                
+                // 底部按钮
+                VStack(spacing: 12) {
+                    Button {
+                        performUpdate()
+                    } label: {
+                        HStack(spacing: 8) {
+                            if showSuccessAnimation {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 18))
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                            Text("确认修改并删除品类")
+                                .font(.system(size: 16, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(
+                            Capsule()
+                                .fill(canConfirm ? AppTheme.Colors.accent : Color.gray)
+                        )
+                    }
+                    .disabled(!canConfirm)
+                    
+                    Button {
+                        onCancel()
+                    } label: {
+                        Text("取消")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(
+                    Rectangle()
+                        .fill(Color.white)
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: -4)
+                )
+            }
+            .background(AppTheme.Colors.milkWhite)
+            .navigationTitle("修改餐厅品类")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        onCancel()
+                    }
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+                }
+            }
+        }
+        .onAppear {
+            localSelections = selectedNewCategories
+        }
+    }
+    
+    private func binding(for restaurantId: UUID) -> Binding<String> {
+        Binding(
+            get: { localSelections[restaurantId] ?? "" },
+            set: { localSelections[restaurantId] = $0 }
+        )
+    }
+    
+    private var canConfirm: Bool {
+        restaurants.allSatisfy { localSelections[$0.id] != nil && !localSelections[$0.id]!.isEmpty }
+    }
+    
+    private func performUpdate() {
+        // 触感反馈
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        
+        withAnimation(.spring(response: 0.3)) {
+            showSuccessAnimation = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            onConfirm(localSelections)
+        }
+    }
+}
+
+// MARK: - 餐厅品类选择行
+struct RestaurantCategoryRow: View {
+    let restaurant: Restaurant
+    @Binding var selectedCategory: String
+    let availableCategories: [String]
+    
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 餐厅信息
+            HStack(spacing: 12) {
+                // 餐厅图片或占位符
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(AppTheme.Colors.softBackground)
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Image(systemName: "fork.knife")
+                            .font(.system(size: 20))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                    )
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(restaurant.name)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                        .lineLimit(1)
+                    
+                    Text(restaurant.district)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
+                }
+                
+                Spacer()
+                
+                // 当前品类标签
+                Text(restaurant.type)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(AppTheme.Colors.iconAmber)
+                    )
+            }
+            
+            // 新品类选择
+            VStack(alignment: .leading, spacing: 8) {
+                Text("选择新品类")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.mediumGray)
+                
+                Menu {
+                    ForEach(availableCategories, id: \.self) { category in
+                        Button(category) {
+                            withAnimation(.spring(response: 0.2)) {
+                                selectedCategory = category
+                            }
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text(selectedCategory.isEmpty ? "请选择新品类" : selectedCategory)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(selectedCategory.isEmpty ? AppTheme.Colors.mediumGray : AppTheme.Colors.darkText)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(selectedCategory.isEmpty ? AppTheme.Colors.iconAmber.opacity(0.5) : AppTheme.Colors.babyBlue.opacity(0.5), lineWidth: 1)
+                    )
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
+        )
+        .opacity(isExpanded ? 1 : 0)
+        .offset(y: isExpanded ? 0 : 20)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
+        .onAppear {
+            isExpanded = true
+        }
+    }
+}
+
+// MARK: - ProfileView 继续
+extension ProfileView {
     
     // MARK: - Phase 2: TOP 5 Restaurants (年度回顾预热)
     private var top5RestaurantsSection: some View {

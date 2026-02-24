@@ -76,10 +76,16 @@ struct AddRestaurantView: View {
     @State private var categoryMatchStatus: MatchStatus = .none
     @State private var categoryMatchMessage: String = ""
     
+    // MARK: - 创建新品类相关状态
+    @State private var showCreateCategoryAlert = false
+    @State private var newCategoryName = ""
+    @State private var showDuplicateCategoryAlert = false
+    @State private var duplicateCategoryName = ""
+    
     let presetTags = ["氛围感", "老字号", "二刷", "排队王", "性价比"]
     
     var categoryOptions: [String] {
-        CategoryManager.shared.getPresetCategories()
+        CategoryManager.shared.getSelectableCategories(context: modelContext)
     }
     
     var districtOptions: [String] {
@@ -395,6 +401,12 @@ struct AddRestaurantView: View {
                                 }
                             }
                         }
+                        Divider()
+                        Button {
+                            showCreateCategoryAlert = true
+                        } label: {
+                            Label("创建新品类", systemImage: "plus")
+                        }
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "fork.knife")
@@ -417,8 +429,30 @@ struct AddRestaurantView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .alert("创建新品类", isPresented: $showCreateCategoryAlert) {
+            TextField("输入品类名称", text: $newCategoryName)
+            Button("取消", role: .cancel) {
+                newCategoryName = ""
+            }
+            Button("创建") {
+                createNewCategory()
+            }
+            .disabled(newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("请输入新的餐厅品类名称")
+        }
+        .alert("品类已存在", isPresented: $showDuplicateCategoryAlert) {
+            Button("取消", role: .cancel) {
+                duplicateCategoryName = ""
+            }
+            Button("直接选用") {
+                selectExistingCategory(duplicateCategoryName)
+            }
+        } message: {
+            Text("「\(duplicateCategoryName)」已存在，是否为你直接选用？")
+        }
     }
-    
+
     // 保留旧实现供参考（已合并到infoPodContainer中）
     private var nameTextField: some View {
         TextField("餐厅名称", text: $name)
@@ -485,7 +519,7 @@ struct AddRestaurantView: View {
     private var categoryCapsule: some View {
         VStack(alignment: .leading, spacing: 4) {
             Menu {
-                Button("选择品类") { 
+                Button("选择品类") {
                     category = ""
                     categoryMatchStatus = .none
                 }
@@ -496,13 +530,19 @@ struct AddRestaurantView: View {
                         categoryMatchStatus = .none
                     }
                 }
+                Divider()
+                Button {
+                    showCreateCategoryAlert = true
+                } label: {
+                    Label("创建新品类", systemImage: "plus")
+                }
             } label: {
                 filterCapsuleLabel(
                     title: category.isEmpty ? "品类" : category,
                     isSelected: !category.isEmpty
                 )
             }
-            
+
             // 品类匹配提示
             if categoryMatchStatus == .manuallyRequired {
                 Text("💡 未能识别，请手动选择")
@@ -512,6 +552,90 @@ struct AddRestaurantView: View {
                     .transition(.opacity)
             }
         }
+        .alert("创建新品类", isPresented: $showCreateCategoryAlert) {
+            TextField("输入品类名称", text: $newCategoryName)
+            Button("取消", role: .cancel) {
+                newCategoryName = ""
+            }
+            Button("创建") {
+                createNewCategory()
+            }
+            .disabled(newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("请输入新的餐厅品类名称")
+        }
+        .alert("品类已存在", isPresented: $showDuplicateCategoryAlert) {
+            Button("取消", role: .cancel) {
+                duplicateCategoryName = ""
+            }
+            Button("直接选用") {
+                selectExistingCategory(duplicateCategoryName)
+            }
+        } message: {
+            Text("「\(duplicateCategoryName)」已存在，是否为你直接选用？")
+        }
+    }
+
+    // MARK: - 创建新品类
+    private func createNewCategory() {
+        let trimmedName = newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
+        do {
+            let newCategory = try CategoryManager.shared.createCategory(
+                name: trimmedName,
+                context: modelContext
+            )
+
+            // 成功触感反馈
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+
+            // 自动选中新创建的品类
+            withAnimation(AppTheme.Animations.standardSpring) {
+                category = newCategory.name
+                categoryMatchStatus = .none
+            }
+
+            // 重置状态
+            newCategoryName = ""
+
+        } catch let error as CategoryError {
+            switch error {
+            case .duplicateName:
+                // 品类已存在，弹出确认框
+                duplicateCategoryName = trimmedName
+                showDuplicateCategoryAlert = true
+                
+            case .emptyName, .saveFailed:
+                // 其他错误，触感反馈
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.error)
+                print("创建品类失败: \(error)")
+            }
+            
+        } catch {
+            // 未知错误
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.error)
+            print("创建品类失败: \(error)")
+        }
+    }
+    
+    // MARK: - 选用已存在的品类
+    private func selectExistingCategory(_ categoryName: String) {
+        withAnimation(AppTheme.Animations.standardSpring) {
+            category = categoryName
+            categoryMatchStatus = .none
+        }
+        
+        // 成功触感反馈
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        
+        // 重置状态
+        newCategoryName = ""
+        duplicateCategoryName = ""
     }
     
     // MARK: - 地址信息行（最多2行显示）

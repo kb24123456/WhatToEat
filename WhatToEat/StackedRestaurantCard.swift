@@ -46,7 +46,7 @@ struct StackedRestaurantCard: View {
         // 物理质感实色系统：压住背景流动感
         .background(
             RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
-                .fill(AppTheme.Colors.milkWhite)  // 奶白背景，防止透视
+                .fill(Color.white)  // 与RestaurantDetailView胶囊相同的白色背景
         )
         // 双层描边系统：白色高光 + 黑色物理边框
         .overlay(
@@ -60,12 +60,12 @@ struct StackedRestaurantCard: View {
                     .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
             }
         )
-        // 增强浮动阴影
+        // iOS 26 小组件风格阴影
         .shadow(
-            color: Color.black.opacity(0.03),
-            radius: 20,
+            color: Color.black.opacity(0.08),
+            radius: 16,
             x: 0,
-            y: 10
+            y: 4
         )
         // 距离屏幕左右边缘 16pt 间距
         .padding(.horizontal, 16)

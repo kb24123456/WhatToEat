@@ -98,6 +98,7 @@ struct LibraryView: View {
                         restaurants: restaurants,
                         districts: currentDistricts
                     )
+                    .environment(\.modelContext, modelContext)
                     // 筛选栏底部横线：硬核视觉切分点
                     .overlay(
                         Rectangle()
@@ -278,7 +279,8 @@ struct LibraryView: View {
                         }
                     }
                 }
-                .padding(.bottom, 90)
+                // 底部内边距：为导航条留出空间（减少间距让卡片更靠近导航栏）
+                .padding(.bottom, 20)
                 .background(
                     GeometryReader { proxy in
                         Color.clear
@@ -355,8 +357,8 @@ struct LibraryView: View {
 
         private func updateStackState(frame: CGRect) {
             let screenHeight = UIScreen.main.bounds.height
-            // 设定一个"堆叠基准线"，距离底部 120pt 的位置
-            let stackBaseLine = screenHeight - 120
+            // 设定一个"堆叠基准线"，距离底部 80pt 的位置（更靠近导航栏）
+            let stackBaseLine = screenHeight - 80
             let cardBottom = frame.maxY
             
             // 计算卡片底部超过基准线多少
@@ -487,6 +489,7 @@ private struct FilterBarView: View {
     @Binding var sortOption: SortOption
     let restaurants: [Restaurant]
     let districts: [String]
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         HStack(spacing: 12) {
@@ -504,11 +507,11 @@ private struct FilterBarView: View {
                 )
             }
 
-            // 2. 品类筛选胶囊
+            // 2. 品类筛选胶囊（使用统一的品类管理，包含用户自定义品类）
             Menu {
                 Button("全部分类") { selectedType = nil }
                 Divider()
-                ForEach(CategoryManager.shared.getAllCategories(from: restaurants), id: \.self) { type in
+                ForEach(CategoryManager.shared.getSelectableCategories(context: modelContext), id: \.self) { type in
                     Button(type) { selectedType = type }
                 }
             } label: {
@@ -756,7 +759,8 @@ private struct RestaurantListView: View {
                     }
                 }
             }
-            .padding(.bottom, 90)
+            // 底部内边距：为导航条留出空间（减少间距让卡片更靠近导航栏）
+            .padding(.bottom, 20)
         }
         // 打卡弹窗
         .sheet(item: $checkInRestaurant) { restaurant in

@@ -666,7 +666,8 @@ struct RestaurantFlowView: View {
                         }
                     }
                     .padding(.top, 40)
-                    .padding(.bottom, 60)
+                    // 底部内边距：为导航条留出空间（减少间距让内容更靠近导航栏）
+                    .padding(.bottom, 20)
                     .padding(.horizontal, 40)
                     .offset(y: buttonOffset)
                 }
