@@ -49,6 +49,9 @@ struct RestaurantFlowView: View {
     // 决策助手显示状态
     @State private var showDecisionAssistant = false
     
+    // 食签显示状态
+    @State private var showFortune = false
+    
     // 随机选择动画状态
     @State private var isRandomSelecting = false
     @State private var targetRestaurantID: Restaurant.ID?
@@ -120,6 +123,28 @@ struct RestaurantFlowView: View {
                         insertion: .opacity.combined(with: .scale(scale: 0.9)),
                         removal: .opacity.combined(with: .scale(scale: 1.1))
                     ))
+                }
+            }
+            
+            // 沉浸式食签视图
+            if showFortune {
+                ZStack {
+                    // 背景模糊层
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                showFortune = false
+                            }
+                        }
+                    
+                    // 食签内容
+                    ImmersiveFortuneView()
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.9)),
+                            removal: .opacity.combined(with: .scale(scale: 1.1))
+                        ))
                 }
             }
         }
@@ -355,10 +380,16 @@ struct RestaurantFlowView: View {
             let topPadding: CGFloat = screenHeight * 0.10 // 减少顶部间距为决策按钮留出空间
             
             VStack(spacing: 0) {
-                // 决策助手按钮
-                decisionAssistantButton
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
+                // 顶部按钮栏
+                HStack(spacing: 12) {
+                    // 决策助手按钮
+                    decisionAssistantButton
+                    
+                    // 今日食签按钮
+                    fortuneButton
+                }
+                .padding(.top, 16)
+                .padding(.bottom, 8)
                 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: spacing) {
@@ -460,6 +491,28 @@ struct RestaurantFlowView: View {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 14, weight: .semibold))
                 Text("帮我决定吃什么")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.glass)  // iOS 26 液态玻璃样式
+        .controlSize(.regular)
+    }
+    
+    // MARK: - 今日食签按钮（iOS 26 液态玻璃样式）
+    private var fortuneButton: some View {
+        Button(action: {
+            // 触觉反馈：轻微震动
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            
+            showFortune = true
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("今日食签")
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
             }
             .padding(.horizontal, 16)

@@ -8,11 +8,12 @@
 import Foundation
 
 /// 区域管理中心，用于管理城市和行政区的层级关系
+/// 优化版：支持全国333个地级市，使用 CityData 作为数据源
 class RegionManager {
     // 单例实例
     static let shared = RegionManager()
     
-    // 城市-行政区数据结构
+    // 城市-行政区数据结构（从JSON加载）
     private let cityDistricts: [String: [String]]
     
     // 私有初始化方法，防止外部创建实例
@@ -79,15 +80,40 @@ class RegionManager {
         cityDistricts = loadedData
     }
     
-    /// 获取所有城市列表
+    // MARK: - 城市列表（使用 CityData）
+    
+    /// 获取所有城市列表（333个地级市）
     var allCities: [String] {
-        Array(cityDistricts.keys).sorted()
+        return CityData.getCities()
     }
+    
+    /// 获取热门城市列表
+    var hotCities: [String] {
+        return CityData.hotCities
+    }
+    
+    /// 搜索城市（支持中文、拼音、首字母）
+    func searchCities(query: String) -> [String] {
+        return CityData.searchCities(query: query)
+    }
+    
+    /// 检查城市是否有效
+    func isValidCity(_ city: String) -> Bool {
+        return CityData.isValidCity(city)
+    }
+    
+    // MARK: - 行政区查询（保持兼容）
     
     /// 根据城市名获取对应的行政区列表
     /// - Parameter city: 城市名称
-    /// - Returns: 该城市的行政区列表，如果城市不存在则返回空数组
+    /// - Returns: 该城市的行政区列表，如果城市不存在则返回 ["其他"]
     func getDistricts(for city: String) -> [String] {
-        cityDistricts[city] ?? []
+        // 1. 先从 JSON 加载的 districts 中查找
+        if let districts = cityDistricts[city], !districts.isEmpty {
+            return districts
+        }
+        
+        // 2. 如果找不到，返回默认值
+        return ["其他"]
     }
 }

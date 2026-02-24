@@ -175,14 +175,14 @@ struct ImmersiveFortuneView: View {
         VStack(spacing: 20) {
             // 宜
             ImmersiveYiJiCard(
-                type: .yi,
+                type: YiJiType.yi,
                 highlight: fortune.yiHighlight,
                 detail: fortune.yiSub
             )
             
             // 忌
             ImmersiveYiJiCard(
-                type: .ji,
+                type: YiJiType.ji,
                 highlight: fortune.jiHighlight,
                 detail: fortune.jiSub
             )
@@ -415,15 +415,6 @@ struct ImmersiveYiJiCard: View {
                 .shadow(color: Color.white.opacity(0.8), radius: 2, x: 0, y: -1)
         )
     }
-}
-
-// MARK: - 宜忌类型
-enum YiJiType {
-    case yi, ji
-    
-    var title: String { self == .yi ? "宜" : "忌" }
-    var icon: String { self == .yi ? "checkmark" : "xmark" }
-    var color: Color { self == .yi ? AppTheme.Colors.accent : AppTheme.Colors.textPrimary }
 }
 
 #Preview {
