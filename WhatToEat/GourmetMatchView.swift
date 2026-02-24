@@ -12,6 +12,9 @@ struct GourmetMatchView: View {
     @State private var selectedDistrict: String = "全部"
     @State private var selectedType: String = "全部"
     
+    // 食签显示状态
+    @State private var showImmersiveFortune = false
+    
     // 地区和分类数据
     private let districts = ["全部", "渝中区", "江北区", "南岸区", "九龙坡区", "沙坪坝区", "渝北区", "巴南区"]
     private let types = ["全部", "火锅", "小面", "烧烤", "川菜", "日料", "西餐", "咖啡", "甜品"]
@@ -32,7 +35,30 @@ struct GourmetMatchView: View {
             }
             
             // MARK: 食签视图
-            FortuneView()
+            immersiveFortuneButton
+        }
+        .overlay {
+            // 沉浸式食签视图
+            if showImmersiveFortune {
+                ZStack {
+                    // 背景模糊层
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                showImmersiveFortune = false
+                            }
+                        }
+                    
+                    // 食签内容
+                    ImmersiveFortuneView()
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.9)),
+                            removal: .opacity.combined(with: .scale(scale: 1.1))
+                        ))
+                }
+            }
         }
     }
     
@@ -68,6 +94,35 @@ struct GourmetMatchView: View {
             }
             
             Spacer()
+        }
+    }
+    
+    // MARK: - 沉浸式食签按钮
+    private var immersiveFortuneButton: some View {
+        VStack {
+            Spacer()
+            
+            Button(action: {
+                // 触觉反馈
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
+                
+                showImmersiveFortune = true
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("今日食签")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.glass)
+            .controlSize(.regular)
+            
+            Spacer()
+                .frame(height: 100)
         }
     }
     
