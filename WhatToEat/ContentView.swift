@@ -121,7 +121,7 @@ struct ContentView: View {
         }
     }
     
-    // 自定义导航栏组件 - 胶囊样式 + 动态背景指示条
+    // 自定义导航栏组件 - 胶囊样式 + 玻璃质感 + 边框高亮与轻量阴影
     // 使用 safeAreaInset 嵌入，紧贴安全区域底部
     private var customTabBar: some View {
         HStack(spacing: 0) {
@@ -174,16 +174,45 @@ struct ContentView: View {
             )
         }
         .frame(height: 64)
-        // 任务1：改为胶囊样式（两端半圆）+ 玻璃质感 + 边框高亮与轻量阴影
+        // 增强玻璃质感：多层材质叠加 + 渐变边框 + 柔和阴影
         .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
+            ZStack {
+                // 底层：模糊材质
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                
+                // 中层：半透明白色增强玻璃感
+                Capsule()
+                    .fill(Color.white.opacity(0.15))
+            }
         )
+        // 多层边框营造玻璃边缘光感
         .overlay(
-            Capsule()
-                .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+            ZStack {
+                // 外层：柔和白色光晕
+                Capsule()
+                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                
+                // 内层：更亮的边缘高光
+                Capsule()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.8),
+                                Color.white.opacity(0.3),
+                                Color.white.opacity(0.6)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+                    .padding(0.5)
+            }
         )
-        .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 8)
+        // 柔和多层阴影营造悬浮感
+        .shadow(color: Color.black.opacity(0.06), radius: 24, x: 0, y: 12)
+        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
         .padding(.horizontal, 16)
         // 负值底部间距，让胶囊下边缘紧贴系统导航条（Home Indicator）
         .padding(.bottom, -12)

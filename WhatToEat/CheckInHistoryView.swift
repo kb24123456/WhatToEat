@@ -70,9 +70,9 @@ struct CheckInHistoryView: View {
         }
     }
     
-    // MARK: - Background
+    // MARK: - Background - 与 ProfileView 一致
     private var backgroundGradient: some View {
-        AppTheme.Colors.milkWhite
+        AppTheme.Colors.pageBackground
     }
     
     // MARK: - Header Section

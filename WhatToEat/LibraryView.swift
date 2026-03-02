@@ -132,7 +132,7 @@ struct LibraryView: View {
             .toolbar(.visible, for: .tabBar)
             .sheet(isPresented: $showImportSheet) { ImportDataView() }
             .sheet(isPresented: $showCityPicker) {
-                SimpleCitySelectionView(selectedCity: $selectedCity)
+                CitySelectionView(selectedCity: $selectedCity)
             }
             .onChange(of: selectedCity) {
                 UserDefaults.standard.set($0, forKey: kSavedCityKey)

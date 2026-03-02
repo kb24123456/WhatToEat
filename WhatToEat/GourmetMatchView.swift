@@ -38,7 +38,7 @@ struct GourmetMatchView: View {
             immersiveFortuneButton
         }
         .overlay {
-            // 沉浸式食签视图
+            // 食签卡片视图
             if showImmersiveFortune {
                 ZStack {
                     // 背景模糊层
@@ -51,12 +51,16 @@ struct GourmetMatchView: View {
                             }
                         }
                     
-                    // 食签内容
-                    ImmersiveFortuneView()
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.9)),
-                            removal: .opacity.combined(with: .scale(scale: 1.1))
-                        ))
+                    // 食签卡片内容
+                    FortuneCardModalView(onClose: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showImmersiveFortune = false
+                        }
+                    })
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.9)),
+                        removal: .opacity.combined(with: .scale(scale: 1.1))
+                    ))
                 }
             }
         }

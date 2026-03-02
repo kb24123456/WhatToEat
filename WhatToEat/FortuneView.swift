@@ -120,6 +120,26 @@ struct FortuneView: View {
                 fortunePendantButton
             }
         }
+        // 视图首次出现时获取今日食签
+        .task {
+            await loadTodayFortuneIfNeeded()
+        }
+    }
+    
+    // 加载今日食签（如果需要）
+    private func loadTodayFortuneIfNeeded() async {
+        // 如果已经有今日食签且不是新的一天，不需要重新获取
+        if let fortune = aiManager.todayFortune {
+            let calendar = Calendar.current
+            if calendar.isDateInToday(fortune.date) {
+                print("✅ 今日食签已存在且有效，无需重新获取")
+                return
+            }
+        }
+        
+        // 获取今日食签（会自动处理缓存逻辑）
+        print("🔄 开始获取今日食签...")
+        _ = await aiManager.getTodayFortune()
     }
     
     // MARK: - 食签交互系统
@@ -211,84 +231,322 @@ struct FortuneView: View {
     }
 }
 
-// MARK: - 食签卡片内容
+// MARK: - 食签卡片内容（美化版）
 struct FortuneCardContent: View {
     let fortune: DailyFoodFortune
     let contentReady: Bool
     let onClose: () -> Void
+    @State private var animatedStars: Int = 0
+    @State private var starScales: [CGFloat] = [0, 0, 0, 0, 0]
+    @State private var foodGlowOpacity: Double = 0
     
     var body: some View {
         VStack(spacing: 0) {
-            TitleView()
-                .padding(.top, 24)
-                .padding(.bottom, 16)
-                .opacity(contentReady ? 1 : 0)
-                .offset(y: contentReady ? 0 : 20)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: contentReady)
+            // 标题栏（带关闭按钮）
+            headerView
             
-            FortuneMetrics(stars: fortune.fortuneStars)
-                .padding(.bottom, 16)
-                .opacity(contentReady ? 1 : 0)
-                .offset(y: contentReady ? 0 : 20)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(FortuneAnimationConstants.staggerDelay * 2), value: contentReady)
-            
-            Text(fortune.analysis)
-                .font(AppTheme.Fonts.bodyYuanti)
-                .multilineTextAlignment(.center)
-                .lineSpacing(6)
-                .lineLimit(3)
-                .foregroundColor(AppTheme.Colors.textPrimary)
-                .padding(.horizontal, 24)
+            // 运势星级
+            enhancedFortuneMetrics
                 .padding(.bottom, 20)
-                .opacity(contentReady ? 1 : 0)
-                .offset(y: contentReady ? 0 : 20)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(FortuneAnimationConstants.staggerDelay * 3), value: contentReady)
             
-            DividerLine()
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-                .opacity(contentReady ? 1 : 0)
-                .offset(y: contentReady ? 0 : 20)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(FortuneAnimationConstants.staggerDelay * 4), value: contentReady)
-            
-            YiJiRow(type: .yi, highlight: fortune.yiHighlight, detail: fortune.yiSub)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-                .opacity(contentReady ? 1 : 0)
-                .offset(y: contentReady ? 0 : 20)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(FortuneAnimationConstants.staggerDelay * 5), value: contentReady)
-            
-            YiJiRow(type: .ji, highlight: fortune.jiHighlight, detail: fortune.jiSub)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-                .opacity(contentReady ? 1 : 0)
-                .offset(y: contentReady ? 0 : 20)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(FortuneAnimationConstants.staggerDelay * 6), value: contentReady)
-            
-            DividerLine()
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-                .opacity(contentReady ? 1 : 0)
-                .offset(y: contentReady ? 0 : 20)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(FortuneAnimationConstants.staggerDelay * 7), value: contentReady)
-            
-            LuckyFoodView(food: fortune.luckFood)
+            // 运势解析
+            analysisView
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
-                .opacity(contentReady ? 1 : 0)
-                .offset(y: contentReady ? 0 : 20)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(FortuneAnimationConstants.staggerDelay * 8), value: contentReady)
+            
+            // 宜忌区域
+            yiJiSection
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            
+            // 开运食物
+            enhancedLuckyFoodView
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
         }
-        .frame(width: FortuneAnimationConstants.cardWidth, height: FortuneAnimationConstants.cardHeight)
+        .frame(width: 320)
         .background(
-            RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                .fill(AppTheme.Card.background)
+            ZStack {
+                // 主背景 - 冷白色
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.white)
+                
+                // 顶部微光效果
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.9),
+                                Color.white.opacity(0.4),
+                                Color.clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(height: 120)
+                    .offset(y: -100)
+                
+                // 边框
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.8),
+                                Color(hex: "#FFE4D6").opacity(0.3),
+                                Color.white.opacity(0.6)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+        )
+        .shadow(
+            color: Color(hex: "#FF6B6B").opacity(0.08),
+            radius: 40,
+            x: 0,
+            y: 20
+        )
+        .shadow(
+            color: Color.black.opacity(0.06),
+            radius: 60,
+            x: 0,
+            y: 30
+        )
+        .onChange(of: contentReady) { _, newValue in
+            if newValue {
+                animateStars()
+                animateFoodGlow()
+            }
+        }
+    }
+    
+    // MARK: - 标题栏
+    private var headerView: some View {
+        HStack {
+            Spacer()
+            
+            Text("今日食签")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color(hex: "#2D3436"), Color(hex: "#636E72")],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+            
+            Spacer()
+        }
+        .overlay(alignment: .trailing) {
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 26))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "#B2BEC3"), Color(hex: "#DFE6E9")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .padding(.trailing, 16)
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.top, 20)
+        .padding(.bottom, 16)
+        .opacity(contentReady ? 1 : 0)
+        .offset(y: contentReady ? 0 : 20)
+    }
+    
+    // MARK: - 增强版运势星级
+    private var enhancedFortuneMetrics: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<5, id: \.self) { index in
+                EnhancedStarView(
+                    isFilled: index < fortune.fortuneStars,
+                    isAnimated: index < animatedStars,
+                    scale: starScales[index]
+                )
+            }
+        }
+    }
+    
+    private func animateStars() {
+        for i in 0..<5 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1 + 0.2) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    starScales[i] = 1.0
+                    if i < fortune.fortuneStars {
+                        animatedStars = i + 1
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - 运势解析
+    private var analysisView: some View {
+        Text(fortune.analysis)
+            .font(.system(size: 15, weight: .medium, design: .rounded))
+            .multilineTextAlignment(.center)
+            .lineSpacing(5)
+            .lineLimit(3)
+            .foregroundColor(Color(hex: "#2D3436"))
+            .opacity(contentReady ? 1 : 0)
+            .offset(y: contentReady ? 0 : 15)
+            .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.2), value: contentReady)
+    }
+    
+    // MARK: - 宜忌区域
+    private var yiJiSection: some View {
+        VStack(spacing: 12) {
+            EnhancedYiJiRowProfile(
+                type: .yi,
+                highlight: fortune.yiHighlight,
+                detail: fortune.yiSub,
+                contentReady: contentReady,
+                delay: 0.3
+            )
+            
+            Rectangle()
+                .fill(Color(hex: "#FFE4D6").opacity(0.5))
+                .frame(height: 0.5)
+                .padding(.horizontal, 8)
+            
+            EnhancedYiJiRowProfile(
+                type: .ji,
+                highlight: fortune.jiHighlight,
+                detail: fortune.jiSub,
+                contentReady: contentReady,
+                delay: 0.4
+            )
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(hex: "#FFF9F7"))
                 .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Card.cornerRadius, style: .continuous)
-                        .stroke(AppTheme.Card.strokeColor, lineWidth: AppTheme.Card.strokeWidth)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color(hex: "#FFE4D6").opacity(0.5), lineWidth: 1)
                 )
         )
-        .compositingGroup()
+        .opacity(contentReady ? 1 : 0)
+        .offset(y: contentReady ? 0 : 20)
+        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.25), value: contentReady)
+    }
+    
+    // MARK: - 增强版开运食物
+    private var enhancedLuckyFoodView: some View {
+        HStack(spacing: 16) {
+            // 食物图标
+            ZStack {
+                // 外发光
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(hex: "#FFD93D").opacity(0.3),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 5,
+                            endRadius: 25
+                        )
+                    )
+                    .frame(width: 50, height: 50)
+                    .opacity(foodGlowOpacity)
+                
+                // 图标背景
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(hex: "#FFF9E6"),
+                                Color(hex: "#FFF0CC")
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color(hex: "#FFD93D"), Color(hex: "#FFA502")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    )
+                
+                Image(systemName: "sparkles")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "#FFA502"), Color(hex: "#FF6B6B")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            
+            VStack(alignment: .leading, spacing: 3) {
+                Text("开运食物")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(hex: "#B2BEC3"))
+                
+                Text(fortune.luckFood)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "#2D3436"))
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: "#FFF9F5"),
+                            Color(hex: "#FFF5F0")
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color(hex: "#FFE4D6").opacity(0.6),
+                                    Color(hex: "#FFD4C4").opacity(0.3)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .opacity(contentReady ? 1 : 0)
+        .offset(y: contentReady ? 0 : 20)
+        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5), value: contentReady)
+    }
+    
+    private func animateFoodGlow() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                foodGlowOpacity = 1
+            }
+        }
     }
 }
 
@@ -577,6 +835,99 @@ struct LoadingFortuneView: View {
         }
         .onDisappear {
             isAnimating = false
+        }
+    }
+}
+
+// MARK: - 增强版星星视图
+struct EnhancedStarView: View {
+    let isFilled: Bool
+    let isAnimated: Bool
+    let scale: CGFloat
+    
+    var body: some View {
+        Image(systemName: isFilled ? "star.fill" : "star")
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(
+                isFilled && isAnimated
+                ? LinearGradient(
+                    colors: [Color(hex: "#FF6B6B"), Color(hex: "#FF8E8E")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                : LinearGradient(
+                    colors: [Color(hex: "#DFE6E9"), Color(hex: "#B2BEC3")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .scaleEffect(scale)
+            .rotationEffect(.degrees(isFilled && !isAnimated ? -180 : 0))
+            .overlay {
+                if isFilled && isAnimated {
+                    // 闪光效果
+                    Circle()
+                        .fill(Color.white.opacity(0.8))
+                        .frame(width: 4, height: 4)
+                        .offset(x: -6, y: -6)
+                        .blur(radius: 1)
+                }
+            }
+    }
+}
+
+// MARK: - 增强版宜忌行（Profile版）
+struct EnhancedYiJiRowProfile: View {
+    let type: YiJiType
+    let highlight: String
+    let detail: String
+    let contentReady: Bool
+    let delay: Double
+    @State private var show: Bool = false
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // 图标
+            ZStack {
+                Circle()
+                    .fill(type.backgroundColor)
+                    .frame(width: 28, height: 28)
+                
+                Image(systemName: type.icon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(type.accentColor)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(type.title)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(type.accentColor)
+                    
+                    Text(highlight)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(hex: "#2D3436"))
+                }
+                
+                Text(detail)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(hex: "#636E72"))
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            Spacer()
+        }
+        .opacity(show ? 1 : 0)
+        .offset(x: show ? 0 : -20)
+        .onChange(of: contentReady) { _, newValue in
+            if newValue {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                        show = true
+                    }
+                }
+            }
         }
     }
 }

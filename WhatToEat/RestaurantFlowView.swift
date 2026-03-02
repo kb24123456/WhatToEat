@@ -126,7 +126,7 @@ struct RestaurantFlowView: View {
                 }
             }
             
-            // 沉浸式食签视图
+            // 食签卡片视图
             if showFortune {
                 ZStack {
                     // 背景模糊层
@@ -139,12 +139,16 @@ struct RestaurantFlowView: View {
                             }
                         }
                     
-                    // 食签内容
-                    ImmersiveFortuneView()
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.9)),
-                            removal: .opacity.combined(with: .scale(scale: 1.1))
-                        ))
+                    // 食签卡片内容
+                    FortuneCardModalView(onClose: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showFortune = false
+                        }
+                    })
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.9)),
+                        removal: .opacity.combined(with: .scale(scale: 1.1))
+                    ))
                 }
             }
         }

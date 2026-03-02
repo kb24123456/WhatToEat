@@ -34,6 +34,14 @@ struct AppTheme {
             endPoint: .bottomTrailing
         )
         
+        // 🪸 珊瑚红 - 温暖活力点缀色
+        static let coralRed = Color(hex: "#FF6B6B")
+        static let coralGradient = LinearGradient(
+            colors: [Color(hex: "#FF6B6B"), Color(hex: "#FF8E8E")],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        
         // ✅ 辅助色系
         static let primary = Color(hex: "#89CFF0") // Baby Blue - 理性数据
         static let babyBlue = Color(hex: "#89CFF0") // 理性数据专用
@@ -321,9 +329,27 @@ extension Color {
         switch hex.count {
         case 3: (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
         case 6: (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
         default: (a, r, g, b) = (1, 1, 1, 0)
         }
         self.init(.sRGB, red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255, opacity: Double(a) / 255)
+    }
+}
+
+// MARK: - 宜忌类型扩展
+extension YiJiType {
+    var accentColor: Color {
+        switch self {
+        case .yi: return Color(hex: "#FF6B6B")  // 宜 - 红色
+        case .ji: return Color(hex: "#00B894")  // 忌 - 绿色
+        }
+    }
+    
+    var backgroundColor: Color {
+        switch self {
+        case .yi: return Color(hex: "#FFF5F5")  // 宜 - 浅红色背景
+        case .ji: return Color(hex: "#E8F8F5")  // 忌 - 浅绿色背景
+        }
     }
 }
 
