@@ -16,7 +16,7 @@ enum FortuneAnimationConstants {
 class FortuneViewModel {
     var isFortuneExpanded: Bool = false
     var isAnimating: Bool = false
-    var cardOffset: CGFloat = UIScreen.main.bounds.height
+    var cardOffset: CGFloat = ScreenMetrics.bounds.height
     var heroOpacity: Double = 0
     var contentReady: Bool = false
     var dragOffset: CGFloat = 0
@@ -28,7 +28,7 @@ class FortuneViewModel {
             isAnimating = true
             contentReady = false
             
-            cardOffset = UIScreen.main.bounds.height
+            cardOffset = ScreenMetrics.bounds.height
             heroOpacity = 0.0
             dragOffset = 0
             
@@ -50,13 +50,13 @@ class FortuneViewModel {
             contentReady = false
             
             withAnimation(.easeIn(duration: 0.25)) {
-                cardOffset = -UIScreen.main.bounds.height
+                cardOffset = -ScreenMetrics.bounds.height
                 heroOpacity = 0.0
             }
             
             try? await Task.sleep(nanoseconds: 250_000_000)
             isFortuneExpanded = false
-            cardOffset = UIScreen.main.bounds.height
+            cardOffset = ScreenMetrics.bounds.height
             dragOffset = 0
             isAnimating = false
         }
@@ -77,7 +77,7 @@ class FortuneViewModel {
     
     nonisolated func handleDragEnd(_ translation: CGFloat, _ velocity: CGFloat) {
         Task { @MainActor in
-            let screenHeight = UIScreen.main.bounds.height
+            let screenHeight = ScreenMetrics.bounds.height
             let threshold = screenHeight * 0.20 // 20% 屏幕高度阈值（更容易触发）
             
             // 向上滑动超过阈值，或速度足够快，触发关闭
@@ -87,7 +87,7 @@ class FortuneViewModel {
                     dragOffset = -screenHeight
                 }
                 try? await Task.sleep(nanoseconds: 200_000_000)
-                await closeFortune()
+                closeFortune()
             } else {
                 // 回弹到原位（快速回弹，减少等待）
                 withAnimation(.interpolatingSpring(stiffness: 300, damping: 25)) {
@@ -101,7 +101,7 @@ class FortuneViewModel {
         isFortuneExpanded = false
         isAnimating = false
         contentReady = false
-        cardOffset = UIScreen.main.bounds.height
+        cardOffset = ScreenMetrics.bounds.height
         heroOpacity = 0.0
         dragOffset = 0
     }
@@ -132,13 +132,11 @@ struct FortuneView: View {
         if let fortune = aiManager.todayFortune {
             let calendar = Calendar.current
             if calendar.isDateInToday(fortune.date) {
-                print("✅ 今日食签已存在且有效，无需重新获取")
                 return
             }
         }
         
         // 获取今日食签（会自动处理缓存逻辑）
-        print("🔄 开始获取今日食签...")
         _ = await aiManager.getTodayFortune()
     }
     
@@ -219,13 +217,10 @@ struct FortuneView: View {
     private var expandedFortuneCard: some View {
         Group {
             if let fortune = aiManager.todayFortune {
-                FortuneCardContent(
-                    fortune: fortune,
-                    contentReady: viewModel.contentReady,
-                    onClose: { viewModel.closeFortune() }
-                )
+                // 使用新的极简INS风毛玻璃卡片
+                MinimalistFortuneCard(onClose: { viewModel.closeFortune() })
             } else {
-                LoadingFortuneView()
+                MinimalistLoadingView()
             }
         }
     }
@@ -269,15 +264,15 @@ struct FortuneCardContent: View {
             ZStack {
                 // 主背景 - 冷白色
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color.white)
+                    .fill(Color(hex: "#FFFFFF"))
                 
                 // 顶部微光效果
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.9),
-                                Color.white.opacity(0.4),
+                                Color(hex: "#FFFFFF").opacity(0.9),
+                                Color(hex: "#FFFFFF").opacity(0.4),
                                 Color.clear
                             ],
                             startPoint: .top,
@@ -292,9 +287,9 @@ struct FortuneCardContent: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.8),
+                                Color(hex: "#FFFFFF").opacity(0.8),
                                 Color(hex: "#FFE4D6").opacity(0.3),
-                                Color.white.opacity(0.6)
+                                Color(hex: "#FFFFFF").opacity(0.6)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -746,8 +741,8 @@ struct LuckyFoodView: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.9),
-                                Color.white.opacity(0.4),
+                                Color(hex: "#FFFFFF").opacity(0.9),
+                                Color(hex: "#FFFFFF").opacity(0.4),
                                 Color.clear
                             ],
                             startPoint: .top,
@@ -867,7 +862,7 @@ struct EnhancedStarView: View {
                 if isFilled && isAnimated {
                     // 闪光效果
                     Circle()
-                        .fill(Color.white.opacity(0.8))
+                        .fill(Color(hex: "#FFFFFF").opacity(0.8))
                         .frame(width: 4, height: 4)
                         .offset(x: -6, y: -6)
                         .blur(radius: 1)

@@ -28,11 +28,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     // MARK: - 位置管理器
     private let locationManager = CLLocationManager()
-    private let geocoder = CLGeocoder()
+    private var reverseGeocodingRequest: MKReverseGeocodingRequest?
     
     // MARK: - 缓存系统
     private var locationCache: LocationCache?
     private var isLocating = false
+    private var pendingLocationCompletions: [(CLLocation?) -> Void] = []
     
     // MARK: - 发布状态
     @Published var userLocation: CLLocation?
@@ -92,7 +93,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
         
         // 3. 启动单次定位
-        performSingleLocationUpdate { [weak self] location in
+        performSingleLocationUpdate { location in
             completion(location)
         }
     }
@@ -142,11 +143,20 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             completion(location)
         }
     }
+
+    /// 清理内存与本地定位缓存
+    func clearCachedData() {
+        locationCache = nil
+        currentCity = nil
+        UserDefaults.standard.removeObject(forKey: "cachedCityName")
+    }
     
     /// 如果需要则刷新位置（静默）
     private func refreshLocationIfNeeded() {
         // 只在缓存无效时刷新
-        guard locationCache == nil || !locationCache!.isValid else { return }
+        if let cache = locationCache, cache.isValid {
+            return
+        }
         
         guard locationManager.authorizationStatus == .authorizedWhenInUse ||
               locationManager.authorizationStatus == .authorizedAlways else {
@@ -183,30 +193,17 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     // MARK: - 单次定位实现
-    
-    private var singleLocationCompletion: ((CLLocation?) -> Void)?
     private var singleLocationTimer: Timer?
     
     private func performSingleLocationUpdate(completion: @escaping (CLLocation?) -> Void) {
         // 防止重复定位
         guard !isLocating else {
-            // 如果正在定位，等待结果
-            let checkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
-                if let cache = self?.locationCache, cache.isValid {
-                    completion(cache.location)
-                    timer.invalidate()
-                }
-            }
-            // 5秒后超时
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-                checkTimer.invalidate()
-                completion(nil)
-            }
+            pendingLocationCompletions.append(completion)
             return
         }
         
         isLocating = true
-        singleLocationCompletion = completion
+        pendingLocationCompletions = [completion]
         
         // 启动定位
         locationManager.startUpdatingLocation()
@@ -219,14 +216,22 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     private func finishSingleLocationUpdate() {
+        guard isLocating else { return }
+
         // 停止定位
         if !isContinuousLocating {
             locationManager.stopUpdatingLocation()
         }
         
         // 回调结果
-        singleLocationCompletion?(locationCache?.location)
-        singleLocationCompletion = nil
+        let result = locationCache?.location
+        let completions = pendingLocationCompletions
+        pendingLocationCompletions.removeAll()
+
+        for completion in completions {
+            completion(result)
+        }
+
         singleLocationTimer?.invalidate()
         singleLocationTimer = nil
         isLocating = false
@@ -235,7 +240,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     // MARK: - 地理编码（节流控制）
     
     private var lastGeocodeTime: Date?
-    private var geocodeCompletions: [(String?) -> Void] = []
     
     private func performGeocoding(for location: CLLocation, completion: @escaping (String?) -> Void) {
         // 节流控制：至少间隔10秒
@@ -246,32 +250,40 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
         
         lastGeocodeTime = Date()
-        
-        geocoder.reverseGeocodeLocation(location) { [weak self] (placemarks, error) in
-            guard let placemark = placemarks?.first else {
+
+        reverseGeocodingRequest?.cancel()
+        guard let request = MKReverseGeocodingRequest(location: location) else {
+            completion(nil)
+            return
+        }
+
+        reverseGeocodingRequest = request
+        request.getMapItems(completionHandler: { [weak self] mapItems, _ in
+            guard let self else {
                 completion(nil)
                 return
             }
-            
-            let cityName = placemark.locality?.replacingOccurrences(of: "市", with: "")
-            
+
+            self.reverseGeocodingRequest = nil
+            let cityName = mapItems?.first?.compatibleCity?.replacingOccurrences(of: "市", with: "")
+
             // 更新缓存
-            if let cache = self?.locationCache {
-                self?.locationCache = LocationCache(
+            if let cache = self.locationCache {
+                self.locationCache = LocationCache(
                     location: cache.location,
                     timestamp: cache.timestamp,
                     cityName: cityName
                 )
             }
-            
+
             // 持久化城市名
             if let city = cityName {
                 UserDefaults.standard.set(city, forKey: "cachedCityName")
-                self?.currentCity = city
+                self.currentCity = city
             }
-            
+
             completion(cityName)
-        }
+        })
     }
     
     // MARK: - CLLocationManagerDelegate
@@ -310,7 +322,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
         
         // 如果是单次定位，完成更新
-        if singleLocationCompletion != nil && !isContinuousLocating {
+        if isLocating && !isContinuousLocating {
             finishSingleLocationUpdate()
         }
     }
@@ -365,12 +377,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             return nil
         }
         
-        let sourcePlacemark = MKPlacemark(coordinate: userLocation.coordinate)
-        let destinationPlacemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: long))
-        
         let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: sourcePlacemark)
-        request.destination = MKMapItem(placemark: destinationPlacemark)
+        request.source = MKMapItem(location: userLocation, address: nil)
+        request.destination = MKMapItem(
+            location: CLLocation(latitude: lat, longitude: long),
+            address: nil
+        )
         request.transportType = .automobile
         
         do {

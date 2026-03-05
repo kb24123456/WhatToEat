@@ -196,13 +196,13 @@ struct CommentTriggerButton: View {
     VStack {
         CommentInputAccessoryView(
             text: .constant(""),
-            onSend: { print("发送") }
+            onSend: {}
         )
         
         CommentTriggerButton(
             review: "",
             placeholder: "点击添加点评...",
-            onTap: { print("触发输入") }
+            onTap: {}
         )
         .padding()
     }

@@ -91,15 +91,15 @@ struct FortuneCardModalView: View {
             ZStack {
                 // 主背景 - 冷白色
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color.white)
+                    .fill(Color(hex: "#FFFFFF"))
                 
                 // 顶部微光效果
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.9),
-                                Color.white.opacity(0.4),
+                                Color(hex: "#FFFFFF").opacity(0.9),
+                                Color(hex: "#FFFFFF").opacity(0.4),
                                 Color.clear
                             ],
                             startPoint: .top,
@@ -114,9 +114,9 @@ struct FortuneCardModalView: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.8),
+                                Color(hex: "#FFFFFF").opacity(0.8),
                                 Color(hex: "#FFE4D6").opacity(0.3),
-                                Color.white.opacity(0.6)
+                                Color(hex: "#FFFFFF").opacity(0.6)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -320,7 +320,7 @@ struct StarView: View {
                 if isFilled && isAnimated {
                     // 闪光效果
                     Circle()
-                        .fill(Color.white.opacity(0.8))
+                        .fill(Color(hex: "#FFFFFF").opacity(0.8))
                         .frame(width: 4, height: 4)
                         .offset(x: -6, y: -6)
                         .blur(radius: 1)
@@ -553,7 +553,7 @@ struct EnhancedLoadingView: View {
         .frame(width: 320, height: 480)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(hex: "#FFFFFF"))
                 .shadow(
                     color: Color(hex: "#FF6B6B").opacity(0.08),
                     radius: 40,

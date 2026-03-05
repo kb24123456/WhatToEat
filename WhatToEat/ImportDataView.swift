@@ -31,7 +31,6 @@ struct ImportDataView: View {
     // 删除确认
     @State private var showDeleteConfirmation = false
     @State private var showDeleteAllConfirmation = false
-    @State private var importedRestaurantIDs: [UUID] = []
     
     // 所有餐厅数量
     @State private var totalRestaurantCount: Int = 0
@@ -160,10 +159,10 @@ struct ImportDataView: View {
         .padding(24)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.5))
+                .fill(Color(hex: "#FFFFFF").opacity(0.5))
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.6), lineWidth: 1)
+                        .stroke(Color(hex: "#FFFFFF").opacity(0.6), lineWidth: 1)
                 )
         )
         .shadow(color: Color.black.opacity(0.04), radius: 16, x: 0, y: 6)
@@ -252,7 +251,7 @@ struct ImportDataView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.35))
+                .fill(Color(hex: "#FFFFFF").opacity(0.35))
         )
     }
     
@@ -372,7 +371,7 @@ struct ImportDataView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.35))
+                .fill(Color(hex: "#FFFFFF").opacity(0.35))
         )
     }
     
@@ -421,7 +420,7 @@ struct ImportDataView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.35))
+                .fill(Color(hex: "#FFFFFF").opacity(0.35))
         )
         .onAppear {
             updateTotalRestaurantCount()
@@ -486,7 +485,7 @@ struct ImportDataView: View {
             return "正在获取坐标..."
         case .completed:
             return "导入完成！"
-        case .error(let message):
+        case .error:
             return "导入失败"
         }
     }
@@ -543,16 +542,13 @@ struct ImportDataView: View {
         
         Task {
             do {
-                let count = try await importManager.importCSV(
+                _ = try await importManager.importCSV(
                     from: url,
                     modelContext: modelContext,
                     defaultCity: defaultCity
                 )
                 
-                await MainActor.run {
-                    isImporting = false
-                    importManager.importPhase = .completed
-                }
+                await MainActor.run { isImporting = false }
                 
             } catch {
                 await MainActor.run {
@@ -582,7 +578,7 @@ struct ImportDataView: View {
     private func deleteImportedRestaurants() {
         Task {
             do {
-                let deletedCount = try await importManager.deleteLastImportedRestaurants(
+                _ = try await importManager.deleteLastImportedRestaurants(
                     modelContext: modelContext
                 )
                 
@@ -593,9 +589,6 @@ struct ImportDataView: View {
                     // 更新总数
                     updateTotalRestaurantCount()
                 }
-                
-                print("ImportDataView: 成功删除 \(deletedCount) 家餐厅")
-                
             } catch {
                 await MainActor.run {
                     importManager.errorMessage = error.localizedDescription
@@ -632,9 +625,6 @@ struct ImportDataView: View {
                     importManager.reset()
                     selectedFileURL = nil
                 }
-                
-                print("ImportDataView: 成功删除所有 \(allRestaurants.count) 家餐厅")
-                
             } catch {
                 await MainActor.run {
                     importManager.errorMessage = error.localizedDescription

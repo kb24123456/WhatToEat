@@ -12,7 +12,7 @@ struct RestaurantFlowView: View {
     
     // 动画状态
     @State private var listViewOffset: CGFloat = 0
-    @State private var expandedViewOffset: CGFloat = UIScreen.main.bounds.height
+    @State private var expandedViewOffset: CGFloat = ScreenMetrics.bounds.height
     @State private var sideCardsOpacity: Double = 1.0
     @State private var sideCardsHorizontalOffset: CGFloat = 0 // 两侧卡片水平偏移
     @State private var centerCardVerticalOffset: CGFloat = 0 // 中心卡片垂直偏移
@@ -69,12 +69,8 @@ struct RestaurantFlowView: View {
     
     var body: some View {
         ZStack {
-            Color(hex: "#F9F9F7").ignoresSafeArea()
-            
-            // 调试：显示餐厅数量
-            #if DEBUG
-            let _ = print("RestaurantFlowView: restaurants count = \(restaurants.count)")
-            #endif
+            DiffuseGradientBackground()
+                .ignoresSafeArea()
             
             // 空数据提示
             if restaurants.isEmpty {
@@ -139,8 +135,8 @@ struct RestaurantFlowView: View {
                             }
                         }
                     
-                    // 食签卡片内容
-                    FortuneCardModalView(onClose: {
+                    // 食签卡片内容（新的极简INS风）
+                    MinimalistFortuneCard(onClose: {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showFortune = false
                         }
@@ -288,8 +284,8 @@ struct RestaurantFlowView: View {
         
         // 连贯动画：列表态飞出 + 展开态进入（同步进行）
         withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
-            sideCardsHorizontalOffset = UIScreen.main.bounds.width * 0.7 // 两侧卡片向左右飞出
-            centerCardVerticalOffset = -UIScreen.main.bounds.height // 中心卡片向上飞出
+            sideCardsHorizontalOffset = ScreenMetrics.bounds.width * 0.7 // 两侧卡片向左右飞出
+            centerCardVerticalOffset = -ScreenMetrics.bounds.height // 中心卡片向上飞出
             expandedViewOffset = 0
         }
         
@@ -335,7 +331,7 @@ struct RestaurantFlowView: View {
         withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
             self.sideCardsHorizontalOffset = 0 // 两侧卡片飞回原位
             self.centerCardVerticalOffset = 0 // 中心卡片飞回原位
-            self.expandedViewOffset = UIScreen.main.bounds.height
+            self.expandedViewOffset = ScreenMetrics.bounds.height
         }
         
         // 级联动画：展开态元素向下飞出
@@ -465,12 +461,10 @@ struct RestaurantFlowView: View {
                 // 每次进入视图时随机打乱餐厅顺序
                 shuffledRestaurants = restaurants.shuffled()
             }
-            .onChange(of: viewModel.centeredRestaurantID) { newID in
-                // 调试：打印中心卡片ID
-                #if DEBUG
-                print("Centered restaurant ID changed to: \(String(describing: newID))")
-                #endif
-                
+            .onChange(of: restaurants) { _, newRestaurants in
+                shuffledRestaurants = newRestaurants.shuffled()
+            }
+            .onChange(of: viewModel.centeredRestaurantID) { _, newID in
                 // 当中心卡片变化时触发轻微震动反馈
                 if newID != lastCenteredRestaurantID {
                     lastCenteredRestaurantID = newID
@@ -545,7 +539,7 @@ struct RestaurantFlowView: View {
         // 高级边框效果 - 增强可见性
         .overlay(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .stroke(Color.white.opacity(0.5), lineWidth: 1.5)
+                .stroke(Color(hex: "#FFFFFF").opacity(0.5), lineWidth: 1.5)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
@@ -759,13 +753,13 @@ struct RestaurantFlowView: View {
             .background(
                 GeometryReader { scrollGeo in
                     Color.clear
-                        .onChange(of: scrollGeo.frame(in: .named("scrollView")).minY) { newValue in
+                        .onChange(of: scrollGeo.frame(in: .named("scrollView")).minY) { _, newValue in
                             expandedScrollOffset = -newValue
                         }
                 }
             )
         }
-        .background(Color(hex: "#F9F9F7"))
+        .background(AppTheme.Colors.pageBackground)
         // 添加坐标空间名称用于滚动位置计算
         .coordinateSpace(name: "scrollView")
     }
@@ -796,7 +790,7 @@ struct RestaurantFlowView: View {
             // 高级边框效果 - 增强可见性
             .overlay(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.white.opacity(0.5), lineWidth: 1.5)
+                    .stroke(Color(hex: "#FFFFFF").opacity(0.5), lineWidth: 1.5)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -806,7 +800,7 @@ struct RestaurantFlowView: View {
             .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
         }
         // 计算高度：屏幕宽度减去左右间距（64pt * 2）后的 0.75 倍（4:3比例）
-        .frame(height: (UIScreen.main.bounds.width - 128) * 0.75)
+        .frame(height: (ScreenMetrics.bounds.width - 128) * 0.75)
     }
     
     // MARK: - 距离/时间行
@@ -858,7 +852,7 @@ struct RestaurantFlowView: View {
                     .padding(.vertical, 7) // 从5增大到7
                     .background(
                         Capsule()
-                            .fill(Color.white)
+                            .fill(Color(hex: "#FFFFFF"))
                     )
                     .overlay(
                         Capsule()
@@ -889,12 +883,12 @@ struct RestaurantFlowView: View {
                 Text("去这里")
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
             }
-            .foregroundColor(.white)
+            .foregroundColor(AppTheme.Colors.primaryButtonText)
             .frame(maxWidth: .infinity)
             .frame(height: 50)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.black)
+                    .fill(AppTheme.Colors.primaryButtonBackground)
             )
             .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 6)
         }
@@ -976,7 +970,7 @@ struct RestaurantFlowView: View {
             .frame(height: 50)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white)
+                    .fill(Color(hex: "#FFFFFF"))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -1044,8 +1038,7 @@ struct RestaurantFlowView: View {
             latitude: restaurant.latitude,
             longitude: restaurant.longitude
         )
-        let placemark = MKPlacemark(coordinate: coordinate)
-        let mapItem = MKMapItem(placemark: placemark)
+        let mapItem = MKMapItem(location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude), address: nil)
         mapItem.name = restaurant.name
         mapItem.openInMaps(launchOptions: [
             MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
@@ -1054,7 +1047,7 @@ struct RestaurantFlowView: View {
     
     // MARK: - 打开高德地图
     private func openGaodeMap(for restaurant: Restaurant) {
-        guard let userLocation = LocationManager.shared.userLocation else {
+        guard LocationManager.shared.userLocation != nil else {
             // 如果没有用户位置，直接打开高德地图
             let urlString = "iosamap://path?sourceApplication=WhatToEat&dlat=\(restaurant.latitude)&dlon=\(restaurant.longitude)&dname=\(restaurant.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&dev=0&t=0"
             if let url = URL(string: urlString), UIApplication.shared.canOpenURL(url) {
@@ -1152,7 +1145,7 @@ struct InfoCard: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(hex: "#FFFFFF"))
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
         )
     }

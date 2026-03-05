@@ -5,7 +5,7 @@ import SwiftData
 /// 用于地图视图的餐厅搜索，支持模糊搜索
 struct MapSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     
     // 所有餐厅数据
     let restaurants: [Restaurant]
@@ -15,16 +15,27 @@ struct MapSearchSheet: View {
     
     @State private var searchQuery = ""
     @State private var searchResults: [Restaurant] = []
-    @State private var isSearching = false
     
     // 防抖计时器
     @State private var debounceTimer: Timer?
+
+    private var sheetBackground: Color {
+        colorScheme == .dark ? Color.fixedHex("#111A28") : AppTheme.Colors.milkyBase
+    }
+
+    private var inputBackground: Color {
+        colorScheme == .dark ? AppTheme.Colors.inputFieldBackground : Color.fixedHex("#FFFFFF")
+    }
+
+    private var cardBackground: Color {
+        colorScheme == .dark ? AppTheme.Colors.surfacePrimary : Color.fixedHex("#FFFFFF")
+    }
     
     var body: some View {
         NavigationStack {
             ZStack {
                 // 背景
-                AppTheme.Colors.milkyBase
+                sheetBackground
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
@@ -52,6 +63,10 @@ struct MapSearchSheet: View {
         .onAppear {
             // 初始显示所有餐厅
             searchResults = restaurants
+        }
+        .onDisappear {
+            debounceTimer?.invalidate()
+            debounceTimer = nil
         }
     }
     
@@ -87,7 +102,7 @@ struct MapSearchSheet: View {
                         .foregroundColor(.gray)
                         .background(
                             Circle()
-                                .fill(Color.white)
+                                .fill(inputBackground)
                         )
                 }
                 .buttonStyle(LiquidFusionButtonStyle())
@@ -101,8 +116,8 @@ struct MapSearchSheet: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(.white)
-                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                .fill(inputBackground)
+                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.24 : 0.04), radius: 8, x: 0, y: 2)
         )
     }
     
@@ -136,10 +151,10 @@ struct MapSearchSheet: View {
                             .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                     }
                 } header: {
-                    Text("共 \(searchResults.count) 家餐厅")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .textCase(nil)
+                        Text("共 \(searchResults.count) 家餐厅")
+                            .font(.caption)
+                            .foregroundColor(AppTheme.Colors.mediumGray)
+                            .textCase(nil)
                 }
             }
         }
@@ -181,15 +196,15 @@ struct MapSearchSheet: View {
                     HStack(spacing: 6) {
                         Text(restaurant.type)
                             .font(.system(size: 13))
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                         
                         Text("·")
                             .font(.system(size: 13))
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                         
                         Text(restaurant.district)
                             .font(.system(size: 13))
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                     }
                     
                     if restaurant.averagePrice > 0 {
@@ -204,14 +219,14 @@ struct MapSearchSheet: View {
                 // 箭头
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14))
-                    .foregroundColor(.gray.opacity(0.5))
+                    .foregroundColor(AppTheme.Colors.lightText)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(.white)
-                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
+                    .fill(cardBackground)
+                    .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.03), radius: 6, x: 0, y: 2)
             )
         }
         .buttonStyle(.plain)

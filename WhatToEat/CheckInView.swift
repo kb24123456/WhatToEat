@@ -37,6 +37,7 @@ enum MoodType: String, CaseIterable {
 
 struct CheckInView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @FocusState private var expenseFieldIsFocused: Bool
     
     let restaurant: Restaurant
@@ -67,6 +68,22 @@ struct CheckInView: View {
     private var currentPerPersonPrice: Double {
         guard peopleCount > 0 else { return 0 }
         return expense / Double(peopleCount)
+    }
+
+    private var checkInPrimaryText: Color {
+        colorScheme == .dark ? Color.fixedHex("#DCE6F6") : AppTheme.Colors.darkText
+    }
+
+    private var checkInSecondaryText: Color {
+        colorScheme == .dark ? Color.fixedHex("#AAB8CD") : AppTheme.Colors.mediumGray
+    }
+
+    private var checkInHintText: Color {
+        colorScheme == .dark ? Color.fixedHex("#8393AC") : AppTheme.Colors.lightText
+    }
+
+    private var checkInPanelBackground: Color {
+        colorScheme == .dark ? Color.fixedHex("#1E2C40").opacity(0.82) : AppTheme.Colors.surfaceSecondary
     }
     
     var body: some View {
@@ -103,9 +120,23 @@ struct CheckInView: View {
         )
     }
     
-    // MARK: - Premium Soft UI Background
+    // MARK: - Premium Soft UI Background（弥散渐变背景）
     private var backgroundOverlay: some View {
-        AppTheme.Colors.pageBackground
+        Group {
+            if colorScheme == .dark {
+                DiffuseGradientBackground(
+                    topLeadingColor: Color.fixedHex("#17365A"),
+                    topTrailingColor: Color.fixedHex("#2C4256"),
+                    bottomColor: Color.fixedHex("#0B1422"),
+                    warmGlowColor: Color.fixedHex("#3B3140"),
+                    useGlobalDarkPalette: false,
+                    blurRadius: 90,
+                    colorOpacity: 0.36
+                )
+            } else {
+                DiffuseGradientBackground()
+            }
+        }
     }
     
     private var scrollContent: some View {
@@ -116,7 +147,7 @@ struct CheckInView: View {
                     // 中间标题
                     Text(editingLog != nil ? "编辑打卡" : "此食此刻")
                         .font(.headline)
-                        .foregroundColor(AppTheme.Colors.darkText)
+                        .foregroundColor(checkInPrimaryText)
                     
                     // 右侧关闭按钮
                     HStack {
@@ -126,11 +157,11 @@ struct CheckInView: View {
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.mediumGray)
+                                .foregroundColor(checkInSecondaryText)
                                 .frame(width: 32, height: 32)
                                 .background(
                                     Circle()
-                                        .fill(Color.white.opacity(0.5))
+                                        .fill(checkInPanelBackground)
                                 )
                         }
                     }
@@ -173,36 +204,36 @@ struct CheckInView: View {
                 VStack(spacing: 4) {
                     Text("\(String(format: "%d", Calendar.current.component(.year, from: date)))年\(Calendar.current.component(.month, from: date))月")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.mediumGray)
+                        .foregroundColor(checkInSecondaryText)
                         .tracking(1)
                     
                     Text("\(Calendar.current.component(.day, from: date))")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.darkText)
+                        .foregroundColor(checkInPrimaryText)
                         .contentTransition(.numericText())
                         .animation(AppTheme.Animations.standardSpring, value: date)
                     
                     Text(weekdayInChinese)
                         .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.mediumGray)
+                        .foregroundColor(checkInSecondaryText)
                         .tracking(0.5)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 
                 Rectangle()
-                    .fill(Color.black.opacity(0.05))
+                    .fill(AppTheme.Colors.headerPillBorder.opacity(0.55))
                     .frame(width: 1, height: 40)
                     .cornerRadius(0.5)
                 
                 VStack(spacing: 4) {
                     Text("现在")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.mediumGray)
+                        .foregroundColor(checkInSecondaryText)
                         .tracking(1)
                     
                     Text(date.chineseShortTime)
                         .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.darkText)
+                        .foregroundColor(checkInPrimaryText)
                         .contentTransition(.numericText())
                         .animation(AppTheme.Animations.standardSpring, value: date)
                     
@@ -240,7 +271,7 @@ struct CheckInView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("消费信息")
             
-            HStack(spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
                 peopleInputSection
                 
                 expenseInputSection
@@ -279,7 +310,7 @@ struct CheckInView: View {
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 13, weight: .medium))
-            .foregroundColor(AppTheme.Colors.darkText)
+            .foregroundColor(checkInPrimaryText)
     }
     
     // MARK: - 人数录入
@@ -287,7 +318,7 @@ struct CheckInView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("人数")
                 .font(.system(size: 12))
-                .foregroundColor(AppTheme.Colors.mediumGray)
+                .foregroundColor(checkInSecondaryText)
             
             HStack(spacing: 12) {
                 Button {
@@ -298,13 +329,13 @@ struct CheckInView: View {
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundColor(peopleCount > 1 ? AppTheme.Colors.darkText : AppTheme.Colors.lightText)
+                        .foregroundColor(peopleCount > 1 ? checkInPrimaryText : checkInHintText)
                 }
                 .disabled(peopleCount <= 1)
 
                 Text("\(peopleCount)")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(checkInPrimaryText)
                     .frame(minWidth: 16)
 
                 Button {
@@ -313,14 +344,10 @@ struct CheckInView: View {
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundColor(AppTheme.Colors.darkText)
+                        .foregroundColor(checkInPrimaryText)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            
-            Rectangle()
-                .fill(AppTheme.Colors.softBackground)
-                .frame(height: 1)
         }
         .frame(maxWidth: .infinity)
     }
@@ -330,16 +357,16 @@ struct CheckInView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("消费")
                 .font(.system(size: 12))
-                .foregroundColor(AppTheme.Colors.mediumGray)
+                .foregroundColor(checkInSecondaryText)
             
             HStack(spacing: 4) {
                 Text("¥")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(checkInPrimaryText)
                 
                 TextField("0", text: $expenseText)
                     .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(checkInPrimaryText)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.leading)
                     .focused($expenseFieldIsFocused)
@@ -354,10 +381,6 @@ struct CheckInView: View {
                     }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            
-            Rectangle()
-                .fill(AppTheme.Colors.softBackground)
-                .frame(height: 1)
         }
         .frame(maxWidth: .infinity)
     }
@@ -367,24 +390,21 @@ struct CheckInView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("人均")
                 .font(.system(size: 12))
-                .foregroundColor(AppTheme.Colors.mediumGray)
+                .foregroundColor(checkInSecondaryText)
             
             HStack(spacing: 2) {
                 Text("¥")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
+                    .foregroundColor(checkInSecondaryText)
                 
                 Text("\(Int(animatedPerPersonPrice))")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(checkInPrimaryText)
                     .contentTransition(.numericText())
                     .animation(AppTheme.Animations.standardSpring, value: animatedPerPersonPrice)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
-            Rectangle()
-                .fill(Color.clear)
-                .frame(height: 1)
         }
         .frame(maxWidth: .infinity)
     }
@@ -404,7 +424,7 @@ struct CheckInView: View {
                     .foregroundColor(type.color)
                 Text(title)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(type == .red ? AppTheme.Colors.darkText : AppTheme.Colors.mediumGray)
+                    .foregroundColor(type == .red ? checkInPrimaryText : checkInSecondaryText)
             }
 
             if !tags.wrappedValue.isEmpty {
@@ -414,7 +434,7 @@ struct CheckInView: View {
                         HStack(spacing: 4) {
                             Text(tags.wrappedValue[index])
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.darkText)
+                                .foregroundColor(checkInPrimaryText)
 
                             Button {
                                 triggerHaptic()
@@ -429,7 +449,7 @@ struct CheckInView: View {
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.system(size: 10))
-                                    .foregroundColor(AppTheme.Colors.lightText)
+                                    .foregroundColor(checkInHintText)
                             }
                         }
                         .padding(.horizontal, 8)
@@ -505,7 +525,7 @@ struct CheckInView: View {
 
                 Text(mood.title)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(isSelected ? AppTheme.Colors.darkText : AppTheme.Colors.lightText)
+                    .foregroundColor(isSelected ? checkInPrimaryText : checkInHintText)
                     .scaleEffect(isSelected ? 1.05 : 1.0)
                     .animation(AppTheme.Animations.standardSpring, value: isSelected)
             }
@@ -528,13 +548,13 @@ struct CheckInView: View {
 
                 Text("完成记录")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.Colors.primaryButtonText)
             }
             .padding(.horizontal, 40)
             .padding(.vertical, 18)
             .background(
                 Capsule()
-                    .fill(Color.black)
+                    .fill(AppTheme.Colors.primaryButtonBackground)
             )
         }
         .buttonStyle(ScaleButtonStyle())
@@ -633,7 +653,7 @@ enum StickyNoteType {
     var color: Color {
         switch self {
         case .red: return AppTheme.Colors.accent
-        case .gray: return AppTheme.Colors.darkText
+        case .gray: return Color.fixedHex("#1E2733")
         }
     }
 }

@@ -12,8 +12,24 @@
 	</array>
 	<key>UIAppFonts</key>
 	<array>
-		<string>Fonts/ResourceHanRoundedCN-Bold.ttf</string>
-		<string>Fonts/ResourceHanRoundedCN-Medium.ttf</string>
+		<string>ResourceHanRoundedCN-Bold.ttf</string>
+		<string>ResourceHanRoundedCN-Medium.ttf</string>
 	</array>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<!-- API Keys Configuration -->
+	<!-- ⚠️ 注意：这些值应该通过 Config.xcconfig 注入，但当前 Xcode 未识别该文件 -->
+	<!-- 临时直接填入值以确保功能正常，后续应修复 Config.xcconfig 关联 -->
+	<key>APIKeyDoubao</key>
+	<string>57f57b30-fec5-487e-a160-7c619701e38e</string>
+	<key>EndpointIDDoubao</key>
+	<string>ep-20260210035323-jgptr</string>
+	<key>APIKeyJuheLunar</key>
+	<string>593a1836e9ce546f3fceef18f3d5af94</string>
+	<key>APIKeyJuheConstellation</key>
+	<string>1e861daeabe2b998323b2380807b381e</string>
 </dict>
 </plist>

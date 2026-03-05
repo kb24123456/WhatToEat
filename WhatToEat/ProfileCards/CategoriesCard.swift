@@ -38,7 +38,7 @@ struct CategoriesCardPreview: View {
             FlowLayout(spacing: 6) {
                 let allCategories = getAllCategories()
                 ForEach(allCategories.prefix(3), id: \.self) { category in
-                    let isPreset = CategoryManager.shared.getPresetCategories().contains(category)
+                    let isPreset = CategoryManager.shared.isPresetCategory(category)
                     Text(category)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(AppTheme.Colors.darkText)
@@ -69,11 +69,10 @@ struct CategoriesCardPreview: View {
     
     // 获取所有品类：预设 + 用户自定义 + 从餐厅数据中提取
     private func getAllCategories() -> [String] {
-        let presetCategories = CategoryManager.shared.getPresetCategories()
-        let userCategories = CategoryManager.shared.getSelectableCategories(context: viewModel.modelContext ?? ModelContext(try! ModelContainer(for: Restaurant.self)))
-        let restaurantCategories = viewModel.restaurants.map { $0.type }
-        
-        let allCategories = Set(presetCategories + userCategories + restaurantCategories)
+        if let context = viewModel.modelContext {
+            return CategoryManager.shared.getSelectableCategories(context: context)
+        }
+        let allCategories = Set(CategoryManager.shared.getPresetCategories() + viewModel.restaurants.map { $0.type })
         return Array(allCategories).sorted()
     }
 }
@@ -129,10 +128,9 @@ struct CategoriesCardDetail: View {
             FlowLayout(spacing: 10) {
                 let allCategories = getAllCategories()
                 ForEach(Array(allCategories.enumerated()), id: \.element) { index, category in
-                    let isPreset = CategoryManager.shared.getPresetCategories().contains(category)
                     EditableCategoryChip(
                         name: category,
-                        isPreset: isPreset,
+                        isPreset: CategoryManager.shared.isPresetCategory(category),
                         isEditing: isEditing,
                         onDelete: {
                             viewModel.prepareDeleteCategory(category)
@@ -187,11 +185,10 @@ struct CategoriesCardDetail: View {
     
     // 获取所有品类：预设 + 用户自定义 + 从餐厅数据中提取
     private func getAllCategories() -> [String] {
-        let presetCategories = CategoryManager.shared.getPresetCategories()
-        let userCategories = CategoryManager.shared.getSelectableCategories(context: viewModel.modelContext ?? ModelContext(try! ModelContainer(for: Restaurant.self)))
-        let restaurantCategories = viewModel.restaurants.map { $0.type }
-        
-        let allCategories = Set(presetCategories + userCategories + restaurantCategories)
+        if let context = viewModel.modelContext {
+            return CategoryManager.shared.getSelectableCategories(context: context)
+        }
+        let allCategories = Set(CategoryManager.shared.getPresetCategories() + viewModel.restaurants.map { $0.type })
         return Array(allCategories).sorted()
     }
     
@@ -226,12 +223,15 @@ struct CategoriesCardDetail: View {
         .buttonStyle(PlainButtonStyle())
     }
     
+    @FocusState private var isInputFocused: Bool
+    
     private var newCategoryInputField: some View {
         HStack(spacing: 8) {
             TextField("输入新品类", text: $newInput)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.darkText)
                 .submitLabel(.done)
+                .focused($isInputFocused)
                 .onSubmit {
                     addNewCategory()
                 }
@@ -283,8 +283,7 @@ private struct EditableCategoryChip: View {
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundColor(AppTheme.Colors.darkText)
             
-            // 只有在编辑模式且不是预设品类时才显示删除按钮
-            if isEditing && !isPreset {
+            if isEditing {
                 Button(action: onDelete) {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
@@ -308,7 +307,7 @@ private struct EditableCategoryChip: View {
     return ScrollView {
         VStack(spacing: 20) {
             CategoriesCardPreview(viewModel: viewModel)
-                .background(Color.white)
+                .background(Color(hex: "#FFFFFF"))
                 .cornerRadius(20)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
                 .padding(.horizontal, 24)

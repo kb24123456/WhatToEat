@@ -33,7 +33,7 @@ struct RestaurantSelectionDetailView: View {
                             .frame(width: 32, height: 32)
                             .background(
                                 Circle()
-                                    .fill(Color.white.opacity(0.5))
+                                    .fill(Color(hex: "#FFFFFF").opacity(0.5))
                             )
                     }
                 }
@@ -111,7 +111,7 @@ struct RestaurantSelectionDetailView: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.5))
+                .fill(Color(hex: "#FFFFFF").opacity(0.5))
         )
     }
     
@@ -141,7 +141,7 @@ struct RestaurantSelectionDetailView: View {
             .padding(.vertical, 20)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.5))
+                    .fill(Color(hex: "#FFFFFF").opacity(0.5))
             )
             
             // 时间
@@ -167,7 +167,7 @@ struct RestaurantSelectionDetailView: View {
             .padding(.vertical, 20)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.5))
+                    .fill(Color(hex: "#FFFFFF").opacity(0.5))
             )
         }
     }
@@ -208,12 +208,12 @@ struct RestaurantSelectionDetailView: View {
                 Text("开始导航")
                     .font(.system(size: 16, weight: .semibold))
             }
-            .foregroundColor(.white)
+            .foregroundColor(AppTheme.Colors.primaryButtonText)
             .padding(.horizontal, 40)
             .padding(.vertical, 16)
             .background(
                 Capsule()
-                    .fill(Color.black)
+                    .fill(AppTheme.Colors.primaryButtonBackground)
             )
         }
     }
@@ -249,11 +249,8 @@ struct RestaurantSelectionDetailView: View {
         let distance = userLocation.distance(from: restaurantLocation)
         
         // 使用 MKDirections 获取实际驾车路线
-        let sourcePlacemark = MKPlacemark(coordinate: userLocation.coordinate)
-        let destinationPlacemark = MKPlacemark(coordinate: restaurantLocation.coordinate)
-        
-        let source = MKMapItem(placemark: sourcePlacemark)
-        let destination = MKMapItem(placemark: destinationPlacemark)
+        let source = MKMapItem(location: userLocation, address: nil)
+        let destination = MKMapItem(location: restaurantLocation, address: nil)
         
         let request = MKDirections.Request()
         request.source = source

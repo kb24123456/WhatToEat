@@ -76,9 +76,8 @@ struct ImmersiveDecisionView: View {
     
     var body: some View {
         ZStack {
-            // 背景层（透明）
-            Color.clear
-                .ignoresSafeArea()
+            // 背景层：弥散渐变
+            DiffuseGradientBackground()
             
             // 内容层
             VStack(spacing: 0) {
@@ -440,10 +439,10 @@ struct ImmersiveOptionButton: View {
             .padding(.vertical, 20)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white.opacity(0.9))
+                    .fill(Color(hex: "#FFFFFF").opacity(0.9))
                     // 轻量级阴影+高光方案
                     .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
-                    .shadow(color: Color.white.opacity(0.8), radius: 4, x: 0, y: -2)
+                    .shadow(color: Color(hex: "#FFFFFF").opacity(0.8), radius: 4, x: 0, y: -2)
             )
         }
         .buttonStyle(ImmersiveButtonStyle())
@@ -465,11 +464,11 @@ struct ImmersiveTag: View {
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .fill(isSelected ? AppTheme.Colors.darkText : Color.white.opacity(0.85))
+                        .fill(isSelected ? AppTheme.Colors.darkText : Color(hex: "#FFFFFF").opacity(0.85))
                         // 轻量级阴影+高光方案
                         .shadow(color: isSelected ? Color.black.opacity(0.2) : Color.black.opacity(0.06), 
                                 radius: isSelected ? 8 : 6, x: 0, y: isSelected ? 4 : 3)
-                        .shadow(color: Color.white.opacity(0.9), radius: 2, x: 0, y: -1)
+                        .shadow(color: Color(hex: "#FFFFFF").opacity(0.9), radius: 2, x: 0, y: -1)
                 )
         }
         .buttonStyle(ImmersiveButtonStyle())
@@ -492,12 +491,12 @@ struct ImmersiveNextButton: View {
                 Image(systemName: "arrow.right")
                     .font(.system(size: 15, weight: .semibold))
             }
-            .foregroundColor(.black)
+            .foregroundColor(AppTheme.Colors.darkText)
             .frame(maxWidth: .infinity)
             .frame(height: 54)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white)
+                    .fill(Color(hex: "#FFFFFF"))
             )
         }
         .buttonStyle(ImmersiveButtonStyle())
@@ -513,12 +512,12 @@ struct ImmersiveActionButton: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundColor(.black)
+                .foregroundColor(AppTheme.Colors.darkText)
                 .frame(maxWidth: .infinity)
                 .frame(height: 60)
                 .background(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.white)
+                        .fill(Color(hex: "#FFFFFF"))
                         .shadow(color: .white.opacity(0.3), radius: 20, x: 0, y: 10)
                 )
         }
@@ -556,11 +555,11 @@ struct JellyTag: View {
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .fill(isSelected ? AppTheme.Colors.darkText : Color.white.opacity(0.85))
+                        .fill(isSelected ? AppTheme.Colors.darkText : Color(hex: "#FFFFFF").opacity(0.85))
                         // 轻量级阴影+高光方案
                         .shadow(color: isSelected ? Color.black.opacity(0.2) : Color.black.opacity(0.06), 
                                 radius: isSelected ? 8 : 6, x: 0, y: isSelected ? 4 : 3)
-                        .shadow(color: Color.white.opacity(0.9), radius: 2, x: 0, y: -1)
+                        .shadow(color: Color(hex: "#FFFFFF").opacity(0.9), radius: 2, x: 0, y: -1)
                 )
         }
         .buttonStyle(JellyButtonStyle())
@@ -582,7 +581,7 @@ struct JellyTag: View {
                 }
             }
         }
-        .onChange(of: isSelected) { newValue in
+        .onChange(of: isSelected) { _, newValue in
             // 选中时的弹跳反馈
             if newValue {
                 withAnimation(.interpolatingSpring(stiffness: 400, damping: 8)) {

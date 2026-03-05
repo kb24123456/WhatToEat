@@ -55,11 +55,7 @@ struct CitySelectionView: View {
         .onAppear {
             // 请求定位权限并获取当前城市
             locationManager.requestLocationPermission()
-            locationManager.getCurrentCity { cityName in
-                if let city = cityName {
-                    print("当前定位城市: \(city)")
-                }
-            }
+            locationManager.getCurrentCity { _ in }
         }
     }
     
@@ -172,7 +168,7 @@ struct CitySelectionView: View {
                     )
             )
         }
-        .frame(maxWidth: UIScreen.main.bounds.width / 3) // 宽度缩短到屏幕宽度的三分之一
+        .frame(maxWidth: ScreenMetrics.bounds.width / 3) // 宽度缩短到屏幕宽度的三分之一
         .buttonStyle(.plain)
         .disabled(locationManager.currentCity == nil)
         .padding(.horizontal, AppTheme.Spacing.lg)

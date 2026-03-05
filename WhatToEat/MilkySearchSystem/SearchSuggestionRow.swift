@@ -55,7 +55,7 @@ struct SearchSuggestionRow: View {
         }
         .frame(height: 52)
         .padding(.horizontal, 16)
-        .background(Color.white)
+        .background(Color(hex: "#FFFFFF"))
         .contentShape(Rectangle())
         .onTapGesture {
             onTap()
@@ -108,7 +108,7 @@ struct SearchSuggestionList: View {
                 }
             }
         }
-        .background(Color.white)
+        .background(Color(hex: "#FFFFFF"))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
     }
@@ -172,7 +172,7 @@ struct EmptySearchSuggestions: View {
             }
             .padding(16)
         }
-        .background(Color.white)
+        .background(Color(hex: "#FFFFFF"))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
     }

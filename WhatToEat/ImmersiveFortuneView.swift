@@ -410,9 +410,9 @@ struct ImmersiveYiJiCard: View {
         .padding(.vertical, 16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.9))
+                .fill(Color(hex: "#FFFFFF").opacity(0.9))
                 .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
-                .shadow(color: Color.white.opacity(0.8), radius: 2, x: 0, y: -1)
+                .shadow(color: Color(hex: "#FFFFFF").opacity(0.8), radius: 2, x: 0, y: -1)
         )
     }
 }

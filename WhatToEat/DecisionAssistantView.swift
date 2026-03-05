@@ -439,7 +439,7 @@ struct ModeCard: View {
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? AppTheme.Colors.darkText.opacity(0.05) : Color.white)
+                    .fill(isSelected ? AppTheme.Colors.darkText.opacity(0.05) : AppTheme.Colors.secondaryButtonBackground)
                     .shadow(color: isSelected ? AppTheme.Colors.darkText.opacity(0.1) : Color.black.opacity(0.08), radius: isSelected ? 15 : 10, x: 0, y: isSelected ? 6 : 4)
             )
             .overlay(
@@ -463,12 +463,12 @@ struct CategoryTag: View {
         Button(action: action) {
             Text(name)
                 .font(.system(size: 14, weight: isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+                .foregroundColor(isSelected ? AppTheme.Colors.primaryButtonText : AppTheme.Colors.textPrimary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(isSelected ? AppTheme.Colors.darkText : Color.white)
+                        .fill(isSelected ? AppTheme.Colors.primaryButtonBackground : AppTheme.Colors.secondaryButtonBackground)
                         .shadow(color: isSelected ? AppTheme.Colors.darkText.opacity(0.3) : Color.black.opacity(0.06), radius: isSelected ? 8 : 4, x: 0, y: isSelected ? 4 : 2)
                 )
                 .scaleEffect(isSelected ? 1.05 : 1.0)
@@ -488,12 +488,12 @@ struct DistrictTag: View {
         Button(action: action) {
             Text(name)
                 .font(.system(size: 14, weight: isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? .white : AppTheme.Colors.textPrimary)
+                .foregroundColor(isSelected ? AppTheme.Colors.primaryButtonText : AppTheme.Colors.textPrimary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(isSelected ? AppTheme.Colors.darkText : Color.white)
+                        .fill(isSelected ? AppTheme.Colors.primaryButtonBackground : AppTheme.Colors.secondaryButtonBackground)
                         .shadow(color: isSelected ? AppTheme.Colors.darkText.opacity(0.3) : Color.black.opacity(0.06), radius: isSelected ? 8 : 4, x: 0, y: isSelected ? 4 : 2)
                 )
                 .scaleEffect(isSelected ? 1.05 : 1.0)

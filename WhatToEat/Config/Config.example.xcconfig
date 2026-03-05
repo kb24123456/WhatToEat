@@ -1,0 +1,28 @@
+//
+// Config.example.xcconfig
+// WhatToEat
+//
+// ⚠️ 使用说明：
+// 1. 复制此文件为 Config.xcconfig
+// 2. 填入你的真实API Key替换所有的 YOUR_XXX_HERE
+// 3. 确保Config.xcconfig不会被提交到Git（已在.gitignore中）
+//
+// 此文件可以安全地提交到Git，因为它不包含真实密钥。
+//
+
+// ==========================================
+// 豆包API配置（火山引擎）
+// 申请地址：https://www.volcengine.com/product/doubao
+// ==========================================
+API_KEY_DOUBAO = YOUR_DOUBAO_API_KEY_HERE
+ENDPOINT_ID_DOUBAO = YOUR_DOUBAO_ENDPOINT_ID_HERE
+
+// ==========================================
+// 聚合数据API配置
+// 申请地址：https://www.juhe.cn/
+// ==========================================
+// 老黄历API Key（50次/天免费）
+API_KEY_JUHE_LUNAR = YOUR_JUHE_LUNAR_KEY_HERE
+
+// 星座运势API Key（50次/天免费）
+API_KEY_JUHE_CONSTELLATION = YOUR_JUHE_CONSTELLATION_KEY_HERE

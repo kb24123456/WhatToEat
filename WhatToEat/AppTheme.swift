@@ -1,4 +1,28 @@
 import SwiftUI
+import UIKit
+
+// MARK: - App Appearance Mode
+enum AppAppearanceMode: String, CaseIterable {
+    case system
+    case light
+    case dark
+
+    var displayName: String {
+        switch self {
+        case .system: return "跟随系统"
+        case .light: return "浅色模式"
+        case .dark: return "深色模式"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
 
 // MARK: - WhatToEat Design System v2.0
 // 设计文档：https://github.com/kb24123456/WhatToEat/wiki/Design-System
@@ -18,7 +42,7 @@ struct AppTheme {
         // 背景色系统
         static let background = Color(hex: "#FFFFFF") // 纯白背景
         static let navigationBar = Colors.background
-        static let card = Color.white
+        static let card = Color.adaptiveHex(light: "#FFFFFF", dark: "#1C1F25")
         
         // 文字色系统
         static let textPrimary = Color(hex: "#1A1A1A") // 主文字
@@ -55,25 +79,25 @@ struct AppTheme {
         static let lightGreen = Color(hex: "#E8F7F2").opacity(0.8)
         static let lightGray = Color(hex: "#F0F2F5") // 收据风格输入框背景
         static let softBackground = Color(hex: "#F8F9FB")
-        static let divider = Color.black.opacity(0.04) // 更淡的分隔线
+        static let divider = Color.adaptiveHex(light: "#1A1A1A", dark: "#E6EBF4").opacity(0.08) // 更淡的分隔线
         
         // MARK: - Misty Oreo 专用
         static let softSecondary = Color(hex: "#A2AAB1")
-        static let milkyWhite = Color.white.opacity(0.2) // 极淡 0.2 透明度
-        static let shadowColor = Color.black.opacity(0.04)
+        static let milkyWhite = Color.adaptiveHex(light: "#FFFFFF", dark: "#171A20").opacity(0.25) // 极淡透明度
+        static let shadowColor = Color.adaptiveHex(light: "#000000", dark: "#000000").opacity(0.22)
         
         // MARK: - 奥利奥奶脂专用 (Oreo Cream)
         static let milkyBase = Color(hex: "#F7F8FA")      // 大背景色，比纯白深一点
         static let pureWhite = Color(hex: "#FFFFFF")      // 用于卡片和容器
-        static let rimLight = Color.white.opacity(0.8)    // 卡片边缘高光
-        static let ceramicShadow = Color.black.opacity(0.02)  // 极其弥散的阴影
-        static let physicalEdge = Color.black.opacity(0.03)   // 物理切痕感描边
+        static let rimLight = Color.adaptiveHex(light: "#FFFFFF", dark: "#2C333E").opacity(0.75)    // 卡片边缘高光
+        static let ceramicShadow = Color.adaptiveHex(light: "#000000", dark: "#000000").opacity(0.22)  // 极其弥散的阴影
+        static let physicalEdge = Color.adaptiveHex(light: "#000000", dark: "#FFFFFF").opacity(0.06)   // 物理切痕感描边
         
         // MARK: - LibraryView 专用
         static let milkWhite = Color(hex: "#fdf9f3")  // 奶白背景色
         
         // MARK: - 全局背景色（中性灰白，所有视图统一使用）
-        static let pageBackground = Color(hex: "#f9f9f7")  // 全局页面背景色
+        static let pageBackground = Color.adaptiveHex(light: "#f9f9f7", dark: "#0E1320")
         
         // MARK: - 语义化补齐
         /// 破坏性颜色，用于删除、取消等警示操作
@@ -82,17 +106,17 @@ struct AppTheme {
         static let warning = Color(hex: "#FF9500")
         
         // MARK: - 极致细节专用
-        // rimLight 已在奥利奥奶脂专用中定义：Color.white.opacity(0.8)
+        // rimLight 已在奥利奥奶脂专用中定义：Color(hex: "#FFFFFF").opacity(0.8)
         /// 玻璃边框色，用于玻璃态效果
-        static let glassBorder = Color.white.opacity(0.5)
+        static let glassBorder = Color(hex: "#FFFFFF").opacity(0.5)
         /// 玻璃白色，用于玻璃态背景
-        static let glassWhite = Color.white.opacity(0.3)
+        static let glassWhite = Color(hex: "#FFFFFF").opacity(0.3)
         
         /// Misty Oreo 蒙层渐变：极淡
         static let milkyOverlayGradient = LinearGradient(
             colors: [
-                Color.white.opacity(0),
-                Color.white.opacity(0.1),
+                Color(hex: "#FFFFFF").opacity(0),
+                Color(hex: "#FFFFFF").opacity(0.1),
                 Colors.milkyWhite // 0.2 透明度
             ],
             startPoint: .top,
@@ -100,21 +124,39 @@ struct AppTheme {
         )
         
         /// 幽灵文字颜色：用于卡片背景的大数字水印（参考图中的 6% 透明度）
-        static let ghostText = Color.black.opacity(0.06)
+        static let ghostText = Color.adaptiveHex(light: "#000000", dark: "#FFFFFF").opacity(0.10)
         
         // MARK: - 常用硬编码颜色统一
-        static let darkText = Color(hex: "#1A1A1A")
-        static let mediumGray = Color(hex: "#525252")
-        static let lightText = Color(hex: "#999999")
-        static let lighterGray = Color(hex: "#BBBBBB")
-        static let ultraLightGray = Color(hex: "#CCCCCC")
+        static let darkText = Color.adaptiveHex(light: "#1A1A1A", dark: "#EEF2F8")
+        static let mediumGray = Color.adaptiveHex(light: "#525252", dark: "#B8C0CE")
+        static let lightText = Color.adaptiveHex(light: "#999999", dark: "#929CAD")
+        static let lighterGray = Color.adaptiveHex(light: "#BBBBBB", dark: "#A4AEBD")
+        static let ultraLightGray = Color.adaptiveHex(light: "#CCCCCC", dark: "#8E99AA")
         static let warmBackground = Color(hex: "#FBF9F7")
         static let warmGray = Color(hex: "#F5F3F0")
         static let cardBackground = Color(hex: "#F8F8F8")
-        static let separatorGray = Color(hex: "#E0E0E0")
-        static let darkBackground = Color(hex: "#2C2C2C")
+        static let separatorGray = Color.adaptiveHex(light: "#E0E0E0", dark: "#343A45")
+        static let darkBackground = Color.adaptiveHex(light: "#2C2C2C", dark: "#101217")
         static let brownText = Color(hex: "#332E2B")
         static let darkBrown = Color(hex: "#8B7355")
+
+        // MARK: - 语义化补充（深色模式核心）
+        static let modalBackground = Color.adaptiveHex(light: "#FFFFFF", dark: "#111A27")
+        static let elevatedCard = Color.adaptiveHex(light: "#FFFFFF", dark: "#171A20")
+        static let overlay = Color.adaptiveHex(light: "#000000", dark: "#000000").opacity(0.30)
+        static let primaryButtonBackground = Color.adaptiveHex(light: "#1A1A1A", dark: "#EEF2F8")
+        static let primaryButtonText = Color.adaptiveHex(light: "#FFFFFF", dark: "#101217")
+        static let secondaryButtonBackground = Color.adaptiveHex(light: "#FFFFFF", dark: "#1D2330")
+        static let surfacePrimary = Color.adaptiveHex(light: "#FFFFFF", dark: "#171A20")
+        static let surfaceSecondary = Color.adaptiveHex(light: "#F5F7F8", dark: "#1D2430")
+        static let inputFieldBackground = Color.adaptiveHex(light: "#FFFFFF", dark: "#1B2230")
+        static let headerPillBackground = Color.adaptiveHex(light: "#FFFFFF", dark: "#1B2536")
+        static let headerPillBorder = Color.adaptiveHex(light: "#E6EBF4", dark: "#2D3B4E")
+        static let topOverlayStrong = Color.adaptiveHex(light: "#FFFFFF", dark: "#0C1320")
+        static let topOverlayMid = Color.adaptiveHex(light: "#FFFFFF", dark: "#0F1827")
+        static let topOverlaySoft = Color.adaptiveHex(light: "#FFFFFF", dark: "#132033")
+        static let tabActive = Color.adaptiveHex(light: "#1A1A1A", dark: "#FFFFFF")
+        static let tabInactive = Color.adaptiveHex(light: "#7F8C8D", dark: "#96A6BC")
         
         // MARK: - 情绪颜色
         static let moodSatisfied = Color(hex: "#FFB3BA")
@@ -165,7 +207,7 @@ struct AppTheme {
     // MARK: - 7. Misty Oreo 卡片规范
     struct Card {
         /// 卡片背景色：纯白实色
-        static let background = Color.white
+        static let background = Colors.elevatedCard
 
         /// 卡片圆角：32pt (continuous 风格)
         static let cornerRadius: CGFloat = 32
@@ -179,7 +221,7 @@ struct AppTheme {
         static let spacingLarge: CGFloat = 48
 
         /// 边框：极细黑色描边
-        static let strokeColor = Color.black.opacity(0.05)
+        static let strokeColor = Colors.separatorGray.opacity(0.45)
         static let strokeWidth: CGFloat = 0.5
 
         /// 废弃阴影
@@ -232,7 +274,7 @@ struct AppTheme {
         static let title3Yuanti = Font.custom("ResourceHanRoundedCN-Bold", size: 18)
         static let subheadlineYuanti = Font.custom("ResourceHanRoundedCN-Medium", size: 16)
         static let bodyYuanti = Font.custom("ResourceHanRoundedCN-Medium", size: 14)
-        static let footnoteYuanti = Font.custom("ResourceHanRoundedCN-Regular", size: 12)
+        static let footnoteYuanti = Font.custom("ResourceHanRoundedCN-Medium", size: 12)
     }
     
     // MARK: - 3. 间距系统
@@ -321,18 +363,185 @@ struct AppTheme {
 
 // MARK: - 颜色 Hex 支持
 extension Color {
+    static func fixedHex(_ hex: String) -> Color {
+        Color(UIColor(hex: hex))
+    }
+
+    static func adaptiveHex(light: String, dark: String) -> Color {
+        Color(
+            UIColor { traits in
+                UIColor(
+                    hex: traits.userInterfaceStyle == .dark ? dark : light
+                )
+            }
+        )
+    }
+
     init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default: (a, r, g, b) = (1, 1, 1, 0)
+        let normalized = Self.normalizeHex(hex)
+
+        // 在深色模式对常见中性色做自动映射，减少历史硬编码改造成本
+        let mappedLight = normalized
+        let mappedDark = Self.resolvedDarkHex(for: normalized)
+
+        self = Color(
+            UIColor { traits in
+                UIColor(hex: traits.userInterfaceStyle == .dark ? mappedDark : mappedLight)
+            }
+        )
+    }
+
+    private static func normalizeHex(_ hex: String) -> String {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted).uppercased()
+        if cleaned.count == 3 {
+            return cleaned.map { "\($0)\($0)" }.joined()
         }
-        self.init(.sRGB, red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255, opacity: Double(a) / 255)
+        return cleaned
+    }
+
+    private static func resolvedDarkHex(for normalized: String) -> String {
+        if let mapped = darkHexMap[normalized] {
+            return mapped
+        }
+        // 自动兜底：将“高亮+低饱和”的历史浅色背景在深色模式转为暗面底色
+        guard let (r, g, b) = rgbComponents(from: normalized) else {
+            return normalized
+        }
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        UIColor(red: r, green: g, blue: b, alpha: 1).getHue(
+            &hue,
+            saturation: &saturation,
+            brightness: &brightness,
+            alpha: &alpha
+        )
+        if brightness >= 0.94 && saturation <= 0.24 {
+            return "1A1E26"
+        }
+        if brightness >= 0.88 && saturation <= 0.28 {
+            return "242B36"
+        }
+        return normalized
+    }
+
+    private static func rgbComponents(from normalized: String) -> (CGFloat, CGFloat, CGFloat)? {
+        var value: UInt64 = 0
+        switch normalized.count {
+        case 6:
+            guard Scanner(string: normalized).scanHexInt64(&value) else { return nil }
+            let r = CGFloat((value >> 16) & 0xFF) / 255.0
+            let g = CGFloat((value >> 8) & 0xFF) / 255.0
+            let b = CGFloat(value & 0xFF) / 255.0
+            return (r, g, b)
+        case 8:
+            guard Scanner(string: normalized).scanHexInt64(&value) else { return nil }
+            let r = CGFloat((value >> 16) & 0xFF) / 255.0
+            let g = CGFloat((value >> 8) & 0xFF) / 255.0
+            let b = CGFloat(value & 0xFF) / 255.0
+            return (r, g, b)
+        default:
+            return nil
+        }
+    }
+
+    private static let darkHexMap: [String: String] = [
+        // Base surfaces
+        "FFFFFF": "171A20",
+        "FDF9F3": "171A20",
+        "F9F9F7": "13161B",
+        "F8F9FB": "1B1F26",
+        "F7F8FA": "1A1D24",
+        "FBF9F7": "161920",
+        "F5F3F0": "1F242D",
+        "F0F2F5": "252B36",
+        "F8F8F8": "1D222B",
+        "FAFAF8": "1A1F27",
+        "F8F7F4": "1A1F27",
+        "F5F5F5": "202631",
+        "F0F0F0": "252B36",
+        "F3F5F6": "242A34",
+        "F3F5F7": "242A34",
+        "F5F7F8": "242A34",
+        "FFF5F0": "1E242E",
+        "FFEEE5": "222833",
+        "FFF8F5": "1E242E",
+        "FFE8E0": "252C37",
+        "FFF0EB": "212833",
+        "FFF5F2": "1E242E",
+        "FFEFE8": "222933",
+        "FFF2EE": "212833",
+        "FFF7F5": "1E242E",
+        "FFF9F7": "1A2029",
+        "FFF9F5": "1A2029",
+        "FFF9E6": "2B2F39",
+        "FFF0CC": "373A43",
+        "FFF0F0": "2A2227",
+        "FFF5F5": "2A2227",
+        "FFE4D6": "3A3137",
+        "FFD4C4": "51474B",
+        "FFE0E0": "3C3136",
+        "FFE8EE": "2A222B",
+        "EBF3FF": "1D2431",
+        "E8F7F2": "1D2A28",
+        "E8F8F5": "1D2A28",
+        "E8F5E9": "1E2924",
+        "FFF3E0": "2F2A22",
+        "E8E5E0": "2C313A",
+        "F0EDE8": "2A3038",
+        "E0E0E0": "343A45",
+        "DFE6E9": "38414C",
+        "E6E8EA": "37404A",
+        // Text neutrals
+        "1A1A1A": "EEF2F8",
+        "2C2C2C": "E3E9F3",
+        "2D3436": "E4EAF4",
+        "332E2B": "E9DFD6",
+        "4A4A4A": "BEC8D8",
+        "525252": "B8C0CE",
+        "5E646B": "A6B2C3",
+        "636E72": "AEB9C9",
+        "6B6B6B": "B0B8C6",
+        "7F8C8D": "AAB5C2",
+        "808991": "A9B3C2",
+        "999999": "929CAD",
+        "95A0A7": "9DA9B9",
+        "B2BEC3": "96A3B3",
+        "BBBBBB": "A4AEBD",
+        "CCCCCC": "8E99AA",
+        "A2AAB1": "9AA5B5",
+        "AAB2B9": "9BA6B6",
+        "8B7355": "CCBDA9",
+        // Low-contrast supporting colors
+        "E8E8E8": "3B404A"
+    ]
+}
+
+private extension UIColor {
+    convenience init(hex: String) {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted).uppercased()
+        var int: UInt64 = 0
+        Scanner(string: cleaned).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+
+        switch cleaned.count {
+        case 3:
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6:
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8:
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+
+        self.init(
+            red: CGFloat(r) / 255.0,
+            green: CGFloat(g) / 255.0,
+            blue: CGFloat(b) / 255.0,
+            alpha: CGFloat(a) / 255.0
+        )
     }
 }
 
@@ -473,7 +682,7 @@ struct SkeletonView: View {
                     LinearGradient(
                         gradient: Gradient(colors: [
                             Color.clear,
-                            Color.white.opacity(0.6),
+                            Color(hex: "#FFFFFF").opacity(0.6),
                             Color.clear
                         ]),
                         startPoint: .leading,

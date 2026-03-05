@@ -40,3 +40,7 @@ build/
 # Personal
 *.personal
 *.private
+
+# Local secret config
+WhatToEat/AppConfig.swift
+WhatToEat/AppConfig.local.swift

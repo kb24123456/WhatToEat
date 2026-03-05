@@ -13,8 +13,8 @@ struct MilkyCanvas: View {
                 // 光影层：顶部中央柔和高光
                 RadialGradient(
                     colors: [
-                        Color.white.opacity(0.4),
-                        Color.white.opacity(0.0)
+                        Color(hex: "#FFFFFF").opacity(0.4),
+                        Color(hex: "#FFFFFF").opacity(0.0)
                     ],
                     center: UnitPoint(x: 0.5, y: 0.2),
                     startRadius: 0,

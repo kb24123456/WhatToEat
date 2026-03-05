@@ -1,0 +1,24 @@
+//
+// Config.xcconfig
+// WhatToEat
+//
+// ⚠️ 重要提示：此文件包含真实的API Key，绝对不要提交到Git！
+// 此文件已在 .gitignore 中被忽略。
+//
+// 团队成员使用说明：
+// 1. 复制 Config.example.xcconfig 为 Config.xcconfig
+// 2. 填入你的真实API Key
+// 3. 确保Config.xcconfig不会被提交到Git
+//
+
+// ==========================================
+// 豆包API配置（火山引擎）
+// ==========================================
+API_KEY_DOUBAO = 57f57b30-fec5-487e-a160-7c619701e38e
+ENDPOINT_ID_DOUBAO = ep-20260210035323-jgptr
+
+// ==========================================
+// 聚合数据API配置
+// ==========================================
+API_KEY_JUHE_LUNAR = 593a1836e9ce546f3fceef18f3d5af94
+API_KEY_JUHE_CONSTELLATION = 1e861daeabe2b998323b2380807b381e

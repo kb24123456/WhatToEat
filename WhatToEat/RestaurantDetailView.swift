@@ -41,7 +41,6 @@ extension Date {
 
     var chineseDateTime: String {
         let calendar = Calendar.current
-        let now = Date()
 
         if calendar.isDateInToday(self) {
             let formatter = DateFormatter()
@@ -145,9 +144,8 @@ struct RestaurantDetailView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
-                // 背景色 - 与吃啥页面一致
-                Color(hex: "#F9F9F7")
-                    .ignoresSafeArea()
+                // 背景层：弥散渐变
+                DiffuseGradientBackground()
 
                 ScrollViewReader { proxy in
                     ScrollView(showsIndicators: false) {
@@ -321,6 +319,9 @@ struct RestaurantDetailView: View {
                     Button(role: .destructive) {
                         let generator = UIImpactFeedbackGenerator(style: .light)
                         generator.impactOccurred()
+                        if let filename = restaurant.coverPhotoFilename {
+                            ImageManager.shared.deleteImage(filename: filename)
+                        }
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             restaurant.coverPhotoFilename = nil
                         }
@@ -459,11 +460,11 @@ struct RestaurantDetailView: View {
             } label: {
                 Image(systemName: "location.fill")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.Colors.primaryButtonText)
                     .frame(width: 48, height: 48)
                     .background(
                         Circle()
-                            .fill(AppTheme.Colors.darkText)
+                            .fill(AppTheme.Colors.primaryButtonBackground)
                     )
             }
             .buttonStyle(ScaleButtonStyle())
@@ -472,7 +473,7 @@ struct RestaurantDetailView: View {
         .frame(height: 56)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.Colors.surfacePrimary)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
         )
     }
@@ -515,7 +516,7 @@ struct RestaurantDetailView: View {
                     .frame(width: 48, height: 48)
                     .background(
                         Circle()
-                            .fill(AppTheme.Colors.darkText) // 背景保持黑色
+                            .fill(AppTheme.Colors.primaryButtonBackground)
                     )
             }
             .buttonStyle(ScaleButtonStyle())
@@ -524,7 +525,7 @@ struct RestaurantDetailView: View {
         .frame(height: 56)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.Colors.surfacePrimary)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
         )
     }
@@ -603,7 +604,7 @@ struct RestaurantDetailView: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.Colors.surfacePrimary)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
         )
     }
@@ -636,7 +637,7 @@ struct RestaurantDetailView: View {
                             .frame(width: 36, height: 36)
                             .background(
                                 Circle()
-                                    .fill(AppTheme.Colors.softBackground)
+                                    .fill(AppTheme.Colors.surfaceSecondary)
                             )
                     }
                     .transition(.scale.combined(with: .opacity))
@@ -656,7 +657,7 @@ struct RestaurantDetailView: View {
                             .frame(width: 36, height: 36)
                             .background(
                                 Circle()
-                                    .fill(AppTheme.Colors.softBackground)
+                                    .fill(AppTheme.Colors.surfaceSecondary)
                             )
                     }
                     .transition(.scale.combined(with: .opacity))
@@ -768,7 +769,7 @@ struct RestaurantDetailView: View {
                         .frame(width: 36, height: 36)
                         .background(
                             Circle()
-                                .fill(AppTheme.Colors.softBackground)
+                                .fill(AppTheme.Colors.surfaceSecondary)
                         )
                 }
             }
@@ -819,7 +820,7 @@ struct RestaurantDetailView: View {
                             .padding(.vertical, 5)
                             .background(
                                 Capsule()
-                                    .fill(AppTheme.Colors.softBackground)
+                                    .fill(AppTheme.Colors.surfaceSecondary)
                             )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -867,7 +868,7 @@ struct RestaurantDetailView: View {
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(AppTheme.Colors.softBackground)
+                    .fill(AppTheme.Colors.surfaceSecondary)
             )
             .overlay(
                 Capsule()
@@ -971,7 +972,7 @@ struct RestaurantDetailView: View {
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(AppTheme.Colors.softBackground)
+                                .fill(AppTheme.Colors.surfaceSecondary)
                         )
                     }
                 }
@@ -1017,12 +1018,12 @@ struct RestaurantDetailView: View {
             } label: {
                 Text("去打卡")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.Colors.primaryButtonText)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 12)
                     .background(
                         Capsule()
-                            .fill(Color.black)
+                            .fill(AppTheme.Colors.primaryButtonBackground)
                     )
             }
         }
@@ -1030,7 +1031,7 @@ struct RestaurantDetailView: View {
         .padding(.vertical, 48)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.Colors.surfacePrimary)
         )
     }
     
@@ -1150,7 +1151,7 @@ struct RestaurantDetailView: View {
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(AppTheme.Colors.softBackground)
+                                .fill(AppTheme.Colors.surfaceSecondary)
                         )
                     }
                 }
@@ -1169,7 +1170,7 @@ struct RestaurantDetailView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.Colors.surfacePrimary)
         )
         .contextMenu {
             Button {
@@ -1193,6 +1194,7 @@ struct RestaurantDetailView: View {
         Button(role: .destructive) {
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
+            cleanupRestaurantImages()
             modelContext.delete(restaurant)
             navigationPath.removeLast()
         } label: {
@@ -1207,7 +1209,7 @@ struct RestaurantDetailView: View {
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white)
+                    .fill(AppTheme.Colors.surfacePrimary)
             )
         }
     }
@@ -1254,8 +1256,22 @@ struct RestaurantDetailView: View {
     }
     
     private func updateCover(image: UIImage) {
+        if let oldFilename = restaurant.coverPhotoFilename {
+            ImageManager.shared.deleteImage(filename: oldFilename)
+        }
         if let filename = ImageManager.shared.saveImage(image) {
             restaurant.coverPhotoFilename = filename
+        }
+    }
+
+    private func cleanupRestaurantImages() {
+        if let filename = restaurant.coverPhotoFilename {
+            ImageManager.shared.deleteImage(filename: filename)
+        }
+        for log in restaurant.logs {
+            for filename in log.photoFilenames {
+                ImageManager.shared.deleteImage(filename: filename)
+            }
         }
     }
 }
@@ -1307,7 +1323,7 @@ struct EditableDataCardNoBorder: View {
         .frame(height: 56)
         .background(
             Capsule()
-                .fill(Color.white)
+                .fill(AppTheme.Colors.surfacePrimary)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
         )
     }
@@ -1440,7 +1456,7 @@ struct ExpandableRatingView: View {
             .frame(height: 56)
             .background(
                 Capsule()
-                    .fill(Color.white)
+                    .fill(AppTheme.Colors.surfacePrimary)
                     .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
             )
         }
@@ -1464,7 +1480,7 @@ struct ExpandableRatingView: View {
         .frame(height: 112)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.Colors.surfacePrimary)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
         )
     }
@@ -1600,7 +1616,7 @@ struct ExpandableCategoryView: View {
             .frame(height: 56)
             .background(
                 Capsule()
-                    .fill(Color.white)
+                    .fill(AppTheme.Colors.surfacePrimary)
                     .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
             )
         }
@@ -1631,7 +1647,7 @@ struct ExpandableCategoryView: View {
                         .padding(.vertical, 12)
                         .background(
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(Color.white)
+                                .fill(AppTheme.Colors.surfacePrimary)
                                 .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
                         )
                         .overlay(
@@ -1714,7 +1730,7 @@ struct ExpandableCategoryView: View {
                     .background(
                         Capsule()
                             .stroke(AppTheme.Colors.mediumGray.opacity(0.4), lineWidth: 1)
-                            .background(Capsule().fill(Color.white.opacity(0.5)))
+                            .background(Capsule().fill(AppTheme.Colors.surfaceSecondary.opacity(0.72)))
                     )
                 }
                 .buttonStyle(ScaleButtonStyle())
@@ -1725,7 +1741,7 @@ struct ExpandableCategoryView: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.Colors.surfacePrimary)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
         )
     }
@@ -1949,7 +1965,7 @@ struct AllCheckInsSheet: View {
                     }
                 }
             }
-            .background(Color(hex: "#F9F9F7").ignoresSafeArea())
+            .background(AppTheme.Colors.pageBackground.ignoresSafeArea())
         }
     }
     
@@ -2069,7 +2085,7 @@ struct AllCheckInsSheet: View {
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(AppTheme.Colors.softBackground)
+                                .fill(AppTheme.Colors.surfaceSecondary)
                         )
                     }
                 }
@@ -2088,7 +2104,7 @@ struct AllCheckInsSheet: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.Colors.surfacePrimary)
         )
     }
 }

@@ -7,6 +7,7 @@ import PhotosUI
 struct AddRestaurantView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     
     var onClose: (() -> Void)?
     
@@ -95,6 +96,22 @@ struct AddRestaurantView: View {
     private var closeAction: () -> Void {
         return onClose ?? { dismiss() }
     }
+
+    private var addPrimaryText: Color {
+        colorScheme == .dark ? Color.fixedHex("#DCE6F6") : AppTheme.Colors.darkText
+    }
+
+    private var addSecondaryText: Color {
+        colorScheme == .dark ? Color.fixedHex("#AAB8CD") : AppTheme.Colors.mediumGray
+    }
+
+    private var addHintText: Color {
+        colorScheme == .dark ? Color.fixedHex("#8393AC") : AppTheme.Colors.lightText
+    }
+
+    private var addPanelBackground: Color {
+        colorScheme == .dark ? Color.fixedHex("#1E2C40").opacity(0.82) : AppTheme.Colors.surfaceSecondary
+    }
     
     // MARK: - Body
     var body: some View {
@@ -181,10 +198,23 @@ struct AddRestaurantView: View {
         }
     }
     
-    // MARK: - Background（使用全局背景色）
+    // MARK: - Background（弥散渐变背景）
     private var backgroundGradient: some View {
-        AppTheme.Colors.pageBackground
-            .ignoresSafeArea()
+        Group {
+            if colorScheme == .dark {
+                DiffuseGradientBackground(
+                    topLeadingColor: Color.fixedHex("#17365A"),
+                    topTrailingColor: Color.fixedHex("#2C4256"),
+                    bottomColor: Color.fixedHex("#0B1422"),
+                    warmGlowColor: Color.fixedHex("#3B3140"),
+                    useGlobalDarkPalette: false,
+                    blurRadius: 90,
+                    colorOpacity: 0.36
+                )
+            } else {
+                DiffuseGradientBackground()
+            }
+        }
     }
     
     // MARK: - Scroll Content（无父容器，组件直接显示 - 参考 CheckInView）
@@ -198,7 +228,7 @@ struct AddRestaurantView: View {
                         // 中间标题
                         Text("新发现！")
                             .font(.headline)
-                            .foregroundColor(AppTheme.Colors.darkText)
+                            .foregroundColor(addPrimaryText)
                         
                         // 右侧关闭按钮
                         HStack {
@@ -208,11 +238,11 @@ struct AddRestaurantView: View {
                             } label: {
                                 Image(systemName: "xmark")
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(AppTheme.Colors.mediumGray)
+                                    .foregroundColor(addSecondaryText)
                                     .frame(width: 32, height: 32)
                                     .background(
                                         Circle()
-                                            .fill(Color.white.opacity(0.5))
+                                            .fill(addPanelBackground.opacity(0.72))
                                     )
                             }
                         }
@@ -308,19 +338,19 @@ struct AddRestaurantView: View {
                             dash: [6, 4]
                         )
                     )
-                    .foregroundColor(AppTheme.Colors.lightText.opacity(0.5))
+                    .foregroundColor(addHintText.opacity(0.5))
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(AppTheme.Colors.softBackground.opacity(0.3))
+                            .fill(addPanelBackground.opacity(0.62))
                     )
                 
                 VStack(spacing: 6) {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(AppTheme.Colors.lightText)
+                        .foregroundColor(addHintText)
                     Text("添加照片")
                         .font(.system(size: 11))
-                        .foregroundColor(AppTheme.Colors.lightText)
+                        .foregroundColor(addHintText)
                 }
             }
         }
@@ -362,7 +392,7 @@ struct AddRestaurantView: View {
             // 餐厅名称（大标题，参考人均消费数字动效）
             Text(name)
                 .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.darkText)
+                .foregroundColor(addPrimaryText)
                 .lineLimit(2)
                 .contentTransition(.numericText())
                 .animation(AppTheme.Animations.standardSpring, value: name)
@@ -379,7 +409,7 @@ struct AddRestaurantView: View {
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
-                    .foregroundColor(AppTheme.Colors.mediumGray)
+                    .foregroundColor(addSecondaryText)
                     .contentTransition(.numericText())
                     .animation(AppTheme.Animations.standardSpring, value: district)
                 }
@@ -388,7 +418,7 @@ struct AddRestaurantView: View {
                 if !district.isEmpty && !category.isEmpty {
                     Text("·")
                         .font(.system(size: 13))
-                        .foregroundColor(AppTheme.Colors.lightText)
+                        .foregroundColor(addHintText)
                 }
                 
                 // 品类（可点击重新选择）
@@ -411,13 +441,13 @@ struct AddRestaurantView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "fork.knife")
                                 .font(.system(size: 12))
-                                .foregroundColor(AppTheme.Colors.mediumGray)
+                                .foregroundColor(addSecondaryText)
                             Text(category)
                                 .font(.system(size: 13))
                                 .fontWeight(.medium)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
-                                .foregroundColor(AppTheme.Colors.mediumGray)
+                                .foregroundColor(addSecondaryText)
                         }
                     }
                     .contentTransition(.numericText())
@@ -457,13 +487,13 @@ struct AddRestaurantView: View {
     private var nameTextField: some View {
         TextField("餐厅名称", text: $name)
             .font(.system(size: 17, weight: .semibold))
-            .foregroundColor(AppTheme.Colors.darkText)
+            .foregroundColor(addPrimaryText)
             .lineLimit(2)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.Colors.softBackground)
+                    .fill(addPanelBackground)
             )
     }
     
@@ -476,21 +506,21 @@ struct AddRestaurantView: View {
             Text(displayTitle)
                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
                 // 未选中：深黑文字 | 选中：白色文字
-                .foregroundColor(isSelected ? .white : Color(hex: "#1A1A1A"))
+                .foregroundColor(isSelected ? AppTheme.Colors.primaryButtonText : addPrimaryText)
                 // 固定宽度和高度，不随内容变化
                 .frame(width: 52, height: 18, alignment: .center)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
                 .font(.system(size: 7))
                 // 未选中：Baby Blue | 选中：白色
-                .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.Colors.babyBlue)
+                .foregroundColor(isSelected ? AppTheme.Colors.primaryButtonText.opacity(0.8) : AppTheme.Colors.babyBlue)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(
             Capsule()
                 // 未选中：纯白实色 | 选中：纯黑实色
-                .fill(isSelected ? Color.black : Color.white)
+                .fill(isSelected ? AppTheme.Colors.primaryButtonBackground : AppTheme.Colors.secondaryButtonBackground)
         )
         // 轻微阴影增加悬浮感
         .shadow(
@@ -643,12 +673,12 @@ struct AddRestaurantView: View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "mappin.and.ellipse")
                 .font(.system(size: 12))
-                .foregroundColor(Color(hex: "#999999"))
+                .foregroundColor(addHintText)
                 .padding(.top, 2)
             
             Text(address)
                 .font(.caption)
-                .foregroundColor(Color.secondary)
+                .foregroundColor(addSecondaryText)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
             
@@ -676,11 +706,11 @@ struct AddRestaurantView: View {
         } label: {
             Image(systemName: "camera.fill")
                 .font(.system(size: 14))
-                .foregroundColor(Color(hex: "#1A1A1A"))
+                .foregroundColor(addPrimaryText)
                 .frame(width: 40, height: 40)
                 .background(
                     Circle()
-                        .fill(Color.white.opacity(0.9))  // 纯色替代高斯模糊
+                        .fill(addPanelBackground.opacity(0.9))
                         .overlay(
                             Circle()
                                 .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
@@ -702,13 +732,13 @@ struct AddRestaurantView: View {
 
                 Text("智能搜索...")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
+                    .foregroundColor(addSecondaryText)
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.lightText)
+                    .foregroundColor(addHintText)
             }
         }
         .buttonStyle(ScaleButtonStyle())
@@ -719,12 +749,12 @@ struct AddRestaurantView: View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "mappin.and.ellipse")
                 .font(.system(size: 12))
-                .foregroundColor(Color(hex: "#999999"))
+                .foregroundColor(addHintText)
                 .padding(.top, 2)
             
             Text(address)
                 .font(.caption)
-                .foregroundColor(Color.secondary)
+                .foregroundColor(addSecondaryText)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
             
@@ -754,18 +784,18 @@ struct AddRestaurantView: View {
                 // 图标改为 darkText
                 Image(systemName: "sparkles")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(addPrimaryText)
 
                 // 修改后的文本
                 Text("只需店名，其余交给我！")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
+                    .foregroundColor(addSecondaryText)
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(AppTheme.Colors.lightText)
+                    .foregroundColor(addHintText)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -775,13 +805,13 @@ struct AddRestaurantView: View {
         .buttonStyle(ScaleButtonStyle())
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(addPanelBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppTheme.Colors.babyBlue.opacity(0.3), lineWidth: 0.5)
+                        .stroke(AppTheme.Colors.headerPillBorder, lineWidth: 0.6)
                 )
         )
-        .shadow(color: AppTheme.Colors.babyBlue.opacity(0.1), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 2)
     }
     
     // MARK: - 评分、评价、标签一体化容器
@@ -807,7 +837,7 @@ struct AddRestaurantView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("评分")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(AppTheme.Colors.darkText)
+                .foregroundColor(addPrimaryText)
                 .tracking(1.5)
 
             // Dock 栏评分系统
@@ -822,7 +852,7 @@ struct AddRestaurantView: View {
             HStack(alignment: .center, spacing: 0) {
                 Text("一句话点评")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(addPrimaryText)
                     .tracking(1.5)
 
                 Spacer()
@@ -846,7 +876,7 @@ struct AddRestaurantView: View {
             HStack(alignment: .center, spacing: 0) {
                 Text("标签")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(addPrimaryText)
                     .tracking(1.5)
 
                 Spacer()
@@ -862,7 +892,7 @@ struct AddRestaurantView: View {
                         } label: {
                             Text("取消")
                                 .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.mediumGray)
+                                .foregroundColor(addSecondaryText)
                         }
 
                         Button {
@@ -946,7 +976,7 @@ struct AddRestaurantView: View {
                 Text("新标签")
                     .font(.system(size: 13, weight: .medium))
             }
-            .foregroundColor(AppTheme.Colors.mediumGray)
+            .foregroundColor(addSecondaryText)
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
             .background(
@@ -959,10 +989,10 @@ struct AddRestaurantView: View {
                             dash: [5, 3]
                         )
                     )
-                    .foregroundColor(AppTheme.Colors.lightText.opacity(0.4))
+                    .foregroundColor(addHintText.opacity(0.4))
                     .background(
                         Capsule()
-                            .fill(AppTheme.Colors.softBackground.opacity(0.3))
+                            .fill(addPanelBackground.opacity(0.62))
                     )
             )
         }
@@ -974,7 +1004,7 @@ struct AddRestaurantView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("推荐标签")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(AppTheme.Colors.lightText)
+                .foregroundColor(addHintText)
 
             FlowLayout(spacing: 8) {
                 ForEach(presetTags.filter { !selectedTags.contains($0) }, id: \.self) { tag in
@@ -1060,7 +1090,7 @@ struct AddRestaurantView: View {
         HStack(spacing: 4) {
             Text(tag)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: "#1A1A1A"))
+                .foregroundColor(addPrimaryText)
             
             if isEditingTags {
                 Button {
@@ -1070,7 +1100,7 @@ struct AddRestaurantView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(AppTheme.Colors.lightText)
+                        .foregroundColor(addHintText)
                 }
             }
         }
@@ -1078,7 +1108,7 @@ struct AddRestaurantView: View {
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(AppTheme.Colors.softBackground)
+                .fill(addPanelBackground)
                 .overlay(
                     Capsule()
                         .stroke(AppTheme.Colors.divider, lineWidth: 0.5)
@@ -1099,7 +1129,7 @@ struct AddRestaurantView: View {
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(AppTheme.Colors.softBackground)
+                        .fill(addPanelBackground)
                 )
                 .overlay(
                     Capsule()
@@ -1133,13 +1163,13 @@ struct AddRestaurantView: View {
 
                 Text("保存餐厅")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.Colors.primaryButtonText)
             }
             .padding(.horizontal, 40)
             .padding(.vertical, 18)
             .background(
                 Capsule()
-                    .fill(Color.black)
+                    .fill(AppTheme.Colors.primaryButtonBackground)
             )
         }
         .buttonStyle(ScaleButtonStyle())
@@ -1158,9 +1188,10 @@ struct AddRestaurantView: View {
     }
     
     private func handleLocationSelect(_ item: MKMapItem) {
-        address = "\(item.placemark.subLocality ?? "")\(item.placemark.thoroughfare ?? "")\(item.placemark.subThoroughfare ?? "")"
-        latitude = item.placemark.coordinate.latitude
-        longitude = item.placemark.coordinate.longitude
+        let coordinate = item.compatibleCoordinate
+        latitude = coordinate.latitude
+        longitude = coordinate.longitude
+        address = item.compatibleAddress.isEmpty ? (item.name ?? "") : item.compatibleAddress
     }
     
     private func handlePhotoPickerChange(_ newValue: PhotosPickerItem?) {
@@ -1357,6 +1388,11 @@ struct AddRestaurantView: View {
         )
 
         modelContext.insert(newRestaurant)
+        do {
+            try modelContext.save()
+        } catch {
+            print("保存餐厅失败: \(error)")
+        }
 
         // Oreo: 1.2s 后关闭弹窗并退出
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
@@ -1454,12 +1490,21 @@ extension View {
 
 // MARK: - Dock 单项视图（参考 CheckInView moodButton 动效）
 struct DockItemView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let item: RatingItem
     let isSelected: Bool
     let onTap: () -> Void
     
     // 动画状态
     @State private var isPressed = false
+
+    private var primaryText: Color {
+        colorScheme == .dark ? Color.fixedHex("#DCE6F6") : AppTheme.Colors.darkText
+    }
+
+    private var hintText: Color {
+        colorScheme == .dark ? Color.fixedHex("#8393AC") : AppTheme.Colors.lightText
+    }
     
     var body: some View {
         Button {
@@ -1510,7 +1555,7 @@ struct DockItemView: View {
                 // 俚语文字
                 Text(item.slang)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? AppTheme.Colors.darkText : AppTheme.Colors.lightText)
+                    .foregroundColor(isSelected ? primaryText : hintText)
                     .scaleEffect(isSelected ? 1.05 : 1.0)
                     .animation(AppTheme.Animations.standardSpring, value: isSelected)
             }
@@ -1557,17 +1602,15 @@ struct SuccessToastView: View {
 
             Text("已保存")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.Colors.primaryButtonText)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
         .background(
             // 哑光黑背景 1A1A1A
             Capsule()
-                .fill(Color(hex: "#1A1A1A"))
+                .fill(AppTheme.Colors.primaryButtonBackground)
         )
         .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
     }
 }
-
-

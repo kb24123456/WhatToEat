@@ -3,26 +3,6 @@ import SwiftData
 import MapKit
 import CoreLocation
 
-// MARK: - 任务队列（用于串行化后台计算）
-private actor TaskQueue {
-    private var currentTask: Task<Void, Never>?
-    
-    func enqueue(_ operation: @escaping () async -> Void) {
-        // 取消之前的任务
-        currentTask?.cancel()
-        
-        // 创建新任务
-        currentTask = Task {
-            await operation()
-        }
-    }
-    
-    func cancel() {
-        currentTask?.cancel()
-        currentTask = nil
-    }
-}
-
 // MARK: - 空间索引节点
 private class SpatialIndexNode {
     let minLat: Double
@@ -174,10 +154,11 @@ private struct ClusterCacheKey: Hashable {
 
 // MARK: - 餐厅地图视图 (食图页面)
 struct RestaurantMapView: View {
+    @Environment(\.colorScheme) private var colorScheme
     // 从外部传入的餐厅数据（不直接查询数据库）
     let restaurants: [Restaurant]
     
-    @ObservedObject var locationManager: LocationManager = LocationManager()
+    @ObservedObject var locationManager: LocationManager = LocationManager.shared
     
     // 搜索与筛选状态
     @State private var searchText: String = ""
@@ -188,11 +169,9 @@ struct RestaurantMapView: View {
     // 地图状态
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var visibleRegion: MKCoordinateRegion?
-    @State private var clusteringDistance: CLLocationDistance = 50 // 聚合距离（米）
     
     // 区域内搜索状态
     @State private var initialCenterCoordinate: CLLocationCoordinate2D?
-    @State private var hasUserInteractedWithMap: Bool = false
     private let regionChangeThreshold: CLLocationDistance = 500 // 移动超过500米后重置
     
     // MARK: - 性能优化：空间索引与缓存
@@ -206,12 +185,7 @@ struct RestaurantMapView: View {
     // MARK: - 滑动检测与延迟计算
     @State private var isMapDragging: Bool = false
     @State private var dragEndTimer: Timer?
-    @State private var settleTimer: Timer?
     private let dragEndDelay: TimeInterval = 0.75  // 滑动停止后等待0.75秒再计算
-    
-    // MARK: - 后台计算任务管理
-    @State private var currentClusteringTask: Task<Void, Never>?
-    @State private var calculationQueue = TaskQueue()
     
     // 最大显示餐厅数量
     private let maxVisibleRestaurants = 10
@@ -255,7 +229,6 @@ struct RestaurantMapView: View {
     // MARK: - 导航状态与路线变量
     @State private var route: MKRoute?
     @State private var isNavigating: Bool = false
-    @State private var navigationSheetHeight: PresentationDetent = .fraction(0.65)
     @State private var routeUpdateTimer: Timer?
     @State private var showExitNavigationButton: Bool = false
     @State private var navigatingRestaurant: Restaurant? // 导航中的餐厅（独立于selectedRestaurant）
@@ -277,7 +250,7 @@ struct RestaurantMapView: View {
     // 筛选餐厅（搜索 + 可视区域 + 有效坐标）- 使用空间索引优化
     private func filterRestaurants() -> [Restaurant] {
         // 过滤无效坐标（latitude == 0 表示尚未获取坐标）
-        let validRestaurants = restaurants.filter { $0.latitude != 0 || $0.longitude != 0 }
+        let validRestaurants = restaurants.filter { $0.latitude != 0 && $0.longitude != 0 }
         
         // 搜索筛选（模糊搜索，支持拼音）
         if !searchText.isEmpty {
@@ -373,7 +346,7 @@ struct RestaurantMapView: View {
         // 搜索 Sheet
         .sheet(isPresented: $showSearchSheet) {
             MapSearchSheet(
-                restaurants: restaurants.filter { $0.latitude != 0 || $0.longitude != 0 },
+                restaurants: restaurants.filter { $0.latitude != 0 && $0.longitude != 0 },
                 onSelectRestaurant: { restaurant in
                     // 更新搜索文本
                     searchText = restaurant.name
@@ -411,8 +384,11 @@ struct RestaurantMapView: View {
                 }
             )
             .presentationDetents([.fraction(0.65), .large])
-            .presentationBackground(.white)
+            .presentationBackground(AppTheme.Colors.modalBackground)
             .presentationDragIndicator(.visible)
+        }
+        .onDisappear {
+            cleanupMapResources()
         }
     }
     
@@ -491,7 +467,11 @@ struct RestaurantMapView: View {
             MapCompass()
         }
         .ignoresSafeArea()
-        .onAppear { setupInitialCameraPosition() }
+        .onAppear {
+            setupInitialCameraPosition()
+            locationManager.requestLocationPermission()
+            locationManager.startContinuousLocation()
+        }
         .onMapCameraChange { context in handleMapCameraChange(context.region) }
         .onChange(of: locationManager.userLocation) { _, newLocation in
             if let location = newLocation, !isNavigating {
@@ -570,8 +550,8 @@ struct RestaurantMapView: View {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.95),
-                                        Color.white
+                                        Color(hex: "#FFFFFF").opacity(0.95),
+                                        Color(hex: "#FFFFFF")
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -606,12 +586,12 @@ struct RestaurantMapView: View {
                     Text("退出")
                         .font(.system(size: 13, weight: .medium))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.Colors.primaryButtonText)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background(
                     Capsule()
-                        .fill(Color.black)
+                        .fill(AppTheme.Colors.primaryButtonBackground)
                 )
                 .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
             }
@@ -730,8 +710,14 @@ struct RestaurantMapView: View {
         guard let userLocation = locationManager.userLocation?.coordinate else { return }
         
         let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: MKPlacemark(coordinate: userLocation))
-        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
+        request.source = MKMapItem(
+            location: CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude),
+            address: nil
+        )
+        request.destination = MKMapItem(
+            location: CLLocation(latitude: destination.latitude, longitude: destination.longitude),
+            address: nil
+        )
         request.transportType = .automobile
         request.requestsAlternateRoutes = false
         
@@ -885,9 +871,9 @@ struct RestaurantMapView: View {
                 width: 3,
                 height: 4,
                 points: [
-                    // 第1行（顶部）：纯白色
+                    // 第1行（顶部）：强遮罩区域
                     .init(x: 0, y: 0),     .init(x: 0.5, y: 0),     .init(x: 1, y: 0),
-                    // 第2行：保持白色
+                    // 第2行：中遮罩区域
                     .init(x: 0, y: 0.3),   .init(x: 0.5, y: 0.3),   .init(x: 1, y: 0.3),
                     // 第3行：开始衰减
                     .init(x: 0, y: 0.6),   .init(x: 0.5, y: 0.6),   .init(x: 1, y: 0.6),
@@ -895,11 +881,13 @@ struct RestaurantMapView: View {
                     .init(x: 0, y: 1),     .init(x: 0.5, y: 1),     .init(x: 1, y: 1),
                 ],
                 colors: [
-                    // 第1-2行：纯白色（状态栏和控件区域）
-                    Color.white, Color.white, Color.white,
-                    Color.white, Color.white, Color.white,
+                    // 第1-2行：根据模式给顶层遮罩
+                    AppTheme.Colors.topOverlayStrong, AppTheme.Colors.topOverlayStrong, AppTheme.Colors.topOverlayStrong,
+                    AppTheme.Colors.topOverlayMid, AppTheme.Colors.topOverlayMid, AppTheme.Colors.topOverlayMid,
                     // 第3行：指数衰减
-                    Color.white.opacity(0.7), Color.white.opacity(0.6), Color.white.opacity(0.7),
+                    AppTheme.Colors.topOverlaySoft.opacity(colorScheme == .dark ? 0.72 : 0.38),
+                    AppTheme.Colors.topOverlaySoft.opacity(colorScheme == .dark ? 0.6 : 0.3),
+                    AppTheme.Colors.topOverlaySoft.opacity(colorScheme == .dark ? 0.72 : 0.38),
                     // 第4行：完全透明
                     Color.clear, Color.clear, Color.clear,
                 ]
@@ -935,13 +923,13 @@ struct RestaurantMapView: View {
                         .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .fill(.white)
+                                .fill(AppTheme.Colors.headerPillBackground)
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                                        .stroke(AppTheme.Colors.headerPillBorder, lineWidth: 0.8)
                                 )
                         )
-                        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.04), radius: 8, x: 0, y: 2)
                     }
                     .buttonStyle(.plain)
                     
@@ -957,11 +945,11 @@ struct RestaurantMapView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "magnifyingglass")
                                         .font(.system(size: 13))
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(AppTheme.Colors.mediumGray)
                                     
                                     Text(searchText.isEmpty ? "搜索餐厅" : searchText)
                                         .font(.system(size: 13))
-                                        .foregroundColor(searchText.isEmpty ? .gray : AppTheme.Colors.textPrimary)
+                                        .foregroundColor(searchText.isEmpty ? AppTheme.Colors.lightText : AppTheme.Colors.darkText)
                                         .lineLimit(1)
                                 }
                                 .padding(.horizontal, 12)
@@ -978,7 +966,7 @@ struct RestaurantMapView: View {
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.system(size: 16))
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(AppTheme.Colors.mediumGray)
                                         .padding(.trailing, 8)
                                         .padding(.vertical, 8)
                                 }
@@ -992,13 +980,13 @@ struct RestaurantMapView: View {
                         .frame(width: 130, alignment: .leading)
                         .background(
                             Capsule()
-                                .fill(.white)
+                                .fill(AppTheme.Colors.headerPillBackground)
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                                        .stroke(AppTheme.Colors.headerPillBorder, lineWidth: 0.8)
                                 )
                         )
-                        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+                        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.04), radius: 8, x: 0, y: 2)
                         .animation(.easeInOut(duration: 0.2), value: searchText.isEmpty)
                     }
                 }
@@ -1015,7 +1003,7 @@ struct RestaurantMapView: View {
                     
                     Text("晴朗")
                         .font(.system(size: 13))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppTheme.Colors.mediumGray)
                     
                     Spacer()
                 }
@@ -1070,7 +1058,6 @@ struct RestaurantMapView: View {
             let distance = calculateDistance(from: initialCenter, to: newCenter)
             
             if distance > regionChangeThreshold {
-                hasUserInteractedWithMap = true
                 initialCenterCoordinate = newCenter
             }
         } else {
@@ -1089,7 +1076,6 @@ struct RestaurantMapView: View {
         
         // 取消之前的计时器
         dragEndTimer?.invalidate()
-        settleTimer?.invalidate()
     }
     
     private func handleMapDragEnd() {
@@ -1155,14 +1141,12 @@ struct RestaurantMapView: View {
         
         // 延迟 0.3 秒后执行聚类计算
         clusteringThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
-            Task { @MainActor in
-                await self.performClusteringAsync()
-            }
+            self.performClustering()
         }
     }
     
-    // 异步执行聚类计算，避免阻塞主线程
-    private func performClusteringAsync() async {
+    // 执行聚类计算
+    private func performClustering() {
         guard let region = visibleRegion else {
             isClusteringPending = false
             return
@@ -1173,42 +1157,48 @@ struct RestaurantMapView: View {
         
         // 检查缓存
         if let cached = clusterCache[cacheKey] {
-            await MainActor.run {
-                self.cachedClusters = cached
-                self.lastClusteringRegion = region
-                self.isClusteringPending = false
-            }
+            cachedClusters = cached
+            lastClusteringRegion = region
+            isClusteringPending = false
             return
         }
         
-        // 在后台线程执行计算
-        let clusters = await Task.detached(priority: .userInitiated) { () -> [RestaurantCluster] in
-            let filtered = self.filterRestaurants()
-            let limitedRestaurants = Array(filtered.prefix(self.maxVisibleRestaurants))
-            return self.calculateClusters(from: limitedRestaurants)
-        }.value
+        let filtered = filterRestaurants()
+        let limitedRestaurants = Array(filtered.prefix(maxVisibleRestaurants))
+        let clusters = calculateClusters(from: limitedRestaurants)
         
         // 更新 UI
-        await MainActor.run {
-            self.cachedClusters = clusters
-            self.lastClusteringRegion = region
-            self.clusterCache[cacheKey] = clusters
-            self.isClusteringPending = false
-            
-            // 限制缓存大小，避免内存溢出
-            if self.clusterCache.count > 50 {
-                self.clusterCache.removeAll(keepingCapacity: true)
-            }
+        cachedClusters = clusters
+        lastClusteringRegion = region
+        clusterCache[cacheKey] = clusters
+        isClusteringPending = false
+        
+        // 限制缓存大小，避免内存溢出
+        if clusterCache.count > 50 {
+            clusterCache.removeAll(keepingCapacity: true)
         }
     }
     
     // 初始化空间索引
     private func buildSpatialIndex() {
-        Task.detached(priority: .background) {
-            let index = RestaurantSpatialIndex(restaurants: self.restaurants)
-            await MainActor.run {
-                self.spatialIndex = index
-            }
+        spatialIndex = RestaurantSpatialIndex(restaurants: restaurants)
+    }
+
+    private func cleanupMapResources() {
+        clusteringThrottleTimer?.invalidate()
+        clusteringThrottleTimer = nil
+        dragEndTimer?.invalidate()
+        dragEndTimer = nil
+        routeUpdateTimer?.invalidate()
+        routeUpdateTimer = nil
+        locationManager.stopContinuousLocation()
+
+        // 页面离开时兜底恢复 TabBar，避免导航状态残留。
+        if isNavigating {
+            isNavigating = false
+            route = nil
+            navigatingRestaurant = nil
+            NotificationCenter.default.post(name: .restoreTabBar, object: nil)
         }
     }
 }
@@ -1273,7 +1263,7 @@ struct GourmetAnnotation: View, Equatable {
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.white)
+                            .fill(Color(hex: "#FFFFFF"))
                     )
                     .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
                     .offset(y: -8 + appearOffset * 0.3)
@@ -1285,7 +1275,7 @@ struct GourmetAnnotation: View, Equatable {
             ZStack {
                 // 外圈边框 - 3pt 宽纯白色实色边框
                 Circle()
-                    .fill(Color.white)
+                    .fill(Color(hex: "#FFFFFF"))
                     .frame(width: simplified ? 40 : 46, height: simplified ? 40 : 46)
                     .shadow(color: Color.black.opacity(0.12), radius: simplified ? 4 : 6, x: 0, y: simplified ? 2 : 3)
 
@@ -1343,7 +1333,7 @@ struct GourmetAnnotation: View, Equatable {
 
             // Misty Oreo: 白色三角形指针
             Triangle()
-                .fill(Color.white)
+                .fill(Color(hex: "#FFFFFF"))
                 .frame(width: simplified ? 8 : 10, height: simplified ? 5 : 6)
                 .offset(y: -1 + appearOffset * 0.5)
                 .scaleEffect(appearScale)
@@ -1519,12 +1509,9 @@ struct CityPickerView: View {
         .edgesIgnoringSafeArea(.all)
         .background(AppTheme.Colors.milkWhite)
         .onAppear {
-            // 启动持续定位（地图视图专用）
-            locationManager.startContinuousLocation()
-        }
-        .onDisappear {
-            // 停止持续定位
-            locationManager.stopContinuousLocation()
+            // 仅用于城市识别，不接管地图页面的持续定位生命周期。
+            locationManager.requestLocationPermission()
+            locationManager.getCurrentCity { _ in }
         }
     }
     
@@ -1637,7 +1624,7 @@ struct CityPickerView: View {
                     )
             )
         }
-        .frame(maxWidth: UIScreen.main.bounds.width / 3)
+        .frame(maxWidth: ScreenMetrics.bounds.width / 3)
         .buttonStyle(.plain)
         .disabled(locationManager.currentCity == nil)
         .padding(.horizontal, AppTheme.Spacing.lg)
@@ -1939,7 +1926,7 @@ struct RestaurantDetailSheet: View {
                         .frame(height: 80)
                 }
             }
-            .background(Color.white)
+            .background(Color(hex: "#FFFFFF"))
             .safeAreaInset(edge: .bottom) {
                 // 底部工具栏
                 bottomToolbar
@@ -1989,16 +1976,16 @@ struct RestaurantDetailSheet: View {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle")
                             .font(.system(size: 15))
-                            .foregroundColor(.black)
+                            .foregroundColor(AppTheme.Colors.darkText)
                         Text("打卡")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.black)
+                            .foregroundColor(AppTheme.Colors.darkText)
                     }
                     .padding(.horizontal, 16)
                     .frame(height: 36)
                     .background(
                         Capsule()
-                            .fill(Color.white)
+                            .fill(Color(hex: "#FFFFFF"))
                     )
                     .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
                 }
@@ -2014,16 +2001,16 @@ struct RestaurantDetailSheet: View {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.turn.up.right")
                             .font(.system(size: 15))
-                            .foregroundColor(.black)
+                            .foregroundColor(AppTheme.Colors.darkText)
                         Text("导航")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.black)
+                            .foregroundColor(AppTheme.Colors.darkText)
                     }
                     .padding(.horizontal, 16)
                     .frame(height: 36)
                     .background(
                         Capsule()
-                            .fill(Color.white)
+                            .fill(Color(hex: "#FFFFFF"))
                     )
                     .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
                 }
@@ -2031,7 +2018,7 @@ struct RestaurantDetailSheet: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(Color.white)
+        .background(Color(hex: "#FFFFFF"))
     }
 }
 
@@ -2048,10 +2035,10 @@ struct NavigationInfoCard: View {
                 VStack(spacing: 4) {
                     Text("\(distance)")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppTheme.Colors.darkText)
                     Text("km")
                         .font(.system(size: 12, design: .rounded))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
                     Text("剩余距离")
                         .font(.system(size: 11, design: .rounded))
                         .foregroundColor(.gray)
@@ -2064,10 +2051,10 @@ struct NavigationInfoCard: View {
                 VStack(spacing: 4) {
                     Text("\(drivingTime)")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppTheme.Colors.darkText)
                     Text("分钟")
                         .font(.system(size: 12, design: .rounded))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
                     Text("预计时间")
                         .font(.system(size: 11, design: .rounded))
                         .foregroundColor(.gray)
@@ -2081,10 +2068,10 @@ struct NavigationInfoCard: View {
                     VStack(spacing: 4) {
                         Text(String(format: "%.1f", route.distance / 1000))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
-                            .foregroundColor(.black)
+                            .foregroundColor(AppTheme.Colors.darkText)
                         Text("km")
                             .font(.system(size: 12, design: .rounded))
-                            .foregroundColor(.black.opacity(0.6))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                         Text("路线长度")
                             .font(.system(size: 11, design: .rounded))
                             .foregroundColor(.gray)
@@ -2133,5 +2120,3 @@ struct VisualEffectBlur: UIViewRepresentable {
         uiView.effect = UIBlurEffect(style: blurStyle)
     }
 }
-
-

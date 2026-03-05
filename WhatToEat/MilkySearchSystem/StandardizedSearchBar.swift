@@ -57,7 +57,7 @@ struct StandardizedSearchBar: View {
         .padding(.vertical, 12)
         .background(
             Capsule()
-                .fill(Color.white)
+                .fill(Color(hex: "#FFFFFF"))
         )
         .overlay(
             Capsule()
@@ -131,7 +131,7 @@ struct SmartSearchBar<Content: View>: View {
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .fill(Color.white)
+                        .fill(Color(hex: "#FFFFFF"))
                 )
                 .overlay(
                     Capsule()

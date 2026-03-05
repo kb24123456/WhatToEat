@@ -60,7 +60,7 @@ struct LocationPicker: View {
                         VStack(alignment: .leading) {
                             Text(item.name ?? "未知地点")
                                 .font(.headline)
-                            Text(getAddressString(from: item.placemark))
+                            Text(getAddressString(from: item))
                                 .font(.subheadline)
                                 .foregroundColor(.gray)
                         }
@@ -84,7 +84,6 @@ struct LocationPicker: View {
         // 收起键盘
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         
-        print("🔍 开始搜索: \(searchText)") // 埋点 1
         isSearching = true
         errorMessage = nil // 清除旧错误
         
@@ -99,27 +98,21 @@ struct LocationPicker: View {
                 
                 if let error = error {
                     // 如果出错，把错误信息显示在屏幕上，而不仅仅是控制台
-                    print("❌ 搜索失败: \(error.localizedDescription)")
                     self.errorMessage = "搜索失败: \(error.localizedDescription)"
                     return
                 }
                 
                 if let items = response?.mapItems, !items.isEmpty {
-                    print("✅ 找到 \(items.count) 个结果") // 埋点 2
                     self.searchResults = items
                 } else {
-                    print("⚠️ 没找到结果")
                     self.errorMessage = "未找到相关地点，请尝试输入更详细的地址（如：城市+店名）"
                 }
             }
         }
     }
     
-    private func getAddressString(from placemark: MKPlacemark) -> String {
-        let city = placemark.locality ?? ""
-        let street = placemark.thoroughfare ?? ""
-        let subStreet = placemark.subThoroughfare ?? ""
-        let full = "\(city) \(street) \(subStreet)"
-        return full.isEmpty ? "暂无详细地址" : full
+    private func getAddressString(from item: MKMapItem) -> String {
+        let address = item.compatibleAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty ? "暂无详细地址" : address
     }
 }

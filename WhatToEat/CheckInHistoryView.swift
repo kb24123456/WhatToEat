@@ -70,9 +70,9 @@ struct CheckInHistoryView: View {
         }
     }
     
-    // MARK: - Background - 与 ProfileView 一致
+    // MARK: - Background - 弥散渐变背景
     private var backgroundGradient: some View {
-        AppTheme.Colors.pageBackground
+        DiffuseGradientBackground()
     }
     
     // MARK: - Header Section
@@ -100,7 +100,7 @@ struct CheckInHistoryView: View {
                     .frame(width: 36, height: 36)
                     .background(
                         Circle()
-                            .fill(Color.white.opacity(0.5))
+                            .fill(AppTheme.Colors.surfaceSecondary.opacity(0.72))
                     )
             }
         }
@@ -362,7 +362,7 @@ struct CheckInHistoryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+                .stroke(AppTheme.Colors.headerPillBorder.opacity(0.7), lineWidth: 0.6)
         )
     }
     

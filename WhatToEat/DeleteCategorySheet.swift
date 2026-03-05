@@ -26,16 +26,17 @@ struct DeleteCategorySheet: View {
     // 动画控制器
     @State private var animationController = CardAnimationController()
     
-    // 缓存可用品类列表
-    private let availableCategories: [String]
-    
     init(categoryName: String, restaurants: [Restaurant], selectedNewCategories: Binding<[UUID: String]>, onConfirm: @escaping ([UUID: String]) -> Void, onCancel: @escaping () -> Void) {
         self.categoryName = categoryName
         self.restaurants = restaurants
         self._selectedNewCategories = selectedNewCategories
         self.onConfirm = onConfirm
         self.onCancel = onCancel
-        self.availableCategories = CategoryManager.shared.getPresetCategories()
+    }
+
+    private var availableCategories: [String] {
+        CategoryManager.shared
+            .getSelectableCategories(context: modelContext)
             .filter { $0 != categoryName }
     }
     
@@ -76,7 +77,7 @@ struct DeleteCategorySheet: View {
                         .padding(.vertical, 16)
                         .background(
                             Rectangle()
-                                .fill(Color.white)
+                                .fill(Color(hex: "#FFFFFF"))
                                 .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: -4)
                         )
                 }
@@ -130,7 +131,7 @@ struct DeleteCategorySheet: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(hex: "#FFFFFF"))
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
         )
     }
@@ -311,7 +312,7 @@ struct RestaurantCategoryRow: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(hex: "#FFFFFF"))
                 .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
         )
         .scaleEffect(isPressed ? 0.98 : 1.0)
@@ -327,8 +328,6 @@ struct RestaurantCategoryRow: View {
 
 // MARK: - Preview
 #Preview {
-    let viewModel = ProfileViewModel()
-    
     return DeleteCategorySheet(
         categoryName: "小吃",
         restaurants: [],

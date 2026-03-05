@@ -67,7 +67,7 @@ struct InlineTagInput: UIViewRepresentable {
     
     private func createInputAccessoryView(context: Context) -> UIView {
         // 创建容器视图 - 全透明背景
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 60))
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: ScreenMetrics.bounds.width, height: 60))
         container.backgroundColor = UIColor.clear
         container.clipsToBounds = true
         
@@ -100,7 +100,7 @@ struct InlineTagInput: UIViewRepresentable {
             inputContainer.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             inputContainer.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
             inputContainer.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
-            inputContainer.widthAnchor.constraint(equalToConstant: UIScreen.main.bounds.width / 3),
+            inputContainer.widthAnchor.constraint(equalToConstant: ScreenMetrics.bounds.width / 3),
             inputContainer.heightAnchor.constraint(equalToConstant: 44),
             
             // 输入框
@@ -169,11 +169,8 @@ struct InlineTagInput: UIViewRepresentable {
         
         // MARK: - 点击处理
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            print("📝 InlineTagInput: 检测到点击")
-            
             // 确保 inputAccessoryView 已创建
             guard let textView = textView else {
-                print("❌ textView 为 nil")
                 return
             }
             
@@ -184,7 +181,6 @@ struct InlineTagInput: UIViewRepresentable {
             // 延迟一小段时间后让 inputTextField 获取焦点
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 self?.inputTextField?.becomeFirstResponder()
-                print("✅ inputTextField 已成为第一响应者")
             }
         }
         

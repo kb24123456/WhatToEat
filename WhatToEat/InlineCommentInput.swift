@@ -71,7 +71,7 @@ struct InlineCommentInput: UIViewRepresentable {
     
     private func createInputAccessoryView(context: Context) -> UIView {
         // 创建容器视图 - 全透明背景
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 70))
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: ScreenMetrics.bounds.width, height: 70))
         container.backgroundColor = UIColor.clear
         container.clipsToBounds = true
         
@@ -309,6 +309,7 @@ struct InlineCommentInput: UIViewRepresentable {
 
 // MARK: - 评论输入包装视图
 struct InlineCommentInputView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var text: String
     var placeholder: String = "点击添加点评..."
     var onSave: (() -> Void)? = nil
@@ -321,16 +322,16 @@ struct InlineCommentInputView: View {
                 ZStack {
                     // 底部阴影层（营造立体感）
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.black.opacity(0.03))
+                        .fill(Color.black.opacity(colorScheme == .dark ? 0.18 : 0.03))
                         .offset(y: 2)
                     
                     // 主背景层
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(AppTheme.Colors.milkWhite)
+                        .fill(AppTheme.Colors.surfaceSecondary)
                     
                     // 顶部高光（营造凸起感）
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.8), lineWidth: 1)
+                        .stroke(AppTheme.Colors.headerPillBorder, lineWidth: 1)
                     
                     // 内阴影效果
                     RoundedRectangle(cornerRadius: 16, style: .continuous)

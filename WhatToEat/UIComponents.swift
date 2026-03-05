@@ -15,10 +15,10 @@ struct MilkyCardStyle: ViewModifier {
         content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(0.35))
+                    .fill(Color(hex: "#FFFFFF").opacity(0.35))
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                            .stroke(Color(hex: "#FFFFFF").opacity(0.35), lineWidth: 1)
                     )
             )
     }

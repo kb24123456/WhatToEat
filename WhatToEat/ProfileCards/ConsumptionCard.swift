@@ -186,7 +186,7 @@ private struct ConsumptionTrendChart: View {
             .symbol {
                 Circle()
                     .stroke(AppTheme.Colors.coralRed, lineWidth: 2)
-                    .background(Circle().fill(Color.white))
+                    .background(Circle().fill(Color(hex: "#FFFFFF")))
                     .frame(width: 8, height: 8)
             }
         }
@@ -212,7 +212,7 @@ private struct ConsumptionTrendChart: View {
     return ScrollView {
         VStack(spacing: 20) {
             ConsumptionCardPreview(viewModel: viewModel)
-                .background(Color.white)
+                .background(Color(hex: "#FFFFFF"))
                 .cornerRadius(20)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
                 .padding(.horizontal, 24)

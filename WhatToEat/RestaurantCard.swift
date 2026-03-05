@@ -112,7 +112,7 @@ struct RestaurantCard: View {
             )
             .onPreferenceChange(ParallaxPreferenceKey.self) { value in
                 // 根据视图在屏幕中的位置计算视差偏移
-                let screenHeight = UIScreen.main.bounds.height
+                let screenHeight = ScreenMetrics.bounds.height
                 let normalizedPosition = value / screenHeight
                 withAnimation(.linear(duration: 0.1)) {
                     imageOffset = normalizedPosition * 20 - 10 // ±10pt 视差范围
@@ -221,7 +221,7 @@ struct RestaurantCard: View {
             ZStack {
                 // 圆形背景（更透明）
                 Circle()
-                    .fill(Color.white.opacity(0.7))
+                    .fill(Color(hex: "#FFFFFF").opacity(0.7))
                     .frame(width: 32, height: 32)
                     .shadow(
                         color: Color.black.opacity(0.06),
@@ -342,7 +342,7 @@ struct RestaurantCard: View {
                 locationManager: LocationManager.shared,
                 isExpanded: false,
                 index: 0,
-                onCheckInTap: { print("打卡") }
+                onCheckInTap: {}
             )
             .modelContainer(container)
         }

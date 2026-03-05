@@ -3,6 +3,8 @@ import SwiftUI
 /// 流体黑色弥散背景组件 - 使用 MeshGradient 实现真正的无级顺滑渐变
 /// iOS 18+ 原生支持，基于贝塞尔曲面插值
 struct LiquidDarkHeaderBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         GeometryReader { geometry in
             let height: CGFloat = 320
@@ -24,12 +26,14 @@ struct LiquidDarkHeaderBackground: View {
                         .init(x: 0, y: 1),     .init(x: 0.5, y: 1),     .init(x: 1, y: 1),
                     ],
                     colors: [
-                        // 第1行：纯黑
-                        Color(hex: "#1A1A1A"), Color(hex: "#1A1A1A"), Color(hex: "#1A1A1A"),
-                        // 第2行：纯黑保持（筛选栏安全区）
-                        Color(hex: "#1A1A1A"), Color(hex: "#1A1A1A"), Color(hex: "#1A1A1A"),
+                        // 第1行：顶部重色
+                        AppTheme.Colors.topOverlayStrong, AppTheme.Colors.topOverlayStrong, AppTheme.Colors.topOverlayStrong,
+                        // 第2行：保持过渡
+                        AppTheme.Colors.topOverlayMid, AppTheme.Colors.topOverlayMid, AppTheme.Colors.topOverlayMid,
                         // 第3行：指数衰减到半透明
-                        Color(hex: "#1A1A1A").opacity(0.5), Color(hex: "#1A1A1A").opacity(0.4), Color(hex: "#1A1A1A").opacity(0.5),
+                        AppTheme.Colors.topOverlaySoft.opacity(colorScheme == .dark ? 0.72 : 0.16),
+                        AppTheme.Colors.topOverlaySoft.opacity(colorScheme == .dark ? 0.56 : 0.12),
+                        AppTheme.Colors.topOverlaySoft.opacity(colorScheme == .dark ? 0.72 : 0.16),
                         // 第4行：完全透明
                         Color.clear, Color.clear, Color.clear,
                     ]
@@ -78,7 +82,7 @@ struct LiquidDarkHeaderBackground: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.15))
+                    .fill(Color(hex: "#FFFFFF").opacity(0.15))
                     .background(.ultraThinMaterial)
             )
             .padding(.horizontal, 24)
@@ -91,21 +95,21 @@ struct LiquidDarkHeaderBackground: View {
                     .foregroundColor(Color(hex: "#1A1A1A"))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.white))
+                    .background(Capsule().fill(Color(hex: "#FFFFFF")))
                 
                 Text("品类")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(Color.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.white.opacity(0.3)))
+                    .background(Capsule().fill(Color(hex: "#FFFFFF").opacity(0.3)))
                 
                 Text("排序")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(Color.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.white.opacity(0.3)))
+                    .background(Capsule().fill(Color(hex: "#FFFFFF").opacity(0.3)))
             }
             .padding(.top, 80)
             

@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import MapKit
+import Combine
 
 // MARK: - 通知名称扩展
 extension Notification.Name {
@@ -11,6 +12,7 @@ extension Notification.Name {
 
 // MARK: - 1. 核心视图
 struct LibraryView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Query private var restaurants: [Restaurant]
     
@@ -30,7 +32,8 @@ struct LibraryView: View {
     @State private var sortOption: SortOption = .smart
     
     // 城市存储键
-    private let kSavedCityKey = "UserSelectedCity"
+    private let kSavedCityKey = AppSettingsKeys.userSelectedCity
+    private let kSavedSortOptionKey = AppSettingsKeys.libraryDefaultSortOption
     
 
     
@@ -50,13 +53,17 @@ struct LibraryView: View {
         } else {
             _selectedCity = State(initialValue: "重庆")
         }
+
+        if let savedSortRaw = UserDefaults.standard.string(forKey: kSavedSortOptionKey),
+           let savedSort = SortOption(rawValue: savedSortRaw) {
+            _sortOption = State(initialValue: savedSort)
+        } else {
+            _sortOption = State(initialValue: .smart)
+        }
     }
     
     private var currentDistricts: [String] {
-        let districts = RegionManager.shared.getDistricts(for: selectedCity)
-        print("currentDistricts: city=\(selectedCity), count=\(districts.count), districts=\(districts.prefix(5))...")
-        print("RegionManager allCities: \(RegionManager.shared.allCities.prefix(5))... (total: \(RegionManager.shared.allCities.count))")
-        return districts
+        RegionManager.shared.getDistricts(for: selectedCity)
     }
     
     // MARK: - Navigation路径
@@ -64,16 +71,23 @@ struct LibraryView: View {
     
     // MARK: - 生命周期
     @State private var scrollOffset: CGFloat = 0
+    @State private var filteredRestaurantsCache: [Restaurant] = []
+    @State private var selectableCategories: [String] = []
+    
+    // 首次加载标志，避免重复计算
+    @State private var hasInitialDataLoaded = false
+    @State private var isDataLoading = false
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ZStack(alignment: .topLeading) {
-                // 最底层：全局背景色
-                AppTheme.Colors.pageBackground
+                // 最底层：复用 Profile 的弥散底色
+                DiffuseGradientBackground()
                     .ignoresSafeArea()
                 
-                // 中间层：流体黑色弥散背景（置顶）
+                // 顶部增强层：仅保留轻量层级，避免与全局弥散冲突
                 LiquidDarkHeaderBackground()
+                    .opacity(colorScheme == .dark ? 0.24 : 1.0)
                     .zIndex(0)
 
                 // 顶层：HeaderView + FilterBarView（内容层）
@@ -95,21 +109,12 @@ struct LibraryView: View {
                         selectedDistrict: $selectedDistrict,
                         selectedType: $selectedType,
                         sortOption: $sortOption,
-                        restaurants: restaurants,
+                        categories: selectableCategories,
                         districts: currentDistricts
-                    )
-                    .environment(\.modelContext, modelContext)
-                    // 筛选栏底部横线：硬核视觉切分点
-                    .overlay(
-                        Rectangle()
-                            .fill(Color.white.opacity(0.05))
-                            .frame(height: 0.5)
-                            .offset(y: 8), // 位于筛选栏下方
-                        alignment: .bottom
                     )
                     
                     StackedRestaurantListView(
-                        filteredRestaurants: filteredRestaurants,
+                        filteredRestaurants: filteredRestaurantsCache,
                         locationManager: locationManager,
                         navigationPath: $navigationPath,
                         scrollOffset: $scrollOffset
@@ -124,26 +129,70 @@ struct LibraryView: View {
                 )
             }
             .onReceive(NotificationCenter.default.publisher(for: .restaurantListShouldRefresh)) { _ in
-                if let savedCity = UserDefaults.standard.string(forKey: "UserSelectedCity") {
+                if let savedCity = UserDefaults.standard.string(forKey: kSavedCityKey) {
                     selectedCity = savedCity
                 }
-                print("RestaurantListRefresh: 收到刷新通知, selectedCity=\(selectedCity)")
             }
             .toolbar(.visible, for: .tabBar)
             .sheet(isPresented: $showImportSheet) { ImportDataView() }
             .sheet(isPresented: $showCityPicker) {
                 CitySelectionView(selectedCity: $selectedCity)
             }
-            .onChange(of: selectedCity) {
-                UserDefaults.standard.set($0, forKey: kSavedCityKey)
+            .onChange(of: selectedCity) { _, newCity in
+                UserDefaults.standard.set(newCity, forKey: kSavedCityKey)
+                refreshFilteredRestaurants()
             }
-            // 状态栏适配：强制白色文字
-            .preferredColorScheme(.light)
+            .onChange(of: restaurants, initial: true) { _, _ in
+                // 避免重复计算：如果正在加载或已加载完成，则跳过
+                guard !isDataLoading else { return }
+                
+                isDataLoading = true
+                
+                // 延迟到下一个 runloop，确保数据稳定
+                DispatchQueue.main.async {
+                    refreshDerivedData()
+                    hasInitialDataLoaded = true
+                    isDataLoading = false
+                }
+            }
+            .onChange(of: selectedDistrict) { _, _ in
+                refreshFilteredRestaurants()
+            }
+            .onChange(of: selectedType) { _, _ in
+                refreshFilteredRestaurants()
+            }
+            .onChange(of: searchText) { _, _ in
+                refreshFilteredRestaurants()
+            }
+            .onChange(of: sortOption) { _, _ in
+                UserDefaults.standard.set(sortOption.rawValue, forKey: kSavedSortOptionKey)
+                refreshFilteredRestaurants()
+            }
+            .onReceive(
+                locationManager.$userLocation
+                    .removeDuplicates(by: { lhs, rhs in
+                        switch (lhs, rhs) {
+                        case (nil, nil):
+                            return true
+                        case let (left?, right?):
+                            return left.distance(from: right) < 25
+                        default:
+                            return false
+                        }
+                    })
+                    .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
+            ) { _ in
+                if sortOption == .smart || sortOption == .distance {
+                    refreshFilteredRestaurants()
+                }
+            }
+            // 状态栏适配由全局主题控制（system/light/dark）
         }
     }
 
     // MARK: - 动态毛玻璃导航条 (适配深色流体背景)
     private struct DynamicHeaderView: View {
+        @Environment(\.colorScheme) private var colorScheme
         let selectedCity: String
         @Binding var showCityPicker: Bool
         @Binding var searchText: String
@@ -163,12 +212,12 @@ struct LibraryView: View {
                         // "What" - 60%白色
                         Text("What")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundColor(Color.white.opacity(0.6))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                         
                         // "ToEat" - 纯白高亮
                         Text("ToEat")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
+                            .foregroundColor(colorScheme == .dark ? AppTheme.Colors.darkText : AppTheme.Colors.textPrimary)
                         
                         // 红色圆点符号（赛博感）
                         Circle()
@@ -186,7 +235,7 @@ struct LibraryView: View {
                             HStack(spacing: 4) {
                                 Text(selectedCity)
                                     .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppTheme.Colors.darkText)
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 10))
                                     .foregroundColor(AppTheme.Colors.babyBlue)
@@ -198,7 +247,7 @@ struct LibraryView: View {
                         
                         // 垂直分隔线
                         Rectangle()
-                            .fill(Color.white.opacity(0.2))
+                            .fill(AppTheme.Colors.headerPillBorder)
                             .frame(width: 1, height: 20)
                         
                         // 搜索框
@@ -207,9 +256,9 @@ struct LibraryView: View {
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.Colors.babyBlue)
                             
-                            TextField("", text: $searchText, prompt: Text("搜索餐厅...").foregroundColor(Color.white.opacity(0.5)))
+                            TextField("", text: $searchText, prompt: Text("搜索餐厅...").foregroundColor(AppTheme.Colors.lightText))
                                 .font(.system(size: 14))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppTheme.Colors.darkText)
                                 .focused($isSearchFocused)
                                 .submitLabel(.search)
                         }
@@ -219,14 +268,14 @@ struct LibraryView: View {
                     .background(
                         // 深色背景 + 高亮边框（参考图样式）
                         Capsule()
-                            .fill(Color.white.opacity(0.1))
+                            .fill(AppTheme.Colors.headerPillBackground)
                     )
                     .overlay(
                         Capsule()
-                            .stroke(AppTheme.Colors.babyBlue.opacity(0.5), lineWidth: 1)
+                            .stroke(AppTheme.Colors.headerPillBorder, lineWidth: 1)
                     )
                     .shadow(
-                        color: AppTheme.Colors.babyBlue.opacity(0.1),
+                        color: Color.black.opacity(colorScheme == .dark ? 0.24 : 0.1),
                         radius: 8,
                         x: 0,
                         y: 2
@@ -305,7 +354,7 @@ struct LibraryView: View {
     }
 
     // MARK: - 卡片堆叠状态
-    struct CardStackState {
+    struct CardStackState: Equatable {
         var scale: CGFloat = 1.0
         var offsetY: CGFloat = 0
         var opacity: CGFloat = 1.0
@@ -321,8 +370,10 @@ struct LibraryView: View {
         let onCheckInTap: () -> Void
         let onNavigate: () -> Void
 
-        @State private var cardGeometry: CGRect = .zero
-        @State private var hasTriggeredHaptic = false
+        @State private var lastFrameMinY: CGFloat = .nan
+        @State private var hasInitializedStackState = false
+        // 延迟初始化标志，避免首次加载时的跳动
+        @State private var shouldApplyStackEffect = false
 
         private var stackState: CardStackState {
             cardStates[restaurant.id] ?? CardStackState()
@@ -334,29 +385,42 @@ struct LibraryView: View {
                     restaurant: restaurant,
                     locationManager: locationManager,
                     index: index,
-                    stackScale: stackState.scale,
-                    isStacked: stackState.isStacked,
+                    stackScale: shouldApplyStackEffect ? stackState.scale : 1.0,
+                    isStacked: shouldApplyStackEffect ? stackState.isStacked : false,
                     onCheckInTap: onCheckInTap,
                     onNavigate: onNavigate
                 )
-                .scaleEffect(stackState.scale, anchor: .bottom) // 向底部收缩，增加挤压感
-                .offset(y: stackState.offsetY)
-                .opacity(stackState.opacity)
-                .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.8), value: stackState.scale)
-                .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.8), value: stackState.offsetY)
-                .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.8), value: stackState.opacity)
+                .scaleEffect(shouldApplyStackEffect ? stackState.scale : 1.0, anchor: .bottom)
+                .offset(y: shouldApplyStackEffect ? stackState.offsetY : 0)
+                .opacity(shouldApplyStackEffect ? stackState.opacity : 1.0)
+                .animation(
+                    shouldApplyStackEffect
+                        ? .interactiveSpring(response: 0.3, dampingFraction: 0.8)
+                        : nil,
+                    value: stackState
+                )
                 .onChange(of: geo.frame(in: .global)) { oldFrame, newFrame in
+                    // 降低高频几何回调带来的状态写入和重排压力
+                    guard lastFrameMinY.isNaN || abs(newFrame.minY - lastFrameMinY) > 0.8 else { return }
+                    lastFrameMinY = newFrame.minY
                     updateStackState(frame: newFrame)
                 }
                 .onAppear {
-                    updateStackState(frame: geo.frame(in: .global))
+                    lastFrameMinY = geo.frame(in: .global).minY
+                    // 延迟启用堆叠效果，避免初始跳动
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        shouldApplyStackEffect = true
+                        updateStackState(frame: geo.frame(in: .global))
+                    }
                 }
             }
             .frame(height: 140) // 固定卡片高度
         }
 
+        @State private var lastStackState: Bool = false
+        
         private func updateStackState(frame: CGRect) {
-            let screenHeight = UIScreen.main.bounds.height
+            let screenHeight = ScreenMetrics.bounds.height
             // 设定一个"堆叠基准线"，距离底部 80pt 的位置（更靠近导航栏）
             let stackBaseLine = screenHeight - 80
             let cardBottom = frame.maxY
@@ -386,13 +450,37 @@ struct LibraryView: View {
             } else {
                 newState = CardStackState()
             }
-
-            // 触感反馈：状态变化时触发
-            if newState.isStacked != stackState.isStacked {
-                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            }
             
+            // 震动反馈：当卡片进入或退出堆叠状态时触发
+            if newState.isStacked != lastStackState {
+                let generator = UIImpactFeedbackGenerator(style: .soft)
+                generator.impactOccurred()
+                lastStackState = newState.isStacked
+            }
+
+            // 首次布局阶段禁用动画，避免初始“跳动一下”
+            if !hasInitializedStackState {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    cardStates[restaurant.id] = newState
+                }
+                hasInitializedStackState = true
+                return
+            }
+
+            if isApproximatelyEqual(stackState, newState) {
+                return
+            }
+
             cardStates[restaurant.id] = newState
+        }
+
+        private func isApproximatelyEqual(_ lhs: CardStackState, _ rhs: CardStackState) -> Bool {
+            abs(lhs.scale - rhs.scale) < 0.001 &&
+            abs(lhs.offsetY - rhs.offsetY) < 0.5 &&
+            abs(lhs.opacity - rhs.opacity) < 0.01 &&
+            lhs.isStacked == rhs.isStacked
         }
     }
 
@@ -433,7 +521,7 @@ struct LibraryView: View {
                                 .foregroundColor(AppTheme.Colors.textPrimary)
                             Image(systemName: "chevron.down")
                                 .font(.caption2)
-                                .foregroundColor(.gray)
+                                .foregroundColor(AppTheme.Colors.mediumGray)
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
@@ -442,13 +530,13 @@ struct LibraryView: View {
 
                     Divider()
                         .frame(height: 20)
-                        .background(Color.gray.opacity(0.2))
+                        .background(AppTheme.Colors.headerPillBorder.opacity(0.6))
 
                     // 搜索框
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                         TextField("搜索餐厅名称、菜系...", text: $searchText)
                             .font(AppTheme.Fonts.footnote)
                             .focused($isSearchFocused)
@@ -459,7 +547,7 @@ struct LibraryView: View {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 12) // 固定圆角 12
-                        .fill(Color.black.opacity(0.03)) // 背景改为 Color.black.opacity(0.03)
+                        .fill(AppTheme.Colors.surfaceSecondary)
                 )
                 .withFocusedInputEffects(isFocused: $isSearchFocused)
             }
@@ -487,9 +575,8 @@ private struct FilterBarView: View {
     @Binding var selectedDistrict: String?
     @Binding var selectedType: String?
     @Binding var sortOption: SortOption
-    let restaurants: [Restaurant]
+    let categories: [String]
     let districts: [String]
-    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         HStack(spacing: 12) {
@@ -511,7 +598,7 @@ private struct FilterBarView: View {
             Menu {
                 Button("全部分类") { selectedType = nil }
                 Divider()
-                ForEach(CategoryManager.shared.getSelectableCategories(context: modelContext), id: \.self) { type in
+                ForEach(categories, id: \.self) { type in
                     Button(type) { selectedType = type }
                 }
             } label: {
@@ -551,11 +638,11 @@ private struct FilterBarView: View {
                         .frame(width: 28, height: 28)
                         .background(
                             Circle()
-                                .fill(AppTheme.Colors.milkWhite)
+                                .fill(AppTheme.Colors.surfaceSecondary)
                         )
                         .overlay(
                             Circle()
-                                .stroke(AppTheme.Colors.darkText.opacity(0.2), lineWidth: 0.5)
+                                .stroke(AppTheme.Colors.headerPillBorder, lineWidth: 0.6)
                         )
                 }
                 .buttonStyle(LiquidFusionButtonStyle())
@@ -581,24 +668,22 @@ private struct FilterBarView: View {
         return HStack(spacing: 4) {
             Text(displayTitle)
                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                .foregroundColor(AppTheme.Colors.darkText) // 深色文本
+                .foregroundColor(AppTheme.Colors.darkText)
                 .frame(width: 52, height: 18, alignment: .center)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
                 .font(.system(size: 8))
-                .foregroundColor(AppTheme.Colors.darkText) // 深色文本
+                .foregroundColor(isSelected ? AppTheme.Colors.babyBlue : AppTheme.Colors.mediumGray)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(
-            // 奶白背景，与 LibraryView 一致
             Capsule()
-                .fill(AppTheme.Colors.milkWhite)
+                .fill(isSelected ? AppTheme.Colors.surfacePrimary : AppTheme.Colors.surfaceSecondary)
         )
         .overlay(
-            // 选中时添加深色边框
             Capsule()
-                .stroke(isSelected ? AppTheme.Colors.darkText.opacity(0.3) : Color.clear, lineWidth: 1)
+                .stroke(isSelected ? AppTheme.Colors.babyBlue.opacity(0.35) : AppTheme.Colors.headerPillBorder, lineWidth: 1)
         )
         .shadow(
             color: Color.black.opacity(0.06),
@@ -652,9 +737,25 @@ private struct FilterBarView: View {
         return score
     }
     
+    private func refreshDerivedData() {
+        refreshSelectableCategories()
+        refreshFilteredRestaurants()
+    }
+
+    private func refreshSelectableCategories() {
+        selectableCategories = CategoryManager.shared.getSelectableCategories(
+            context: modelContext,
+            restaurants: restaurants
+        )
+    }
+
+    private func refreshFilteredRestaurants() {
+        filteredRestaurantsCache = computeFilteredRestaurants(from: restaurants)
+    }
+
     /// 过滤和排序后的餐厅列表
-    private var filteredRestaurants: [Restaurant] {
-        var result = restaurants.filter { restaurant in
+    private func computeFilteredRestaurants(from source: [Restaurant]) -> [Restaurant] {
+        var result = source.filter { restaurant in
             guard restaurant.modelContext != nil else {
                 return false
             }
@@ -802,4 +903,3 @@ struct EmptyStateView: View {
 
 
 }
-

@@ -7,6 +7,7 @@ import Combine
 @MainActor
 final class InputProxyManager: ObservableObject {
     static let shared = InputProxyManager()
+    static let smartInputProxySettingKey = AppSettingsKeys.smartInputProxyEnabled
     
     // MARK: - 代理状态
     /// 是否激活吸附栏模式
@@ -32,6 +33,15 @@ final class InputProxyManager: ObservableObject {
     
     private init() {
         setupKeyboardNotifications()
+    }
+
+    static func isSmartInputProxyEnabled() -> Bool {
+        let defaults = UserDefaults.standard
+        // 未设置时默认开启，保持现有交互习惯
+        guard defaults.object(forKey: smartInputProxySettingKey) != nil else {
+            return true
+        }
+        return defaults.bool(forKey: smartInputProxySettingKey)
     }
     
     // MARK: - 键盘高度监听
@@ -65,6 +75,10 @@ final class InputProxyManager: ObservableObject {
         placeholder: String = "",
         onCommit: @escaping (String) -> Void
     ) {
+        guard Self.isSmartInputProxyEnabled() else {
+            return
+        }
+
         self.proxyText = text
         self.originalBinding = binding
         self.placeholder = placeholder
@@ -139,10 +153,20 @@ struct SmartFocusModifier: ViewModifier {
     
     /// 检查输入框位置并决定是否触发代理
     private func checkPositionAndTriggerProxy() {
+        guard InputProxyManager.isSmartInputProxyEnabled() else {
+            return
+        }
+
         // 获取输入框在屏幕中的位置
         // 使用延迟确保布局完成
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            guard let window = UIApplication.shared.windows.first,
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            let window = scenes
+                .first(where: { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive })?
+                .windows.first(where: \.isKeyWindow)
+                ?? scenes.first?.windows.first
+
+            guard let window,
                   let rootView = window.rootViewController?.view else {
                 return
             }
@@ -150,7 +174,7 @@ struct SmartFocusModifier: ViewModifier {
             // 查找输入框的坐标
             // 通过遍历视图层级找到包含该修饰符的输入框
             findInputFieldPosition(in: rootView) { centerY in
-                let screenHeight = UIScreen.main.bounds.height
+                let screenHeight = ScreenMetrics.bounds.height
                 let threshold = screenHeight * 0.5  // 屏幕下半部阈值
                 
                 if centerY > threshold {
@@ -171,10 +195,26 @@ struct SmartFocusModifier: ViewModifier {
     
     /// 查找输入框在屏幕中的 Y 坐标中心
     private func findInputFieldPosition(in view: UIView, completion: @escaping (CGFloat) -> Void) {
-        // 简化处理：使用固定偏移估算
-        // 实际项目中可以通过更精确的方式定位
-        let estimatedCenterY = UIScreen.main.bounds.height * 0.75
-        completion(estimatedCenterY)
+        if let firstResponder = findFirstResponder(in: view) {
+            let frame = firstResponder.convert(firstResponder.bounds, to: nil)
+            completion(frame.midY)
+            return
+        }
+
+        // 找不到输入框时使用中位值，避免误触发。
+        completion(ScreenMetrics.bounds.height * 0.5)
+    }
+
+    private func findFirstResponder(in view: UIView) -> UIView? {
+        if view.isFirstResponder {
+            return view
+        }
+        for subview in view.subviews {
+            if let responder = findFirstResponder(in: subview) {
+                return responder
+            }
+        }
+        return nil
     }
 }
 

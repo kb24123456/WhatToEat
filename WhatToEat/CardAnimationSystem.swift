@@ -67,11 +67,20 @@ final class CardAnimationController {
             staggerIndex = i + 1
             try? await Task.sleep(for: .milliseconds(Int(staggerDelay * 1000)))
         }
+
+        // 级联完成后进入 fully expanded，避免后续元素长期不可见。
+        if phase == .expanding {
+            completeAnimation()
+        }
     }
     
     // 获取元素的动画状态
     func animationState(for index: Int) -> AnimationState {
-        guard phase == .expanding || phase == .expanded else {
+        if phase == .expanded {
+            return AnimationState(opacity: 1, offset: 0, scale: 1)
+        }
+
+        guard phase == .expanding else {
             return AnimationState(opacity: 0, offset: 20, scale: 0.95)
         }
         
@@ -251,7 +260,7 @@ struct DismissibleCardModifier: ViewModifier {
                         
                         if shouldDismiss {
                             withAnimation(.easeOut(duration: 0.2)) {
-                                dragOffset = UIScreen.main.bounds.height
+                                dragOffset = ScreenMetrics.bounds.height
                             }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                                 onDismiss()

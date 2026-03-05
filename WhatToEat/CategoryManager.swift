@@ -47,14 +47,22 @@ class CategoryManager {
         return presetCategories
     }
 
+    /// 判断是否为预设品类
+    /// - Parameter name: 品类名称
+    /// - Returns: 是否为预设品类
+    func isPresetCategory(_ name: String) -> Bool {
+        presetCategories.contains(name)
+    }
+
     // MARK: - 用户自定义品类管理
 
-    /// 获取所有品类（预设 + 用户自定义）
+    /// 获取所有可选品类（预设 + 用户自定义 + 餐厅实际品类）
     /// - Parameter context: SwiftData 上下文
     /// - Returns: 去重排序后的品类数组
-    func getSelectableCategories(context: ModelContext) -> [String] {
+    func getSelectableCategories(context: ModelContext, restaurants: [Restaurant]? = nil) -> [String] {
         let userCategories = fetchUserCategories(from: context)
         let activeUserCategoryNames = userCategories.map { $0.name }
+        let restaurantCategoryNames = fetchRestaurantCategoryNames(from: context, restaurants: restaurants)
         
         // 获取被删除的预设品类
         let deletedPresets = fetchDeletedPresetCategories(from: context)
@@ -64,14 +72,14 @@ class CategoryManager {
             !deletedPresets.contains(preset)
         }
         
-        let allCategories = availablePresets + activeUserCategoryNames
+        let allCategories = availablePresets + activeUserCategoryNames + restaurantCategoryNames
         return Array(Set(allCategories)).sorted()
     }
     
     /// 获取被删除的预设品类
     /// - Parameter context: SwiftData 上下文
     /// - Returns: 被删除的预设品类名称数组
-    private func fetchDeletedPresetCategories(from context: ModelContext) -> [String] {
+    func fetchDeletedPresetCategories(from context: ModelContext) -> [String] {
         let descriptor = FetchDescriptor<UserCategory>(
             predicate: #Predicate { $0.isActive == false && $0.name.starts(with: "__DELETED_PRESET_") }
         )
@@ -88,6 +96,36 @@ class CategoryManager {
         }
     }
 
+    /// 删除品类（支持预设品类与用户自定义品类）
+    /// - Parameters:
+    ///   - name: 品类名称
+    ///   - context: SwiftData 上下文
+    func deleteCategory(name: String, context: ModelContext) throws {
+        if isPresetCategory(name) {
+            try markPresetCategoryAsDeleted(name: name, context: context)
+            return
+        }
+
+        let activeUserCategories = fetchUserCategories(from: context)
+        guard let categoryToDelete = activeUserCategories.first(where: { $0.name == name }) else {
+            return
+        }
+
+        context.delete(categoryToDelete)
+        try context.save()
+    }
+
+    /// 将预设品类标记为删除（通过 tombstone 记录）
+    private func markPresetCategoryAsDeleted(name: String, context: ModelContext) throws {
+        let deletedPresets = fetchDeletedPresetCategories(from: context)
+        guard !deletedPresets.contains(name) else { return }
+
+        let tombstone = UserCategory(name: "__DELETED_PRESET_\(name)")
+        tombstone.isActive = false
+        context.insert(tombstone)
+        try context.save()
+    }
+
     /// 创建新品类
     /// - Parameters:
     ///   - name: 品类名称
@@ -95,21 +133,27 @@ class CategoryManager {
     /// - Returns: 创建的用户品类
     /// - Throws: CategoryError
     func createCategory(name: String, context: ModelContext) throws -> UserCategory {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+
         // 验证：不能为空
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard !trimmedName.isEmpty else {
             throw CategoryError.emptyName
         }
 
         // 验证：不能重复
         let existingCategories = fetchUserCategories(from: context)
-        let allExistingNames = presetCategories + existingCategories.map { $0.name }
+        let restaurantCategories = fetchRestaurantCategoryNames(from: context)
+        let allExistingNames = (presetCategories + existingCategories.map { $0.name })
+            + restaurantCategories
+        let normalizedExistingNames = allExistingNames
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
 
-        if allExistingNames.contains(name) {
+        if normalizedExistingNames.contains(trimmedName.lowercased()) {
             throw CategoryError.duplicateName
         }
 
         // 创建新品类
-        let newCategory = UserCategory(name: name)
+        let newCategory = UserCategory(name: trimmedName)
         context.insert(newCategory)
         try context.save()
 
@@ -129,6 +173,27 @@ class CategoryManager {
             return try context.fetch(descriptor)
         } catch {
             print("获取用户品类失败: \(error)")
+            return []
+        }
+    }
+
+    /// 从数据库获取餐厅中实际使用的品类
+    /// - Parameter context: SwiftData 上下文
+    /// - Returns: 餐厅品类名称数组
+    private func fetchRestaurantCategoryNames(from context: ModelContext, restaurants: [Restaurant]? = nil) -> [String] {
+        if let restaurants {
+            return restaurants
+                .map { $0.type.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+
+        let descriptor = FetchDescriptor<Restaurant>()
+
+        do {
+            return try context.fetch(descriptor)
+                .map { $0.type.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        } catch {
             return []
         }
     }

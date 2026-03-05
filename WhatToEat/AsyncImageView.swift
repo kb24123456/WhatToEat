@@ -11,8 +11,9 @@ class AsyncImageLoader: ObservableObject {
     
     // 图片缓存（使用单例ImageCacheManager）
     
-    // 取消标记
+    // 取消标记（跨线程访问需要加锁）
     private var cancellable: Bool = false
+    private let cancellationLock = NSLock()
     
     // MARK: - 图片加载方法
     /// 加载图片，支持缓存和预解码
@@ -21,7 +22,7 @@ class AsyncImageLoader: ObservableObject {
     ///   - placeholder: 占位符图片
     func loadImage(filename: String, placeholder: UIImage? = nil) {
         // 重置状态
-        cancellable = false
+        setCancelled(false)
         isLoading = true
         error = nil
         
@@ -38,7 +39,7 @@ class AsyncImageLoader: ObservableObject {
         // 3. 在后台线程加载图片
         DispatchQueue.global().async {
             // 检查是否已取消
-            guard !self.cancellable else {
+            guard !self.isCancelled() else {
                 DispatchQueue.main.async {
                     self.isLoading = false
                 }
@@ -59,7 +60,7 @@ class AsyncImageLoader: ObservableObject {
             let fixedImage = originalImage.fixOrientation()
             
             // 5. 检查是否已取消
-            guard !self.cancellable else {
+            guard !self.isCancelled() else {
                 DispatchQueue.main.async {
                     self.isLoading = false
                 }
@@ -69,8 +70,10 @@ class AsyncImageLoader: ObservableObject {
             // 6. 预解码图片（优化渲染性能）
             AnimationUtils.preDecodeImage(fixedImage) { decodedImage in
                 // 检查是否已取消
-                guard !self.cancellable else {
-                    self.isLoading = false
+                guard !self.isCancelled() else {
+                    DispatchQueue.main.async {
+                        self.isLoading = false
+                    }
                     return
                 }
                 
@@ -101,15 +104,27 @@ class AsyncImageLoader: ObservableObject {
     
     /// 取消图片加载
     func cancel() {
-        cancellable = true
+        setCancelled(true)
     }
     
     /// 重置加载器状态
     func reset() {
-        cancellable = false
+        setCancelled(false)
         image = nil
         isLoading = false
         error = nil
+    }
+
+    private func setCancelled(_ value: Bool) {
+        cancellationLock.lock()
+        cancellable = value
+        cancellationLock.unlock()
+    }
+
+    private func isCancelled() -> Bool {
+        cancellationLock.lock()
+        defer { cancellationLock.unlock() }
+        return cancellable
     }
     
     /// 清除缓存
@@ -271,14 +286,16 @@ class ImageCacheManager {
     // 单例实例
     static let shared = ImageCacheManager()
     
-    // 内存缓存
-    private var memoryCache: [String: UIImage] = [:]
+    // 线程安全的内存缓存
+    private let memoryCache = NSCache<NSString, UIImage>()
     
     // 内存缓存最大数量
     private let maxMemoryCacheSize = 100
     
     // 私有初始化
-    private init() {}
+    private init() {
+        memoryCache.countLimit = maxMemoryCacheSize
+    }
     
     // MARK: - 缓存方法
     /// 保存图片到缓存
@@ -286,34 +303,25 @@ class ImageCacheManager {
     ///   - image: 图片
     ///   - key: 缓存键
     func saveToCache(image: UIImage, forKey key: String) {
-        // 1. 保存到内存缓存
-        memoryCache[key] = image
-        
-        // 2. 管理缓存大小，超过限制则移除最早的缓存
-        if memoryCache.count > maxMemoryCacheSize {
-            let firstKey = memoryCache.keys.first
-            if let key = firstKey {
-                memoryCache.removeValue(forKey: key)
-            }
-        }
+        memoryCache.setObject(image, forKey: key as NSString)
     }
     
     /// 从缓存获取图片
     /// - Parameter key: 缓存键
     /// - Returns: 缓存的图片，或 nil
     func getFromCache(forKey key: String) -> UIImage? {
-        return memoryCache[key]
+        memoryCache.object(forKey: key as NSString)
     }
     
     /// 清除所有缓存
     func clearCache() {
-        memoryCache.removeAll()
+        memoryCache.removeAllObjects()
     }
     
     /// 清除特定缓存
     /// - Parameter key: 缓存键
     func removeFromCache(forKey key: String) {
-        memoryCache.removeValue(forKey: key)
+        memoryCache.removeObject(forKey: key as NSString)
     }
 }
 

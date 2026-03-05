@@ -269,7 +269,7 @@ struct TagsCardDetail: View {
     return ScrollView {
         VStack(spacing: 20) {
             TagsCardPreview(viewModel: viewModel)
-                .background(Color.white)
+                .background(Color(hex: "#FFFFFF"))
                 .cornerRadius(20)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
                 .padding(.horizontal, 24)

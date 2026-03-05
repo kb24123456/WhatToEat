@@ -12,7 +12,7 @@ struct IdentifiableMapItem: Identifiable {
 // MARK: - 智能搜索半屏浮层
 struct SmartSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var locationManager = LocationManager.shared
     
     @Query private var allRestaurants: [Restaurant]
@@ -38,19 +38,27 @@ struct SmartSearchSheet: View {
     
     // 预热后的品类词库
     @State private var existingCategories: [String] = []
+
+    private var sheetGradient: LinearGradient {
+        if colorScheme == .dark {
+            return LinearGradient(
+                colors: [Color.fixedHex("#101925"), Color.fixedHex("#121F2E")],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        return LinearGradient(
+            colors: [Color(hex: "#F5F3F0"), Color(hex: "#FBF9F7")],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
     
     var body: some View {
         NavigationStack {
             ZStack {
                 // 背景渐变
-                LinearGradient(
-                    colors: [
-                        Color(hex: "#F5F3F0"),
-                        Color(hex: "#FBF9F7")
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                sheetGradient
                 .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
@@ -71,13 +79,18 @@ struct SmartSearchSheet: View {
                     Button("关闭") {
                         dismiss()
                     }
-                    .foregroundColor(Color(hex: "#1A1A1A"))
+                    .foregroundColor(AppTheme.Colors.darkText)
                 }
             }
         }
         .onAppear {
             precomputeExistingCategories()
             loadNearbyPlaces()
+        }
+        .onDisappear {
+            searchTask?.cancel()
+            debounceTimer?.invalidate()
+            debounceTimer = nil
         }
     }
     
@@ -267,7 +280,7 @@ struct SmartSearchSheet: View {
     // MARK: - 确定品类（三层级深度优化识别引擎）
     private func determineCategory(from mapItem: MKMapItem) -> (category: String, isAutoMatched: Bool) {
         let rawName = mapItem.name ?? ""
-        let title = mapItem.placemark.title ?? ""
+        let title = mapItem.compatibleAddress
         
         // 第零步：字符串脱敏预处理
         let cleanedName = deepCleanString(rawName)
@@ -637,11 +650,11 @@ struct SmartSearchSheet: View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 17))
-                .foregroundColor(Color(hex: "#999999"))
+                .foregroundColor(AppTheme.Colors.mediumGray)
             
             TextField("输入店名，智能填充所有信息...", text: $searchQuery)
                 .font(.system(size: 16))
-                .foregroundColor(Color(hex: "#1A1A1A"))
+                .foregroundColor(AppTheme.Colors.darkText)
                 .onChange(of: searchQuery) { _, newValue in
                     handleSearchInput(newValue)
                 }
@@ -653,7 +666,7 @@ struct SmartSearchSheet: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(Color(hex: "#CCCCCC"))
+                        .foregroundColor(AppTheme.Colors.lightText)
                 }
             }
         }
@@ -661,13 +674,13 @@ struct SmartSearchSheet: View {
         .padding(.vertical, 12)
         .background(
             Capsule()
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
-                .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
+                .fill(colorScheme == .dark ? AppTheme.Colors.inputFieldBackground : Color.fixedHex("#FFFFFF"))
+                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.24 : 0.04), radius: 8, x: 0, y: 2)
+                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.16 : 0.02), radius: 4, x: 0, y: 1)
         )
         .overlay(
             Capsule()
-                .stroke(Color.white.opacity(0.8), lineWidth: 1)
+                .stroke(AppTheme.Colors.headerPillBorder, lineWidth: 1)
         )
     }
     
@@ -685,7 +698,7 @@ struct SmartSearchSheet: View {
                                 .foregroundColor(Color(hex: "#FF6B6B"))
                             Text("附近推荐")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(Color(hex: "#666666"))
+                                .foregroundColor(AppTheme.Colors.mediumGray)
                             Spacer()
                         }
                         .padding(.horizontal, 20)
@@ -716,7 +729,7 @@ struct SmartSearchSheet: View {
                                 .foregroundColor(Color(hex: "#CCCCCC"))
                             Text("未找到相关地点")
                                 .font(.system(size: 15))
-                                .foregroundColor(Color(hex: "#999999"))
+                                .foregroundColor(AppTheme.Colors.lightText)
                         }
                         .padding(.top, 60)
                     } else {
@@ -736,8 +749,8 @@ struct SmartSearchSheet: View {
     private func nearbyPlaceCard(for identifiableItem: IdentifiableMapItem) -> some View {
         let item = identifiableItem.item
         let name = item.name ?? "未知地点"
-        let address = item.placemark.title ?? ""
-        let distance = calculateDistance(to: item.placemark.coordinate)
+        let address = item.compatibleAddress
+        let distance = calculateDistance(to: item.compatibleCoordinate)
         
         return Button {
             selectPlace(identifiableItem)
@@ -758,13 +771,13 @@ struct SmartSearchSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(name)
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(Color(hex: "#1A1A1A"))
+                        .foregroundColor(AppTheme.Colors.darkText)
                         .lineLimit(1)
                     
                     if !address.isEmpty {
                         Text(address)
                             .font(.system(size: 13))
-                            .foregroundColor(Color(hex: "#999999"))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                             .lineLimit(1)
                     }
                 }
@@ -788,8 +801,8 @@ struct SmartSearchSheet: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
+                    .fill(colorScheme == .dark ? AppTheme.Colors.surfacePrimary : Color.fixedHex("#FFFFFF"))
+                    .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.03), radius: 6, x: 0, y: 2)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -799,7 +812,7 @@ struct SmartSearchSheet: View {
     private func searchResultCard(for identifiableItem: IdentifiableMapItem) -> some View {
         let item = identifiableItem.item
         let name = item.name ?? "未知地点"
-        let address = item.placemark.title ?? ""
+        let address = item.compatibleAddress
         let (category, isAutoMatched) = determineCategory(from: item)
         
         return Button {
@@ -811,7 +824,7 @@ struct SmartSearchSheet: View {
                     HStack(spacing: 8) {
                         Text(name)
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(Color(hex: "#1A1A1A"))
+                            .foregroundColor(AppTheme.Colors.darkText)
                         
                         // 智能识别标签（放大）
                         if isAutoMatched {
@@ -831,7 +844,7 @@ struct SmartSearchSheet: View {
                     if !address.isEmpty {
                         Text(address)
                             .font(.system(size: 14))
-                            .foregroundColor(Color(hex: "#999999"))
+                            .foregroundColor(AppTheme.Colors.mediumGray)
                             .lineLimit(1)
                     }
                 }
@@ -841,14 +854,14 @@ struct SmartSearchSheet: View {
                 // 箭头
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color(hex: "#CCCCCC"))
+                    .foregroundColor(AppTheme.Colors.lightText)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
+                    .fill(colorScheme == .dark ? AppTheme.Colors.surfacePrimary : Color.fixedHex("#FFFFFF"))
+                    .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.03), radius: 6, x: 0, y: 2)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -857,24 +870,20 @@ struct SmartSearchSheet: View {
     // MARK: - 选择地点
     private func selectPlace(_ identifiableItem: IdentifiableMapItem) {
         let item = identifiableItem.item
-        let placemark = item.placemark
+        let coordinate = item.compatibleCoordinate
         
         // 设置基本信息
         selectedName = item.name ?? ""
-        selectedAddress = placemark.title ?? ""
-        selectedLatitude = placemark.coordinate.latitude
-        selectedLongitude = placemark.coordinate.longitude
+        selectedAddress = item.compatibleAddress
+        selectedLatitude = coordinate.latitude
+        selectedLongitude = coordinate.longitude
         
         // 智能识别品类
         let (category, _) = determineCategory(from: item)
         selectedCategory = category
         
         // 提取区域信息
-        if let city = placemark.locality {
-            // 从地址中提取区县
-            let addressComponents = [placemark.subLocality, placemark.thoroughfare].compactMap { $0 }
-            selectedDistrict = addressComponents.first ?? ""
-        }
+        selectedDistrict = item.compatibleDistrict ?? item.compatibleCity ?? ""
         
         // 触发高亮动画
         onAutoFill?()
@@ -935,8 +944,10 @@ struct SmartSearchSheet: View {
                     .sorted { a, b in
                         // 按距离排序
                         guard let userLocation = locationManager.userLocation else { return true }
-                        let distA = userLocation.distance(from: CLLocation(latitude: a.placemark.coordinate.latitude, longitude: a.placemark.coordinate.longitude))
-                        let distB = userLocation.distance(from: CLLocation(latitude: b.placemark.coordinate.latitude, longitude: b.placemark.coordinate.longitude))
+                        let coordinateA = a.compatibleCoordinate
+                        let coordinateB = b.compatibleCoordinate
+                        let distA = userLocation.distance(from: CLLocation(latitude: coordinateA.latitude, longitude: coordinateA.longitude))
+                        let distB = userLocation.distance(from: CLLocation(latitude: coordinateB.latitude, longitude: coordinateB.longitude))
                         return distA < distB
                     }
                 

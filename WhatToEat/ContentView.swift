@@ -34,21 +34,10 @@ struct ContentView: View {
     @State private var isAdding: Bool = false
     @State private var isTabBarHidden: Bool = false
     
-    // 从数据库查询所有餐厅数据，供子视图使用
-    @Query private var restaurants: [Restaurant]
-    
-    // 缓存餐厅数据，避免频繁重建
-    @State private var cachedRestaurants: [Restaurant] = []
-    @State private var lastRestaurantCount: Int = 0
-    @State private var lastRestaurantUpdate: Date = Date.distantPast
-    
-    // MARK: - 输入代理管理器
-    @StateObject private var inputProxyManager = InputProxyManager.shared
-    
     var body: some View {
         ZStack(alignment: .bottom) {
-            // 背景层：奶白背景铺满整个屏幕（包括安全区域）
-            AppTheme.Colors.milkWhite
+            // 背景层：全局语义背景（深色与浅色统一走主题）
+            AppTheme.Colors.pageBackground
                 .ignoresSafeArea()
             
             // MARK: - 主内容区域（性能冻结保护）
@@ -62,8 +51,8 @@ struct ContentView: View {
                 case .add:
                     EmptyView()
                 case .friends:
-                    // 将缓存的餐厅数据传入地图视图
-                    RestaurantMapView(restaurants: cachedRestaurants)
+                    // 仅在进入“食图”时再查询餐厅，避免启动阶段重复全量查询
+                    RestaurantMapTabContainer()
                 case .profile:
                     ProfileView()
                 }
@@ -78,7 +67,7 @@ struct ContentView: View {
                     }
                 })
                 .presentationDetents([.large])
-                .presentationBackground(.white)
+                .presentationBackground(AppTheme.Colors.modalBackground)
             }
             
             // 导航条放置在安全区域内，紧贴底部
@@ -101,23 +90,6 @@ struct ContentView: View {
             withAnimation {
                 isTabBarHidden = false
             }
-        }
-        .onChange(of: restaurants) { _, newRestaurants in
-            // 只有当餐厅数量变化或超过5秒未更新时才刷新缓存
-            let shouldUpdate = newRestaurants.count != lastRestaurantCount ||
-                              Date().timeIntervalSince(lastRestaurantUpdate) > 5.0
-            
-            if shouldUpdate {
-                cachedRestaurants = newRestaurants
-                lastRestaurantCount = newRestaurants.count
-                lastRestaurantUpdate = Date()
-            }
-        }
-        .onAppear {
-            // 初始化缓存
-            cachedRestaurants = restaurants
-            lastRestaurantCount = restaurants.count
-            lastRestaurantUpdate = Date()
         }
     }
     
@@ -147,12 +119,12 @@ struct ContentView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color.black)
+                        .fill(AppTheme.Colors.primaryButtonBackground)
                         .frame(width: 44, height: 44)
 
                     Image(systemName: TabItem.add.iconName)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.Colors.primaryButtonText)
                 }
             }
             .buttonStyle(.plain)
@@ -183,7 +155,7 @@ struct ContentView: View {
                 
                 // 中层：半透明白色增强玻璃感
                 Capsule()
-                    .fill(Color.white.opacity(0.15))
+                    .fill(Color(hex: "#FFFFFF").opacity(0.15))
             }
         )
         // 多层边框营造玻璃边缘光感
@@ -191,16 +163,16 @@ struct ContentView: View {
             ZStack {
                 // 外层：柔和白色光晕
                 Capsule()
-                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                    .stroke(Color(hex: "#FFFFFF").opacity(0.5), lineWidth: 1)
                 
                 // 内层：更亮的边缘高光
                 Capsule()
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.8),
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.6)
+                                Color(hex: "#FFFFFF").opacity(0.8),
+                                Color(hex: "#FFFFFF").opacity(0.3),
+                                Color(hex: "#FFFFFF").opacity(0.6)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -239,10 +211,18 @@ struct ContentView: View {
                     .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .rounded))
                     .frame(height: 10)
             }
-            .foregroundColor(isSelected ? .black : AppTheme.Colors.textSecondary.opacity(0.7))
+            .foregroundColor(isSelected ? AppTheme.Colors.tabActive : AppTheme.Colors.tabInactive)
             .frame(maxWidth: .infinity, maxHeight: 60)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct RestaurantMapTabContainer: View {
+    @Query private var restaurants: [Restaurant]
+
+    var body: some View {
+        RestaurantMapView(restaurants: restaurants)
     }
 }
 

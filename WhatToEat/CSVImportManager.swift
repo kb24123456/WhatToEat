@@ -8,6 +8,8 @@
 import Foundation
 import SwiftData
 import CoreLocation
+import MapKit
+import Combine
 
 // MARK: - CSV 餐厅数据模型
 struct CSVRestaurantRecord {
@@ -161,12 +163,13 @@ class CityRecognizer {
 }
 
 // MARK: - 地理编码管理器
+@MainActor
 class GeocodingManager: ObservableObject {
     static let shared = GeocodingManager()
     
-    private let geocoder = CLGeocoder()
-    private var isProcessing = false
+    private var activeRequest: MKGeocodingRequest?
     private var queue: [Restaurant] = []
+    private var batchCompletion: (() -> Void)?
     
     @Published var totalCount: Int = 0
     @Published var completedCount: Int = 0
@@ -175,14 +178,29 @@ class GeocodingManager: ObservableObject {
     private init() {}
     
     /// 开始批量地理编码
-    func startBatchGeocoding(restaurants: [Restaurant], interval: TimeInterval = 1.5) {
-        guard !isRunning else { return }
-        
+    func startBatchGeocoding(
+        restaurants: [Restaurant],
+        interval: TimeInterval = 1.5,
+        completion: (() -> Void)? = nil
+    ) {
+        guard !isRunning else {
+            completion?()
+            return
+        }
+
         // 筛选出需要补全坐标的餐厅
         queue = restaurants.filter { $0.latitude == 0 && $0.longitude == 0 }
         totalCount = queue.count
         completedCount = 0
         isRunning = true
+        batchCompletion = completion
+
+        guard !queue.isEmpty else {
+            isRunning = false
+            batchCompletion?()
+            batchCompletion = nil
+            return
+        }
         
         processNext(interval: interval)
     }
@@ -191,21 +209,17 @@ class GeocodingManager: ObservableObject {
     private func processNext(interval: TimeInterval) {
         guard !queue.isEmpty else {
             isRunning = false
+            batchCompletion?()
+            batchCompletion = nil
             return
         }
         
         let restaurant = queue.removeFirst()
         
-        geocodeAddress(restaurant: restaurant) { [weak self] success in
+        geocodeAddress(restaurant: restaurant) { [weak self] _ in
             guard let self = self else { return }
             
             self.completedCount += 1
-            
-            if success {
-                print("GeocodingManager: 成功获取 '\(restaurant.name)' 的坐标")
-            } else {
-                print("GeocodingManager: 无法获取 '\(restaurant.name)' 的坐标")
-            }
             
             // 延迟处理下一个（遵守苹果频率限制）
             DispatchQueue.main.asyncAfter(deadline: .now() + interval) {
@@ -217,70 +231,66 @@ class GeocodingManager: ObservableObject {
     /// 单个地址地理编码
     private func geocodeAddress(restaurant: Restaurant, completion: @escaping (Bool) -> Void) {
         let address = restaurant.address
-        
-        geocoder.geocodeAddressString(address) { placemarks, error in
-            if let error = error {
+
+        guard let request = MKGeocodingRequest(addressString: address) else {
+            completion(false)
+            return
+        }
+
+        activeRequest = request
+        request.getMapItems(completionHandler: { mapItems, error in
+            self.activeRequest = nil
+
+            if let error {
                 print("Geocoding error for '\(restaurant.name)': \(error.localizedDescription)")
                 completion(false)
                 return
             }
-            
-            guard let placemark = placemarks?.first,
-                  let location = placemark.location else {
+
+            guard let location = mapItems?.first?.location else {
                 completion(false)
                 return
             }
-            
+
             // 更新餐厅坐标
             restaurant.latitude = location.coordinate.latitude
             restaurant.longitude = location.coordinate.longitude
-            
+
             completion(true)
-        }
+        })
     }
     
     /// 取消所有任务
     func cancel() {
         queue.removeAll()
-        geocoder.cancelGeocode()
+        activeRequest?.cancel()
+        activeRequest = nil
         isRunning = false
+        batchCompletion = nil
     }
 }
 
 // MARK: - CSV 导入管理器
+@MainActor
 class CSVImportManager: ObservableObject {
     static let shared = CSVImportManager()
     
     @Published var importPhase: ImportPhase = .idle
     @Published var importedCount: Int = 0
-    @Published var geocodingProgress: (completed: Int, total: Int) = (0, 0)
     @Published var errorMessage: String?
     
     // 记录本次导入的餐厅 ID，用于批量删除
     @Published var lastImportedRestaurantIDs: [UUID] = []
     
     private var cityRecognizer = CityRecognizer()
-    private var cancellable: Any?
     
-    private init() {
-        // 监听地理编码进度
-        cancellable = GeocodingManager.shared.objectWillChange.sink { [weak self] in
-            DispatchQueue.main.async {
-                self?.geocodingProgress = (
-                    GeocodingManager.shared.completedCount,
-                    GeocodingManager.shared.totalCount
-                )
-            }
-        }
-    }
+    private init() {}
     
     /// 导入 CSV 文件
     func importCSV(from url: URL, modelContext: ModelContext, defaultCity: String = "重庆") async throws -> Int {
         // 阶段一：读取和解析
-        await MainActor.run {
-            self.importPhase = .parsing
-            self.errorMessage = nil
-        }
+        importPhase = .parsing
+        errorMessage = nil
         
         // 开始安全作用域访问
         guard url.startAccessingSecurityScopedResource() else {
@@ -302,9 +312,7 @@ class CSVImportManager: ObservableObject {
         }
         
         // 阶段二：导入文本数据
-        await MainActor.run {
-            self.importPhase = .importingText
-        }
+        importPhase = .importingText
         
         cityRecognizer.defaultCity = defaultCity
         var importedRestaurants: [Restaurant] = []
@@ -342,17 +350,23 @@ class CSVImportManager: ObservableObject {
         // 记录导入的餐厅 ID
         let importedIDs = importedRestaurants.map { $0.id }
         
-        await MainActor.run {
-            self.importedCount = importedRestaurants.count
-            self.lastImportedRestaurantIDs = importedIDs
-            self.importPhase = .geocoding
-        }
+        importedCount = importedRestaurants.count
+        lastImportedRestaurantIDs = importedIDs
+        importPhase = .geocoding
         
-        // 阶段三：异步补全坐标
-        GeocodingManager.shared.startBatchGeocoding(
-            restaurants: importedRestaurants,
-            interval: 1.5
-        )
+        // 阶段三：补全坐标并等待完成
+        await withCheckedContinuation { continuation in
+            GeocodingManager.shared.startBatchGeocoding(
+                restaurants: importedRestaurants,
+                interval: 1.5
+            ) {
+                continuation.resume()
+            }
+        }
+
+        // 持久化地理编码后的坐标
+        try modelContext.save()
+        importPhase = .completed
         
         return importedRestaurants.count
     }
@@ -361,7 +375,6 @@ class CSVImportManager: ObservableObject {
     func reset() {
         importPhase = .idle
         importedCount = 0
-        geocodingProgress = (0, 0)
         errorMessage = nil
         lastImportedRestaurantIDs = []
     }
@@ -391,10 +404,8 @@ class CSVImportManager: ObservableObject {
         try modelContext.save()
         
         // 清空记录的 ID
-        await MainActor.run {
-            self.lastImportedRestaurantIDs = []
-            self.importedCount = 0
-        }
+        lastImportedRestaurantIDs = []
+        importedCount = 0
         
         return deletedCount
     }
@@ -446,7 +457,6 @@ private func readCSVFileWithBOMHandling(url: URL) throws -> String {
         if firstThreeBytes == bom {
             // 移除 BOM
             processedData = data.subdata(in: 3..<data.count)
-            print("CSVImportManager: 检测到并移除了 UTF-8 BOM")
         }
     }
     
@@ -460,16 +470,4 @@ private func readCSVFileWithBOMHandling(url: URL) throws -> String {
     }
     
     return content
-}
-
-// MARK: - Combine 支持
-import Combine
-
-extension GeocodingManager {
-    var objectWillChange: ObservableObjectPublisher {
-        // 手动触发更新
-        let publisher = ObservableObjectPublisher()
-        // 在 completedCount 改变时调用 publisher.send()
-        return publisher
-    }
 }

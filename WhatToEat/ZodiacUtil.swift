@@ -67,7 +67,6 @@ struct ZodiacUtil {
         UserDefaults.standard.set(date, forKey: "user_birth_date")
         let zodiac = getZodiacSign(from: date)
         UserDefaults.standard.set(zodiac, forKey: "user_zodiac_sign")
-        print("💾 已保存生日：\(date)，星座：\(zodiac)")
     }
     
     /// 从 UserDefaults 读取用户生日
@@ -86,6 +85,5 @@ struct ZodiacUtil {
     static func clearBirthData() {
         UserDefaults.standard.removeObject(forKey: "user_birth_date")
         UserDefaults.standard.removeObject(forKey: "user_zodiac_sign")
-        print("🗑️ 已清除生日和星座数据")
     }
 }

@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SwiftData
-import Combine
 
 // MARK: - Profile View Model
 // 管理 ProfileView 的所有状态和业务逻辑
@@ -64,9 +63,7 @@ class ProfileViewModel {
     var showCheckInHistory = false
     
     // MARK: - Initialization
-    init() {
-        loadUserCategories()
-    }
+    init() {}
     
     // MARK: - Computed Properties
     var totalRestaurants: Int { restaurants.count }
@@ -140,7 +137,10 @@ class ProfileViewModel {
     // MARK: - Categories Management
     func loadUserCategories() {
         guard let context = modelContext else { return }
-        let descriptor = FetchDescriptor<UserCategory>(sortBy: [SortDescriptor(\.createdAt)])
+        let descriptor = FetchDescriptor<UserCategory>(
+            predicate: #Predicate { $0.isActive == true },
+            sortBy: [SortDescriptor(\.createdAt)]
+        )
         do {
             userCategories = try context.fetch(descriptor)
         } catch {
@@ -149,32 +149,22 @@ class ProfileViewModel {
     }
     
     func addNewCategory() {
-        let trimmed = newCategoryInput.trimmingCharacters(in: .whitespaces)
+        let trimmed = newCategoryInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        
-        let presetCategories = CategoryManager.shared.getPresetCategories()
-        guard !presetCategories.contains(trimmed),
-              !userCategories.contains(where: { $0.name == trimmed }) else {
-            newCategoryInput = ""
-            return
-        }
-        
-        let newCategory = UserCategory(name: trimmed)
-        modelContext?.insert(newCategory)
-        
+
+        guard let context = modelContext else { return }
+
         do {
-            try modelContext?.save()
+            _ = try CategoryManager.shared.createCategory(name: trimmed, context: context)
             loadUserCategories()
             newCategoryInput = ""
         } catch {
             print("保存新品类失败: \(error)")
+            newCategoryInput = ""
         }
     }
     
     func prepareDeleteCategory(_ categoryName: String) {
-        let presetCategories = CategoryManager.shared.getPresetCategories()
-        guard !presetCategories.contains(categoryName) else { return }
-        
         let affectedRestaurants = restaurants.filter { $0.type == categoryName }
         
         if affectedRestaurants.isEmpty {
@@ -188,12 +178,10 @@ class ProfileViewModel {
     }
     
     func performDeleteCategory(_ categoryName: String) {
-        guard let categoryToDelete = userCategories.first(where: { $0.name == categoryName }) else { return }
-        
-        modelContext?.delete(categoryToDelete)
-        
+        guard let context = modelContext else { return }
+
         do {
-            try modelContext?.save()
+            try CategoryManager.shared.deleteCategory(name: categoryName, context: context)
             loadUserCategories()
             buildCategoryRestaurantMap { }
         } catch {
@@ -242,8 +230,17 @@ class ProfileViewModel {
         
         for i in (0..<6).reversed() {
             if let date = calendar.date(byAdding: .month, value: -i, to: now) {
+                let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
+                let nextMonthStart = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? date
                 let monthStr = String(format: "%d月", calendar.component(.month, from: date))
-                let amount = Double.random(in: 800...4000)
+                let amount = restaurants.reduce(0.0) { partialResult, restaurant in
+                    partialResult + restaurant.logs.reduce(0.0) { sum, log in
+                        if log.date >= monthStart && log.date < nextMonthStart {
+                            return sum + log.expense
+                        }
+                        return sum
+                    }
+                }
                 result.append((month: monthStr, amount: amount))
             }
         }
@@ -252,13 +249,20 @@ class ProfileViewModel {
     
     func getCuisineTypeDistribution() -> [(type: String, count: Int, percent: Double, color: Color)] {
         let colors: [Color] = [AppTheme.Colors.accent, AppTheme.Colors.babyBlue, AppTheme.Colors.mediumGray, AppTheme.Colors.secondary]
-        let types = ["火锅", "日料", "烧烤", "西餐", "其他"]
-        let counts = [28, 15, 12, 8, 20]
-        let total = counts.reduce(0, +)
+        let typeCounts = Dictionary(grouping: restaurants, by: { $0.type })
+            .mapValues { $0.count }
+        let sortedTypes = typeCounts.sorted { $0.value > $1.value }
+        let total = sortedTypes.reduce(0) { $0 + $1.value }
+        guard total > 0 else { return [] }
         
-        return types.enumerated().map { index, type in
-            let percent = Double(counts[index]) / Double(total)
-            return (type: type, count: counts[index], percent: percent, color: colors[index % colors.count])
+        return sortedTypes.enumerated().map { index, item in
+            let percent = Double(item.value) / Double(total)
+            return (
+                type: item.key,
+                count: item.value,
+                percent: percent,
+                color: colors[index % colors.count]
+            )
         }
     }
     

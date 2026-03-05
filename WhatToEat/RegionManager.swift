@@ -28,7 +28,6 @@ class RegionManager {
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String]] {
                     loadedData = json
                     loadSuccess = true
-                    print("RegionManager: Loaded \(json.count) cities from main bundle")
                 }
             } catch {
                 lastError = "Bundle URL error: \(error.localizedDescription)"
@@ -45,7 +44,6 @@ class RegionManager {
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String]] {
                 loadedData = json
                 loadSuccess = true
-                print("RegionManager: Loaded \(json.count) cities from project directory")
             }
         }
         
@@ -63,7 +61,6 @@ class RegionManager {
                         if let json = try JSONSerialization.jsonObject(with: data) as? [String: [String]] {
                             loadedData = json
                             loadSuccess = true
-                            print("RegionManager: Loaded \(json.count) cities from AppSupport")
                         }
                     }
                 }

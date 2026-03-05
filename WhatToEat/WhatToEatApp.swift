@@ -21,6 +21,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct WhatToEatApp: App {
     // 注册 AppDelegate
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @AppStorage(AppSettingsKeys.appAppearanceMode) private var appAppearanceMode: String = AppAppearanceMode.system.rawValue
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -38,10 +39,18 @@ struct WhatToEatApp: App {
     }()
 
     init() {
-        setupRegionsFile()
+        // 避免在启动关键路径执行文件 I/O，降低首帧白屏时长
+        DispatchQueue.global(qos: .utility).async {
+            Self.setupRegionsFile()
+        }
+        
+        // 预初始化键盘，避免首次输入框激活卡顿
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let _ = UITextField()
+        }
     }
 
-    private func setupRegionsFile() {
+    private static func setupRegionsFile() {
         guard let executablePath = Bundle.main.executablePath else {
             print("Could not find executable path")
             return
@@ -72,9 +81,15 @@ struct WhatToEatApp: App {
         }
     }
 
+    private var resolvedAppearance: ColorScheme? {
+        let mode = AppAppearanceMode(rawValue: appAppearanceMode) ?? .system
+        return mode.colorScheme
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(resolvedAppearance)
         }
         .modelContainer(sharedModelContainer)
     }

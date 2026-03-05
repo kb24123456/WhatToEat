@@ -19,61 +19,57 @@ struct ExpandableCard<Preview: View, Detail: View>: View {
     var namespace: Namespace.ID
     var onTap: (() -> Void)?
     
-    @State private var isAnimating = false
-    @State private var animationCompleted = true
-    @State private var scale: CGFloat = 1.0
+    @State private var pressScale: CGFloat = 1.0
     
     var body: some View {
         preview()
             .frame(maxWidth: .infinity)
             .frame(height: cardSize.fixedHeight)
             .background(
-                RoundedRectangle(cornerRadius: isExpanded ? 28 : 20, style: .continuous)
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
+                RoundedRectangle(cornerRadius: isExpanded ? 26 : 20, style: .continuous)
+                    .fill(Color(hex: "#FFFFFF"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: isExpanded ? 26 : 20, style: .continuous)
+                            .stroke(Color.black.opacity(0.04), lineWidth: 0.6)
+                    )
+                    .shadow(color: Color.black.opacity(0.06), radius: 18, x: 0, y: 8)
                     .matchedGeometryEffect(id: "\(id)_background", in: namespace)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: isExpanded ? 28 : 20, style: .continuous)
-                    .stroke(Color.clear, lineWidth: 0)
-                    .matchedGeometryEffect(id: "\(id)_border", in: namespace)
-            )
-            .scaleEffect(scale)
-            .opacity(isAnimating ? 0.9 : 1.0)
+            .scaleEffect(pressScale)
             .onTapGesture {
-                guard animationCompleted && !isAnimating else { return }
+                guard !isExpanded else { return }
                 
-                let generator = UIImpactFeedbackGenerator(style: .light)
+                let generator = UIImpactFeedbackGenerator(style: .soft)
                 generator.impactOccurred()
                 
-                withAnimation(.easeInOut(duration: 0.1)) {
-                    scale = 0.96
+                withAnimation(.easeInOut(duration: 0.08)) {
+                    pressScale = 0.975
                 }
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        scale = 1.0
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        pressScale = 1.0
                     }
                 }
                 
-                isAnimating = true
-                animationCompleted = false
-                
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8, blendDuration: 0)) {
+                withAnimation(.interactiveSpring(response: 0.46, dampingFraction: 0.86, blendDuration: 0.18)) {
                     isExpanded = true
                 }
                 
                 onTap?()
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    isAnimating = false
-                    animationCompleted = true
-                }
             }
     }
 }
 
-// MARK: - Expanded Card Overlay (优化版)
+private struct ExpandedContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+// MARK: - Expanded Card Overlay (自适应高度 + 高级动效)
 struct ExpandedCardOverlay<Content: View>: View {
     let id: String
     let title: String
@@ -83,165 +79,196 @@ struct ExpandedCardOverlay<Content: View>: View {
     var namespace: Namespace.ID
     var onClose: (() -> Void)?
     
-    @State private var animationController = CardAnimationController()
+    @State private var measuredContentHeight: CGFloat = 0
     @State private var dragOffset: CGFloat = 0
-    @State private var isDragging = false
     @State private var backgroundOpacity: Double = 0
-    @State private var isAnimating = false
-    @State private var animationCompleted = false
-    
-    // 高度配置
+    @State private var cardScale: CGFloat = 0.985
+    @State private var cardYOffset: CGFloat = 20
+    @State private var keyboardHeight: CGFloat = 0
+
+    // 尺寸配置
+    private let horizontalInset: CGFloat = 18
+    private let verticalInset: CGFloat = 32
     private let minHeight: CGFloat = 300
-    private let maxHeight: CGFloat = UIScreen.main.bounds.height * 0.75
+    private let maxHeightRatio: CGFloat = 0.88
+    private let headerHeight: CGFloat = 66
+    private let contentBottomPadding: CGFloat = 26
+    private let contentTopPadding: CGFloat = 6
+
     private let dismissThreshold: CGFloat = 120
     private let velocityThreshold: CGFloat = 800
     
     var body: some View {
-        ZStack {
-            // 背景模糊层
-            VisualEffectBlur(blurStyle: .systemMaterial)
-                .ignoresSafeArea()
-                .opacity(backgroundOpacity)
-                .onAppear {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        backgroundOpacity = 1.0
-                    }
+        GeometryReader { geometry in
+            let maxCardHeight = geometry.size.height * maxHeightRatio
+            let desiredHeight = headerHeight + measuredContentHeight + contentBottomPadding
+            let cardHeight = min(max(desiredHeight, minHeight), maxCardHeight)
+            let shouldScroll = desiredHeight > maxCardHeight
+
+            ZStack {
+                // 背景层：模糊 + 暗化，提升高级感
+                ZStack {
+                    VisualEffectBlur(blurStyle: .systemUltraThinMaterial)
+                        .ignoresSafeArea()
+                    Color.black.opacity(0.14)
+                        .ignoresSafeArea()
                 }
+                .opacity(backgroundOpacity)
                 .onTapGesture {
-                    guard animationCompleted && !isAnimating else { return }
                     close()
                 }
-            
-            // 卡片容器 - 使用 GeometryReader 实现自适应高度
-            GeometryReader { geometry in
-                let availableHeight = geometry.size.height
-                let cardHeight = min(maxHeight, max(minHeight, availableHeight * 0.7))
-                
+
                 VStack(spacing: 0) {
-                    // 标题栏
-                    HStack {
+                    Capsule()
+                        .fill(Color.black.opacity(0.13))
+                        .frame(width: 42, height: 5)
+                        .padding(.top, 10)
+                        .padding(.bottom, 8)
+
+                    HStack(spacing: 12) {
                         Text(title)
-                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundColor(AppTheme.Colors.darkText)
-                        
+
                         Spacer()
-                        
+
                         Button {
-                            guard animationCompleted && !isAnimating else { return }
                             close()
                         } label: {
                             Image(systemName: "xmark")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(AppTheme.Colors.mediumGray)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(Color(hex: "#808991"))
                                 .frame(width: 32, height: 32)
                                 .background(
                                     Circle()
-                                        .fill(AppTheme.Colors.softBackground)
+                                        .fill(Color(hex: "#F3F5F7"))
                                 )
                         }
-                        .disabled(isAnimating)
+                        .buttonStyle(PlainButtonStyle())
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 12)
-                    .staggeredAnimation(index: 0, controller: animationController)
-                    
-                    // 内容区域 - 使用 ScrollView 但限制最大高度
-                    ScrollView(showsIndicators: false) {
-                        content()
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 30)
+                    .padding(.bottom, 10)
+
+                    Group {
+                        if shouldScroll {
+                            ScrollView(showsIndicators: false) {
+                                measuredContent
+                            }
+                        } else {
+                            measuredContent
+                                .frame(maxHeight: .infinity, alignment: .top)
+                        }
                     }
-                    .frame(maxHeight: cardHeight - 70) // 减去标题栏高度
+                    .padding(.top, contentTopPadding)
                 }
-                .frame(maxWidth: .infinity, maxHeight: cardHeight, alignment: .top)
+                .frame(maxWidth: .infinity)
+                .frame(height: cardHeight, alignment: .top)
                 .background(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .fill(Color.white)
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(Color(hex: "#FFFFFF"))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                .stroke(Color.black.opacity(0.05), lineWidth: 0.6)
+                        )
                         .matchedGeometryEffect(id: "\(id)_background", in: namespace)
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.clear, lineWidth: 0)
-                        .matchedGeometryEffect(id: "\(id)_border", in: namespace)
-                )
-                .padding(.horizontal, 20)
-                .offset(y: dragOffset)
-                .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
-                .simultaneousGesture(
+                .shadow(color: Color.black.opacity(0.16), radius: 32, x: 0, y: 16)
+                .padding(.horizontal, horizontalInset)
+                .padding(.vertical, verticalInset)
+                .offset(y: dragOffset + cardYOffset - keyboardHeight * 0.5)
+                .scaleEffect(cardScale, anchor: .center)
+                .gesture(
                     DragGesture()
                         .onChanged { value in
-                            guard animationCompleted && !isAnimating else { return }
-                            
-                            if value.translation.height > 0 {
-                                isDragging = true
-                                dragOffset = value.translation.height * 0.5
-                                let progress = min(1.0, value.translation.height / 300)
-                                backgroundOpacity = 1.0 - (progress * 0.5)
-                            }
+                            guard value.translation.height > 0 else { return }
+                            dragOffset = value.translation.height * 0.78
+                            let progress = min(1.0, value.translation.height / 280)
+                            backgroundOpacity = 1.0 - (progress * 0.55)
+                            cardScale = 1.0 - (progress * 0.03)
                         }
                         .onEnded { value in
-                            isDragging = false
                             let shouldDismiss = value.translation.height > dismissThreshold ||
-                                              value.velocity.height > velocityThreshold
-                            
+                                value.velocity.height > velocityThreshold
+
                             if shouldDismiss {
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    dragOffset = UIScreen.main.bounds.height
-                                    backgroundOpacity = 0
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                    performClose()
-                                }
+                                close(byGesture: true)
                             } else {
-                                withAnimation(.interpolatingSpring(stiffness: 300, damping: 25)) {
+                                withAnimation(.interactiveSpring(response: 0.42, dampingFraction: 0.84, blendDuration: 0.16)) {
                                     dragOffset = 0
+                                    cardScale = 1.0
                                     backgroundOpacity = 1.0
                                 }
                             }
                         }
                 )
             }
-        }
-        .onAppear {
-            isAnimating = true
-            animationCompleted = false
-            animationController.beginExpansion()
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                isAnimating = false
-                animationCompleted = true
+            .onAppear {
+                // 使用延迟确保布局计算完成后再开始动画，减少首次卡顿
+                DispatchQueue.main.async {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        backgroundOpacity = 1.0
+                    }
+                    withAnimation(.interactiveSpring(response: 0.5, dampingFraction: 0.86, blendDuration: 0.18)) {
+                        cardScale = 1.0
+                        cardYOffset = 0
+                    }
+                }
+                
+                // 监听键盘通知
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { notification in
+                    if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            keyboardHeight = keyboardFrame.height
+                        }
+                    }
+                }
+                
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        keyboardHeight = 0
+                    }
+                }
+            }
+            .onDisappear {
+                // 移除键盘监听
+                NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+                NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillHideNotification, object: nil)
             }
         }
     }
-    
-    private func close() {
-        isAnimating = true
-        animationCompleted = false
-        
-        withAnimation(.easeIn(duration: 0.15)) {
+
+    private var measuredContent: some View {
+        content()
+            .padding(.horizontal, 20)
+            .padding(.bottom, contentBottomPadding)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: ExpandedContentHeightPreferenceKey.self, value: proxy.size.height)
+                }
+            )
+            .onPreferenceChange(ExpandedContentHeightPreferenceKey.self) { value in
+                measuredContentHeight = value
+            }
+    }
+
+    private func close(byGesture: Bool = false) {
+        let closeAnimation = Animation.interactiveSpring(response: 0.36, dampingFraction: 0.88, blendDuration: 0.12)
+        withAnimation(.easeIn(duration: byGesture ? 0.14 : 0.18)) {
             backgroundOpacity = 0
         }
-        
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85, blendDuration: 0)) {
+        withAnimation(closeAnimation) {
+            dragOffset = byGesture ? ScreenMetrics.bounds.height * 0.3 : 0
+            cardScale = 0.985
+            cardYOffset = 16
+        }
+
+        withAnimation(closeAnimation) {
             isExpanded = false
-            dragOffset = 0
         }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            onClose?()
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            isAnimating = false
-            animationCompleted = true
-        }
-    }
-    
-    private func performClose() {
-        isExpanded = false
-        dragOffset = 0
+
         onClose?()
+        isExpanded = false
     }
 }
 

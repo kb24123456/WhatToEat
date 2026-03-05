@@ -21,8 +21,8 @@ struct GourmetMatchView: View {
     
     var body: some View {
         ZStack {
-            // 背景
-            AppTheme.Colors.pageBackground
+            // 背景：复用 Profile 深色弥散
+            DiffuseGradientBackground()
                 .ignoresSafeArea()
             
             // MARK: 顶部筛选器
@@ -51,8 +51,8 @@ struct GourmetMatchView: View {
                             }
                         }
                     
-                    // 食签卡片内容
-                    FortuneCardModalView(onClose: {
+                    // 食签卡片内容（新的极简INS风）
+                    MinimalistFortuneCard(onClose: {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showImmersiveFortune = false
                         }
@@ -137,18 +137,18 @@ struct GourmetMatchView: View {
         return HStack(spacing: 4) {
             Text(displayTitle)
                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? .white : Color.primary)
+                .foregroundColor(isSelected ? AppTheme.Colors.primaryButtonText : AppTheme.Colors.darkText)
                 .frame(width: 52, height: 18, alignment: .center)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
                 .font(.system(size: 7))
-                .foregroundColor(isSelected ? .white.opacity(0.8) : .blue)
+                .foregroundColor(isSelected ? AppTheme.Colors.primaryButtonText.opacity(0.8) : AppTheme.Colors.babyBlue)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(isSelected ? Color.black : Color.white)
+                .fill(isSelected ? AppTheme.Colors.primaryButtonBackground : AppTheme.Colors.secondaryButtonBackground)
         )
         .shadow(
             color: Color.black.opacity(0.08),

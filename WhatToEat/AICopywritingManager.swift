@@ -1,3 +1,10 @@
+//
+//  AICopywritingManager.swift
+//  WhatToEat
+//
+//  赛博吃货命理师 - 每日食签生成与管理（集成实时黄历/星座API）
+//
+
 import Foundation
 import Combine
 
@@ -12,6 +19,15 @@ struct DailyFoodFortune: Codable, Equatable {
     let luckFood: String            // 开运食物
     var date: Date                  // 生成日期（AI返回中可能不包含，解析后自动填充）
     
+    // 新增：数据来源标记
+    var dataSource: DataSource = .api
+    
+    enum DataSource: String, Codable {
+        case api = "api"           // 实时API数据
+        case cache = "cache"       // 缓存数据
+        case fallback = "fallback" // 降级默认数据
+    }
+    
     enum CodingKeys: String, CodingKey {
         case fortuneStars = "fortune_stars"
         case analysis
@@ -21,6 +37,7 @@ struct DailyFoodFortune: Codable, Equatable {
         case jiSub = "ji_sub"
         case luckFood = "luck_food"
         case date
+        case dataSource
     }
     
     // 自定义解码器，处理 AI 返回中可能不包含 date 字段的情况
@@ -37,11 +54,15 @@ struct DailyFoodFortune: Codable, Equatable {
         
         // date 字段是可选的，如果 AI 没有返回，使用当前日期
         date = try container.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        
+        // dataSource 是可选的，默认为 api
+        dataSource = try container.decodeIfPresent(DataSource.self, forKey: .dataSource) ?? .api
     }
     
     // 初始化方法（用于创建默认食签）
     init(fortuneStars: Int, analysis: String, yiHighlight: String, yiSub: String, 
-         jiHighlight: String, jiSub: String, luckFood: String, date: Date = Date()) {
+         jiHighlight: String, jiSub: String, luckFood: String, date: Date = Date(),
+         dataSource: DataSource = .fallback) {
         self.fortuneStars = fortuneStars
         self.analysis = analysis
         self.yiHighlight = yiHighlight
@@ -50,10 +71,11 @@ struct DailyFoodFortune: Codable, Equatable {
         self.jiSub = jiSub
         self.luckFood = luckFood
         self.date = date
+        self.dataSource = dataSource
     }
 }
 
-// MARK: - 食签请求上下文
+// MARK: - 食签请求上下文（集成实时API数据）
 struct FortuneContext {
     let userZodiac: String      // 用户星座
     let currentDate: String     // 当前日期（yyyy-MM-dd）
@@ -61,9 +83,15 @@ struct FortuneContext {
     let solarTerm: String       // 当前节气
     let city: String            // 用户所在城市
     
-    /// 构建 User Prompt
+    // 新增：实时API数据
+    let lunarData: LunarCalendarData?     // 黄历数据
+    let zodiacData: ZodiacFortuneData?    // 星座运势数据
+    let creativeTheme: String              // 创意主题（熵值）
+    
+    /// 构建 User Prompt（使用真实API数据）
     func buildUserPrompt() -> String {
-        return """
+        // 基础信息
+        var prompt = """
         请为以下用户生成今日食签：
         - 星座：\(userZodiac)
         - 日期：\(currentDate)
@@ -71,13 +99,47 @@ struct FortuneContext {
         - 节气：\(solarTerm)
         - 城市：\(city)
         """
+        
+        // 如果有实时黄历数据，加入详细黄历信息
+        if let lunar = lunarData {
+            prompt += """
+            
+            【黄历信息】（真实数据）
+            - 阳历日期：\(lunar.solarDate)
+            - 农历日期：\(lunar.lunarDate)
+            - 干支：\(lunar.fullGanzhi)
+            - 建除十二神：\(lunar.jianchu)
+            - 宜：\(lunar.suitable.joined(separator: "、"))
+            - 忌：\(lunar.unsuitable.joined(separator: "、"))
+            - 节气：\(lunar.solarTerm)
+            - 彭祖百忌：\(lunar.pengzu)
+            """
+        }
+        
+        // 如果有实时星座数据，加入运势信息
+        if let zodiac = zodiacData {
+            prompt += """
+            
+            【星座运势】（真实数据）
+            - 星座：\(zodiac.zodiac.rawValue)
+            - 综合运势：\(zodiac.fortuneScore)分（\(zodiac.fortuneLevel)）
+            - 幸运色：\(zodiac.luckyColor)
+            - 幸运数字：\(zodiac.luckyNumbers.map { String($0) }.joined(separator: ","))
+            - 运势摘要：\(zodiac.summary)
+            """
+        }
+        
+        // 加入创意主题（熵值）
+        prompt += """
+        
+        【创意方向】\(creativeTheme)
+        """
+        
+        return prompt
     }
 }
 
-// 使用 AppConfig.swift 中的 AIConfig
-
-// MARK: - 食签管理器
-/// 赛博吃货命理师 - 每日食签生成与管理
+// MARK: - 食签管理器（集成实时API）
 class AICopywritingManager: ObservableObject {
     
     // MARK: - 单例模式
@@ -91,6 +153,9 @@ class AICopywritingManager: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var hasInitialLoad: Bool = false
     
+    // MARK: - API聚合器
+    private let dataAggregator = FortuneDataAggregator.shared
+    
     // MARK: - UserDefaults Keys
     private enum Keys {
         static let todayFortune = "today_food_fortune"
@@ -98,114 +163,223 @@ class AICopywritingManager: ObservableObject {
         static let cachedZodiacSign = "cached_zodiac_sign_for_fortune"
     }
     
-    // MARK: - 农历和节气工具
+    // MARK: - 生日变化检测
     
-    /// 获取当前农历日期
-    private func getLunarDate() -> String {
-        let calendar = Calendar(identifier: .chinese)
-        let components = calendar.dateComponents([.year, .month, .day], from: Date())
+    /// 检查生日是否发生变化（星座改变）
+    /// - Returns: 如果星座发生变化，返回 true
+    func hasZodiacChanged() -> Bool {
+        let currentZodiac = ZodiacUtil.loadZodiacSign()
+        let cachedZodiac = UserDefaults.standard.string(forKey: Keys.cachedZodiacSign)
         
-        let lunarMonths = ["正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "冬", "腊"]
-        let lunarDays = ["初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十",
-                         "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
-                         "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十"]
-        
-        guard let month = components.month, let day = components.day else {
-            return "未知"
+        // 如果当前没有设置星座，不认为发生变化
+        guard let current = currentZodiac else {
+            return false
         }
         
-        return "\(lunarMonths[month - 1])月\(lunarDays[day - 1])"
-    }
-    
-    /// 获取当前节气（简化版，实际应用需要更复杂的算法）
-    private func getSolarTerm() -> String {
-        let calendar = Calendar.current
-        let month = calendar.component(.month, from: Date())
-        let day = calendar.component(.day, from: Date())
-        
-        // 简化节气判断（实际应用需要精确计算）
-        let solarTerms: [(month: Int, day: Int, name: String)] = [
-            (2, 4, "立春"), (2, 19, "雨水"),
-            (3, 6, "惊蛰"), (3, 21, "春分"),
-            (4, 5, "清明"), (4, 20, "谷雨"),
-            (5, 6, "立夏"), (5, 21, "小满"),
-            (6, 6, "芒种"), (6, 21, "夏至"),
-            (7, 7, "小暑"), (7, 23, "大暑"),
-            (8, 8, "立秋"), (8, 23, "处暑"),
-            (9, 8, "白露"), (9, 23, "秋分"),
-            (10, 8, "寒露"), (10, 23, "霜降"),
-            (11, 7, "立冬"), (11, 22, "小雪"),
-            (12, 7, "大雪"), (12, 22, "冬至"),
-            (1, 6, "小寒"), (1, 20, "大寒")
-        ]
-        
-        // 找到最近的节气
-        var closestTerm = ""
-        var minDiff = Int.max
-        
-        for term in solarTerms {
-            let diff = abs((month - term.month) * 30 + (day - term.day))
-            if diff < minDiff {
-                minDiff = diff
-                closestTerm = term.name
-            }
+        // 如果缓存为空（首次使用），保存当前星座
+        guard let cached = cachedZodiac else {
+            UserDefaults.standard.set(current, forKey: Keys.cachedZodiacSign)
+            return false
         }
         
-        return closestTerm.isEmpty ? "无" : closestTerm
-    }
-    
-    /// 获取当前日期字符串
-    private func getCurrentDateString() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: Date())
-    }
-    
-    /// 检查是否是新的一天
-    private func isNewDay() -> Bool {
-        guard let savedDate = UserDefaults.standard.string(forKey: Keys.fortuneDate) else {
+        // 比较星座是否变化
+        if current != cached {
             return true
         }
-        return savedDate != getCurrentDateString()
+        
+        return false
     }
     
-    // MARK: - System Prompt（赛博吃货命理师）
-    private func buildSystemInstruction() -> String {
+    /// 更新缓存的星座信息
+    func updateCachedZodiac() {
+        if let currentZodiac = ZodiacUtil.loadZodiacSign() {
+            UserDefaults.standard.set(currentZodiac, forKey: Keys.cachedZodiacSign)
+        }
+    }
+    
+    // MARK: - 获取今日食签（带缓存逻辑，集成实时API）
+    
+    /// 获取今日食签
+    /// - 如果本地有今日缓存且未过00:00，直接返回
+    /// - 如果星座发生变化，清理缓存并重新获取
+    /// - 否则调用 API 生成新的食签
+    func getTodayFortune(forceRefresh: Bool = false) async -> DailyFoodFortune? {
+        print("🔮 [AICopywritingManager] getTodayFortune 开始调用...")
+        
+        // 检查星座是否发生变化
+        if hasZodiacChanged() {
+            print("🔮 [AICopywritingManager] 星座发生变化，清理缓存")
+            clearFortuneCache()
+            updateCachedZodiac()
+        }
+        
+        // 检查是否需要强制刷新
+        if !forceRefresh {
+            // 检查本地缓存
+            print("🔮 [AICopywritingManager] 检查本地缓存...")
+            if let cached = loadTodayFortuneFromLocal(), !isNewDay() {
+                print("✅ [AICopywritingManager] 使用本地缓存")
+                await MainActor.run {
+                    self.todayFortune = cached
+                }
+                return cached
+            }
+            print("🔮 [AICopywritingManager] 无本地缓存或已过期")
+        }
+        
+        // 避免重复请求
+        guard !isLoading else {
+            print("⚠️ [AICopywritingManager] 正在加载中，返回当前数据")
+            return todayFortune
+        }
+        
+        // 检查 AI 配置
+        print("🔮 [AICopywritingManager] 检查AI配置...")
+        guard AIConfig.isConfigured else {
+            print("⚠️ [AICopywritingManager] AI配置未设置，使用默认食签")
+            return getDefaultFortune()
+        }
+        print("✅ [AICopywritingManager] AI配置已设置")
+        
+        await MainActor.run {
+            self.isLoading = true
+        }
+        
+        do {
+            print("🔮 [AICopywritingManager] 开始生成食签...")
+            // 使用新的API集成方式生成食签
+            let fortune = try await generateFortuneWithAPIData()
+            
+            await MainActor.run {
+                self.todayFortune = fortune
+                self.isLoading = false
+            }
+            
+            saveTodayFortuneToLocal(fortune)
+            return fortune
+            
+        } catch {
+            print("❌ [AICopywritingManager] 获取食签失败：\(error)")
+            print("❌ [AICopywritingManager] 错误详情：\(error.localizedDescription)")
+            
+            // 错误降级：使用缓存或默认数据
+            if let cached = loadTodayFortuneFromLocal() {
+                await MainActor.run {
+                    self.todayFortune = cached
+                    self.isLoading = false
+                }
+                return cached
+            }
+            
+            await MainActor.run {
+                self.isLoading = false
+            }
+            
+            return getDefaultFortune()
+        }
+    }
+    
+    // MARK: - 新增：使用实时API数据生成食签
+    
+    /// 使用实时黄历/星座API数据生成食签
+    private func generateFortuneWithAPIData() async throws -> DailyFoodFortune {
+        // 获取用户信息
+        guard let zodiacSign = ZodiacUtil.loadZodiacSign(),
+              let zodiac = ZodiacSign.from(chineseName: zodiacSign) else {
+            throw FortuneError.configurationMissing
+        }
+        
+        let city = LocationManager.shared.currentCity ?? "未知城市"
+        
+        // 1. 使用FortuneDataAggregator获取实时API数据
+        print("🔮 [AICopywritingManager] 开始获取实时API数据...")
+        let context = try await dataAggregator.aggregateFortuneData(
+            for: zodiac,
+            city: city,
+            forceRefresh: false
+        )
+        
+        // 2. 构建使用真实API数据的System Prompt
+        let systemPrompt = buildSystemInstructionWithAPIData(context)
+        
+        // 3. 构建User Prompt
+        let userPrompt = buildUserPromptWithAPIData(context)
+        
+        // 4. 调用AI生成食签
+        print("🤖 [AICopywritingManager] 调用AI生成食签...")
+        let fortune = try await fetchFortuneFromAI(systemPrompt: systemPrompt, userPrompt: userPrompt)
+        
+        // 5. 标记数据来源
+        var result = fortune
+        result.dataSource = .api
+        
+        print("✅ [AICopywritingManager] 食签生成成功!")
+        print("   ⭐ 星级: \(result.fortuneStars)")
+        print("   📝 解析: \(String(result.analysis.prefix(30)))...")
+        print("   ✅ 宜: \(result.yiHighlight)")
+        print("   ❌ 忌: \(result.jiHighlight)")
+        print("   🍜 开运食物: \(result.luckFood)")
+        return result
+    }
+    
+    // MARK: - 新增：使用API数据构建System Prompt
+    
+    /// 使用实时API数据构建System Prompt
+    private func buildSystemInstructionWithAPIData(_ context: FortuneGenerationContext) -> String {
+        let lunar = context.lunarData
+        let zodiac = context.zodiacData
+        
         return """
         # Role
         你是一位精通西方古典占星术与中国民俗黄历、且说话极具网感的"赛博吃货命理师"。
         
-        ⚠️ 重要声明：你的回复必须基于真实数据，严禁凭记忆或感觉编造！
+        ⚠️ 重要声明：你的回复必须基于以下真实数据，严禁凭记忆或感觉编造！
         
-        数据来源要求（必须严格遵守）
-        1. 黄历数据：必须查询当天真实的干支（如：甲子日）、十二神（如：开日、破日）、当日宜/忌项。可参考权威黄历资料（如万年历 App、农历网 nongli.pyrmj.cn）。
-        2. 占星数据：必须查询该星座当天真实的综合运势分值和幸运色。可参考专业星座运势网站（如 Astro.com、星座屋）。
-        3. 在 analysis 中必须注明你使用的具体黄历术语和占星依据（如："根据今日建除十二神为'收'"、"根据月亮在第X宫"）。
+        ## 语言风格指南（必须遵守）
+        你的文案必须年轻化、生活化、趣味化，符合Z世代用户的阅读习惯：
         
-        禁止事项：
-        - 禁止使用"我记得"、"应该是"、"可能是"等模糊表述
-        - 禁止编造不存在的黄历术语
-        - 禁止凭空给出运势分值
+        1. **使用网络流行语**：如"绝绝子"、"yyds"、"拿捏了"、"破防了"、"真香"、"emo"、"躺平"、"内卷"、"氛围感"、"仪式感"等
+        2. **使用emoji表情**：在analysis中必须包含1-2个emoji（如：✨🍀🔥💫🌟💥🎯🎉😋🤤）
+        3. **语气轻松幽默**：像朋友聊天一样，不要太正式
+        4. **多用短句**：避免长难句，多用逗号分隔的短句
+        5. **口语化表达**：用"咱"、"你"、"宝子"等称呼，拉近距离
         
-        Data Source & Accuracy
-        你的结论必须基于以下真实数据来源：
-        黄历数据：当日干支（如：甲子日）、十二神（如：开日、破日）、具体宜/忌项。
-        占星数据：当日星座综合运势（分值）、该星座当日幸运色。
+        【真实黄历数据】（来自聚合数据API）
+        - 阳历日期：\(lunar.solarDate)
+        - 农历日期：\(lunar.lunarDate)
+        - 干支：\(lunar.fullGanzhi)
+        - 建除十二神：\(lunar.jianchu)
+        - 宜：\(lunar.suitable.joined(separator: "、"))
+        - 忌：\(lunar.unsuitable.joined(separator: "、"))
+        - 节气：\(lunar.solarTerm)
+        - 彭祖百忌：\(lunar.pengzu)
+        
+        【真实星座运势数据】（来自聚合数据API）
+        - 星座：\(zodiac.zodiac.rawValue)
+        - 综合运势：\(zodiac.fortuneScore)分（\(zodiac.fortuneLevel)）
+        - 幸运色：\(zodiac.luckyColor)
+        - 幸运数字：\(zodiac.luckyNumbers.map { String($0) }.joined(separator: ","))
+        - 运势摘要：\(zodiac.summary)
+        
+        【创意方向】\(context.creativeTheme)
+        
         Deduction Protocol (推演协议 - 严格遵守)
         为了防止内容同质化，你必须执行以下逻辑链条进行创作：
+        
         黄历转换逻辑：
-        提取当日黄历中的核心“宜/忌”。
-        强制映射：将传统项映射至美食场景。（例：宜祭祀 -> 宜去老字号致敬；忌动土 -> 忌装修风或工业风餐厅）。
-        术语引用：文案中必须自然提及一个专业术语（如：岁破、月德、建除十二神等）。
+        1. 提取真实黄历数据中的核心"宜/忌"
+        2. 强制映射：将传统宜忌项映射至美食场景（例：宜祭祀 -> 宜去老字号致敬传统味道；忌动土 -> 忌装修风或工业风餐厅）
+        3. 术语引用：文案中必须自然引用一个真实黄历术语（如：\(lunar.jianchu)、岁破、月德等）
+        
         星座色彩逻辑：
-        获取该星座当日幸运色。
-        颜色强绑定：生成的 luck_food 必须在视觉上包含该颜色或其相近色，并在 analysis 中点出这种关联。（例：幸运色为绿色 -> 幸运食物必须是：抹茶、泰绿、沙拉等）。
-        运势评分逻辑：
-        fortune_stars 必须真实反映该星座当日的综合运势水平，严禁每天都给 4-5 星。
-        Content Requirements
-        去 AI 味：禁止使用"美味、探索、推荐、独特"。
-        语调：毒舌且精准。如果你算出用户今天运势极差，请直接开启"劝退模式"，用最狠的话劝他吃最稳的饭。
-        高亮逻辑：yi_highlight 和 ji_highlight 必须是极具冲击力的短词。
+        1. 使用真实幸运色：\(zodiac.luckyColor)
+        2. 颜色强绑定：生成的 luck_food 必须在视觉上包含该颜色或其相近色，并在 analysis 中点出这种关联
+        3. 运势评分逻辑：fortune_stars 必须真实反映 \(zodiac.fortuneScore) 分对应的水平，严禁每天都给 4-5 星
+        
+        创意主题逻辑：
+        1. 严格按照【创意方向】\(context.creativeTheme) 指定的风格生成文案
+        2. 避免使用近期的常见表达方式
+        3. 尝试不同的修辞风格和比喻角度
         
         开运食物要求（严格遵守）：
         luck_food 必须是符合以下标准的食物：
@@ -230,171 +404,68 @@ class AICopywritingManager: ObservableObject {
         - 白色系：小笼包、豆腐脑、米饭、牛奶、白切鸡、银耳羹
         - 黑色系：黑芝麻糊、黑森林蛋糕、墨鱼汁意面、可乐
         
+        Content Requirements
+        去 AI 味：禁止使用"美味、探索、推荐、独特"。
+        语调：像闺蜜/兄弟聊天一样，时而毒舌吐槽，时而暖心鼓励，穿插网络梗和emoji。
+        高亮逻辑：yi_highlight 和 ji_highlight 必须是极具网感的短词（如："冲就完了"、"原地躺平"、"拿捏了"）。
+        
+        ## 文案风格示例
+        - 运势好："宝子，今天运势简直绝绝子！✨ 建除十二神是'满'，宜大吃大喝，加上射手座今日运势拉满，这波不冲真的亏大了！"
+        - 运势一般："今天运势中规中矩，别想着搞事情了🍀 老老实实吃顿好的，给自己充充电，明天再战！"
+        - 运势差："emmm...今天黄历说'诸事不宜'，咱就别折腾了😅 找个舒服的地方躺平，吃点治愈系美食，保命要紧！"
+        
         Format (Strictly JSON)
         {
         "fortune_stars": Int,
-        "analysis": "引用星象相位或黄历术语的一句话解析（网感+玄学）",
+        "analysis": "引用真实黄历术语和星座数据的一句话解析（网感+玄学）",
         "yi_highlight": "高亮动作",
-        "yi_sub": "基于黄历逻辑的解释（字数15-20）",
+        "yi_sub": "基于真实黄历宜忌项的解释（字数15-20）",
         "ji_highlight": "高亮动作",
-        "ji_sub": "基于星座相位的解释（字数15-20）",
+        "ji_sub": "基于真实星座运势的解释（字数15-20）",
         "luck_food": "包含幸运色的具体食物"
         }
-        Example (狮子座 + 辛亥日):
+        Example (年轻化网感风格):
         {
-        "fortune_stars": 2,
-        "analysis": "水逆回旋镖精准命中，狮子今日虽有天德合，但也架不住食伤被克。",
-        "yi_highlight": "潜伏老破小",
-        "yi_sub": "今日建除十二神为'收'，利入仓，去犄角旮旯的店里收割地道烟火气。",
-        "ji_highlight": "带没脑子的同事拼单",
-        "ji_sub": "今日幸运色为'冷灰'，忌一切热血上脑的社交，独自去吃性冷淡风简餐。 ",
-        "luck_food": "黑松露菌菇意面"
+        "fortune_stars": 4,
+        "analysis": "宝子，今天运势简直绝绝子！✨ 建除十二神是'满'，宜大吃大喝，加上射手座今日运势拉满，这波不冲真的亏大了！",
+        "yi_highlight": "冲就完了",
+        "yi_sub": "今日宜满，宜囤货，宜大口吃肉！火锅烧烤奶茶全安排上，快乐就完事了～",
+        "ji_highlight": "原地躺平",
+        "ji_sub": "今日忌动土，别想着搞装修或者搬家了，老实待着，点外卖不香吗？😋",
+        "luck_food": "麻辣小龙虾"
         }
         """
     }
     
-    // MARK: - 请求数据结构
-    private struct ChatMessage: Codable {
-        let role: String
-        let content: String
+    /// 使用API数据构建User Prompt
+    private func buildUserPromptWithAPIData(_ context: FortuneGenerationContext) -> String {
+        // 简单提示，主要信息已在System Prompt中
+        return """
+        请基于以上提供的真实黄历和星座数据，生成今日食签。
+        
+        要求：
+        1. 严格引用真实数据中的黄历术语（如干支、建除十二神、宜忌等）
+        2. 幸运食物必须包含真实幸运色：\(context.zodiacData.luckyColor)
+        3. 遵循指定的创意主题风格
+        4. 运势星级必须真实反映\(context.zodiacData.fortuneScore)分的水平
+        
+        请以JSON格式返回结果。
+        """
     }
     
-    private struct ChatRequest: Codable {
-        let model: String
-        let messages: [ChatMessage]
-    }
+    // MARK: - 核心API调用方法
     
-    private struct ChatResponse: Codable {
-        struct Choice: Codable {
-            struct Message: Codable {
-                let content: String
-            }
-            let message: Message
-        }
-        let choices: [Choice]
-    }
-    
-    // MARK: - 生日变化检测
-    
-    /// 检查生日是否发生变化（星座改变）
-    /// - Returns: 如果星座发生变化，返回 true
-    func hasZodiacChanged() -> Bool {
-        let currentZodiac = ZodiacUtil.loadZodiacSign()
-        let cachedZodiac = UserDefaults.standard.string(forKey: Keys.cachedZodiacSign)
-        
-        // 如果当前没有设置星座，不认为发生变化
-        guard let current = currentZodiac else {
-            return false
-        }
-        
-        // 如果缓存为空（首次使用），保存当前星座
-        guard let cached = cachedZodiac else {
-            UserDefaults.standard.set(current, forKey: Keys.cachedZodiacSign)
-            return false
-        }
-        
-        // 比较星座是否变化
-        if current != cached {
-            print("🔄 检测到星座变化：\(cached) → \(current)")
-            return true
-        }
-        
-        return false
-    }
-    
-    /// 更新缓存的星座信息
-    func updateCachedZodiac() {
-        if let currentZodiac = ZodiacUtil.loadZodiacSign() {
-            UserDefaults.standard.set(currentZodiac, forKey: Keys.cachedZodiacSign)
-            print("💾 已更新缓存星座：\(currentZodiac)")
-        }
-    }
-    
-    // MARK: - 获取今日食签（带缓存逻辑）
-    
-    /// 获取今日食签
-    /// - 如果本地有今日缓存且未过00:00，直接返回
-    /// - 如果星座发生变化，清理缓存并重新获取
-    /// - 否则调用 API 生成新的食签
-    func getTodayFortune(forceRefresh: Bool = false) async -> DailyFoodFortune? {
-        // 检查星座是否发生变化
-        if hasZodiacChanged() {
-            print("♻️ 星座发生变化，清理食签缓存...")
-            clearFortuneCache()
-            updateCachedZodiac()
-        }
-        
-        // 检查是否需要强制刷新
-        if !forceRefresh {
-            // 检查本地缓存
-            if let cached = loadTodayFortuneFromLocal(), !isNewDay() {
-                print("✅ 使用本地缓存的今日食签")
-                await MainActor.run {
-                    self.todayFortune = cached
-                }
-                return cached
-            }
-        }
-        
-        // 避免重复请求
-        guard !isLoading else {
-            print("⏳ 正在加载中...")
-            return todayFortune
-        }
-        
-        // 检查 API 配置
-        guard AIConfig.apiKey != "YOUR_API_KEY" else {
-            print("⚠️ API Key 未配置，使用默认食签")
-            return getDefaultFortune()
-        }
-        
-        await MainActor.run {
-            self.isLoading = true
-        }
-        
-        do {
-            let fortune = try await fetchFortuneFromAPI()
-            await MainActor.run {
-                self.todayFortune = fortune
-                self.isLoading = false
-            }
-            saveTodayFortuneToLocal(fortune)
-            return fortune
-        } catch {
-            print("❌ 获取食签失败：\(error.localizedDescription)")
-            await MainActor.run {
-                self.isLoading = false
-            }
-            return getDefaultFortune()
-        }
-    }
-    
-    // MARK: - API 请求
-    
-    private func fetchFortuneFromAPI() async throws -> DailyFoodFortune {
+    /// 调用AI API生成食签
+    private func fetchFortuneFromAI(systemPrompt: String, userPrompt: String) async throws -> DailyFoodFortune {
         guard let url = URL(string: AIConfig.baseURL) else {
             throw FortuneError.invalidURL
         }
         
-        // 构建上下文
-        let context = FortuneContext(
-            userZodiac: ZodiacUtil.loadZodiacSign() ?? "未知星座",
-            currentDate: getCurrentDateString(),
-            lunarDate: getLunarDate(),
-            solarTerm: getSolarTerm(),
-            city: LocationManager.shared.currentCity ?? "未知城市"
-        )
-        
-        print("🔮 正在为用户 \(context.userZodiac) 推算今日食签...")
-        print("📅 日期：\(context.currentDate)，农历：\(context.lunarDate)，节气：\(context.solarTerm)")
-        
-        let systemInstruction = buildSystemInstruction()
-        let userPrompt = context.buildUserPrompt()
-        
+        // 构建请求体
         let requestBody = ChatRequest(
             model: AIConfig.endpointID,
             messages: [
-                ChatMessage(role: "system", content: systemInstruction),
+                ChatMessage(role: "system", content: systemPrompt),
                 ChatMessage(role: "user", content: userPrompt)
             ]
         )
@@ -421,29 +492,19 @@ class AICopywritingManager: ObservableObject {
         let chatResponse = try decoder.decode(ChatResponse.self, from: data)
         
         let rawContent = chatResponse.choices[0].message.content
-        print("📝 AI 原始返回：\(rawContent)")
         
         let cleanedJSON = cleanJSONString(rawContent)
-        print("🧹 清洗后 JSON：\(cleanedJSON)")
         
         guard let jsonData = cleanedJSON.data(using: .utf8) else {
-            print("❌ 无法将清洗后的字符串转换为 Data")
             throw FortuneError.jsonParsingFailed
         }
         
         do {
             let fortune = try decoder.decode(DailyFoodFortune.self, from: jsonData)
-            
-            print("✅ 成功获取今日食签")
-            print("   运势：\(fortune.fortuneStars)星")
-            print("   宜：\(fortune.yiHighlight)")
-            print("   忌：\(fortune.jiHighlight)")
-            print("   开运食物：\(fortune.luckFood)")
-            
             return fortune
         } catch {
-            print("❌ JSON 解析失败：\(error)")
-            print("❌ 尝试解析的数据：\(cleanedJSON)")
+            print("❌ 食签 JSON 解析失败：\(error)")
+            print("❌ 原始数据前200字符: \(String(cleanedJSON.prefix(200)))")
             throw FortuneError.jsonParsingFailed
         }
     }
@@ -486,22 +547,35 @@ class AICopywritingManager: ObservableObject {
             jiHighlight: "为了减肥不吃晚饭",
             jiSub: "饿着肚子睡觉会做饿梦的。",
             luckFood: "你最爱吃的那家",
-            date: Date()
+            date: Date(),
+            dataSource: .fallback
         )
     }
     
-    // MARK: - 本地持久化
+    // MARK: - 本地持久化（使用文件存储，避免UserDefaults 4MB限制）
+    
+    private var fortuneCacheFileURL: URL? {
+        let urls = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+        return urls.first?.appendingPathComponent("today_fortune_cache.json")
+    }
     
     private func saveTodayFortuneToLocal(_ fortune: DailyFoodFortune) {
-        if let encoded = try? JSONEncoder().encode(fortune) {
-            UserDefaults.standard.set(encoded, forKey: Keys.todayFortune)
+        guard let fileURL = fortuneCacheFileURL else { return }
+        
+        do {
+            let encoded = try JSONEncoder().encode(fortune)
+            try encoded.write(to: fileURL, options: .atomic)
             UserDefaults.standard.set(getCurrentDateString(), forKey: Keys.fortuneDate)
-            print("💾 今日食签已保存到本地")
+            print("✅ [AICopywritingManager] 食签已保存到文件缓存")
+        } catch {
+            print("❌ [AICopywritingManager] 保存食签失败: \(error)")
         }
     }
     
     private func loadTodayFortuneFromLocal() -> DailyFoodFortune? {
-        guard let data = UserDefaults.standard.data(forKey: Keys.todayFortune),
+        guard let fileURL = fortuneCacheFileURL,
+              FileManager.default.fileExists(atPath: fileURL.path),
+              let data = try? Data(contentsOf: fileURL),
               let fortune = try? JSONDecoder().decode(DailyFoodFortune.self, from: data) else {
             return nil
         }
@@ -511,25 +585,66 @@ class AICopywritingManager: ObservableObject {
     func loadFromLocal() {
         if let fortune = loadTodayFortuneFromLocal() {
             todayFortune = fortune
-            print("📂 从本地加载今日食签")
         }
         hasInitialLoad = true
     }
     
     func clearLocalCache() {
-        UserDefaults.standard.removeObject(forKey: Keys.todayFortune)
+        if let fileURL = fortuneCacheFileURL {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
         UserDefaults.standard.removeObject(forKey: Keys.fortuneDate)
         todayFortune = nil
-        print("🗑️ 食签缓存已清空")
+        print("🗑️ [AICopywritingManager] 本地食签缓存已清理")
     }
     
     /// 清理食签缓存（用于星座变化时）
     func clearFortuneCache() {
-        UserDefaults.standard.removeObject(forKey: Keys.todayFortune)
+        if let fileURL = fortuneCacheFileURL {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
         UserDefaults.standard.removeObject(forKey: Keys.fortuneDate)
         UserDefaults.standard.removeObject(forKey: Keys.cachedZodiacSign)
         todayFortune = nil
-        print("🗑️ 食签缓存和星座缓存已清空")
+        print("🗑️ [AICopywritingManager] 食签缓存已清理（星座变化）")
+    }
+    
+    // MARK: - 工具方法
+    
+    /// 获取当前日期字符串
+    private func getCurrentDateString() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
+    
+    /// 检查是否是新的一天
+    private func isNewDay() -> Bool {
+        guard let savedDate = UserDefaults.standard.string(forKey: Keys.fortuneDate) else {
+            return true
+        }
+        return savedDate != getCurrentDateString()
+    }
+    
+    // MARK: - 请求数据结构
+    private struct ChatMessage: Codable {
+        let role: String
+        let content: String
+    }
+    
+    private struct ChatRequest: Codable {
+        let model: String
+        let messages: [ChatMessage]
+    }
+    
+    private struct ChatResponse: Codable {
+        struct Choice: Codable {
+            struct Message: Codable {
+                let content: String
+            }
+            let message: Message
+        }
+        let choices: [Choice]
     }
 }
 
@@ -549,7 +664,7 @@ enum FortuneError: Error, LocalizedError {
         case .jsonParsingFailed:
             return "JSON 解析失败"
         case .configurationMissing:
-            return "配置缺失：请设置 API Key 和 Endpoint ID"
+            return "配置缺失：请设置 API Key 和星座信息"
         }
     }
 }

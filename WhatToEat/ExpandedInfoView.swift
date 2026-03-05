@@ -88,12 +88,12 @@ struct ExpandedInfoView: View {
         Button(action: onClose) {
             Text("去这里")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.Colors.primaryButtonText)
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.black)
+                        .fill(AppTheme.Colors.primaryButtonBackground)
                         .shadow(color: Color.black.opacity(0.2), radius: 15, x: 0, y: 8)
                 )
         }
@@ -124,7 +124,7 @@ struct DataCell: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(hex: "#FFFFFF"))
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
         )
     }

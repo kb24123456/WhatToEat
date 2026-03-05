@@ -40,7 +40,7 @@ struct OreoCreamBackground: View {
 
                 // 中央偏上微妙高光 - 增加层次感
                 Ellipse()
-                    .fill(Color.white)
+                    .fill(Color(hex: "#FFFFFF"))
                     .frame(width: w * 0.5, height: w * 0.5)
                     .blur(radius: 80)
                     .opacity(0.4)

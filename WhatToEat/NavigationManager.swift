@@ -118,7 +118,7 @@ struct MilkyToastView: View {
                         .fill(.ultraThinMaterial)
                         .overlay(
                             Capsule()
-                                .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                                .stroke(Color(hex: "#FFFFFF").opacity(0.5), lineWidth: 0.5)
                         )
                         .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 4)
                 )
@@ -143,12 +143,12 @@ struct NavigationButton: View {
                 Text(type.rawValue)
                     .font(.system(size: 13, weight: .medium))
             }
-            .foregroundColor(.white)
+            .foregroundColor(AppTheme.Colors.primaryButtonText)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(Color.black)
+                    .fill(AppTheme.Colors.primaryButtonBackground)
             )
             .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
         }

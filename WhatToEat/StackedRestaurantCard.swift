@@ -46,24 +46,24 @@ struct StackedRestaurantCard: View {
         // 物理质感实色系统：压住背景流动感
         .background(
             RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
-                .fill(Color.white)  // 与RestaurantDetailView胶囊相同的白色背景
+                .fill(AppTheme.Colors.surfacePrimary)
         )
         // 双层描边系统：白色高光 + 黑色物理边框
         .overlay(
             ZStack {
                 // 内层：白色高光描边（顶部/左侧光源效果）
                 RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.8), lineWidth: 0.5)
+                    .stroke(AppTheme.Colors.rimLight.opacity(0.16), lineWidth: 0.5)
                 
                 // 外层：极淡黑色物理边框
                 RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
+                    .stroke(Color.black.opacity(0.04), lineWidth: 0.5)
             }
         )
         // iOS 26 小组件风格阴影
         .shadow(
-            color: Color.black.opacity(0.08),
-            radius: 16,
+            color: Color.black.opacity(0.05),
+            radius: 10,
             x: 0,
             y: 4
         )
@@ -105,7 +105,7 @@ struct StackedRestaurantCard: View {
                         // 店名文字，使用 fixedSize 防止省略号
                         Text(restaurant.name)
                             .font(.custom("ResourceHanRoundedCN-Bold", size: 18))
-                            .foregroundColor(Color(hex: "#1A1A1A"))
+                            .foregroundColor(AppTheme.Colors.darkText)
                             .fixedSize(horizontal: true, vertical: false)
                             .background(
                                 // 用于测量文字实际宽度
@@ -120,8 +120,8 @@ struct StackedRestaurantCard: View {
                         // 右侧淡出渐变遮罩（仅在文字超出时显示）
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                Color.white.opacity(0),
-                                AppTheme.Colors.milkWhite
+                                AppTheme.Colors.surfacePrimary.opacity(0),
+                                AppTheme.Colors.surfacePrimary
                             ]),
                             startPoint: .leading,
                             endPoint: .trailing
@@ -233,7 +233,7 @@ struct StackedRestaurantCard: View {
             // 评论文字
             Text(restaurant.review)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: "#7F8C8D"))  // 评论使用 #7F8C8D
+                .foregroundColor(AppTheme.Colors.mediumGray)
                 .lineLimit(2)
                 .lineSpacing(2)
         }
@@ -253,7 +253,7 @@ struct StackedRestaurantCard: View {
             ZStack {
                 // 圆形背景
                 Circle()
-                    .fill(Color.white)
+                    .fill(AppTheme.Colors.surfaceSecondary)
                     .frame(width: 36, height: 36)
                 
                 // 打钩图标 + 数字

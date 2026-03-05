@@ -460,7 +460,7 @@ struct ZodiacCardDetail: View {
     return ScrollView {
         VStack(spacing: 20) {
             RestaurantsCardPreview(viewModel: viewModel)
-                .background(Color.white)
+                .background(Color(hex: "#FFFFFF"))
                 .cornerRadius(20)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
                 .padding(.horizontal, 24)
@@ -469,13 +469,13 @@ struct ZodiacCardDetail: View {
                 .frame(height: 450)
             
             TimelineCardPreview(viewModel: viewModel)
-                .background(Color.white)
+                .background(Color(hex: "#FFFFFF"))
                 .cornerRadius(20)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
                 .padding(.horizontal, 24)
             
             ZodiacCardPreview(viewModel: viewModel)
-                .background(Color.white)
+                .background(Color(hex: "#FFFFFF"))
                 .cornerRadius(20)
                 .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
                 .padding(.horizontal, 24)

@@ -59,7 +59,7 @@ struct MilkyRatingView: View {
                         .overlay(
                             // 白色高光描边
                             Capsule()
-                                .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
+                                .stroke(Color(hex: "#FFFFFF").opacity(0.6), lineWidth: 0.5)
                         )
                     
                     // 填充层 - 使用 AppTheme accent 颜色（与智能搜索框边框一致）
@@ -81,7 +81,7 @@ struct MilkyRatingView: View {
                             let isFilled = fillWidth >= segmentPosition
                             
                             Rectangle()
-                                .fill(Color.white.opacity(isFilled ? 0 : 0.4))
+                                .fill(Color(hex: "#FFFFFF").opacity(isFilled ? 0 : 0.4))
                                 .frame(width: 1.5)
                                 .frame(maxHeight: .infinity)
                                 .animation(.easeInOut(duration: 0.1), value: isFilled)
