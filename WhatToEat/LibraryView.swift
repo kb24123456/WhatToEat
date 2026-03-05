@@ -74,10 +74,6 @@ struct LibraryView: View {
     @State private var filteredRestaurantsCache: [Restaurant] = []
     @State private var selectableCategories: [String] = []
     
-    // 首次加载标志，避免重复计算
-    @State private var hasInitialDataLoaded = false
-    @State private var isDataLoading = false
-    
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ZStack(alignment: .topLeading) {
@@ -143,17 +139,8 @@ struct LibraryView: View {
                 refreshFilteredRestaurants()
             }
             .onChange(of: restaurants, initial: true) { _, _ in
-                // 避免重复计算：如果正在加载或已加载完成，则跳过
-                guard !isDataLoading else { return }
-                
-                isDataLoading = true
-                
-                // 延迟到下一个 runloop，确保数据稳定
-                DispatchQueue.main.async {
-                    refreshDerivedData()
-                    hasInitialDataLoaded = true
-                    isDataLoading = false
-                }
+                // 启动首帧直接完成筛选与排序，避免首屏列表短暂出现错误顺序
+                refreshDerivedData()
             }
             .onChange(of: selectedDistrict) { _, _ in
                 refreshFilteredRestaurants()
@@ -803,13 +790,46 @@ private struct FilterBarView: View {
             case .smart:
                 let score1 = calculateSmartScore(distance: distance1, rating: rating1, createdAt: createdAt1)
                 let score2 = calculateSmartScore(distance: distance2, rating: rating2, createdAt: createdAt2)
-                return score1 > score2
+                if abs(score1 - score2) > 0.001 {
+                    return score1 > score2
+                }
+                if abs(distance1 - distance2) > 1 {
+                    return distance1 < distance2
+                }
+                if abs(rating1 - rating2) > 0.001 {
+                    return rating1 > rating2
+                }
+                if createdAt1 != createdAt2 {
+                    return createdAt1 > createdAt2
+                }
+                return restaurant1.id.uuidString < restaurant2.id.uuidString
             case .distance:
-                return distance1 < distance2
+                if abs(distance1 - distance2) > 1 {
+                    return distance1 < distance2
+                }
+                if abs(rating1 - rating2) > 0.001 {
+                    return rating1 > rating2
+                }
+                if createdAt1 != createdAt2 {
+                    return createdAt1 > createdAt2
+                }
+                return restaurant1.id.uuidString < restaurant2.id.uuidString
             case .rating:
-                return rating1 > rating2
+                if abs(rating1 - rating2) > 0.001 {
+                    return rating1 > rating2
+                }
+                if createdAt1 != createdAt2 {
+                    return createdAt1 > createdAt2
+                }
+                return restaurant1.id.uuidString < restaurant2.id.uuidString
             case .createdAt:
-                return createdAt1 > createdAt2
+                if createdAt1 != createdAt2 {
+                    return createdAt1 > createdAt2
+                }
+                if abs(rating1 - rating2) > 0.001 {
+                    return rating1 > rating2
+                }
+                return restaurant1.id.uuidString < restaurant2.id.uuidString
             }
         }
         

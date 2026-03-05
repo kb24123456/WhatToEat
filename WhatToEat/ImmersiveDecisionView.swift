@@ -9,6 +9,11 @@ enum ImmersiveDecisionStep: Int, CaseIterable {
     case ready = 3
 }
 
+private enum StepTransitionDirection {
+    case forward
+    case backward
+}
+
 // MARK: - 沉浸式决策视图
 struct ImmersiveDecisionView: View {
     @Environment(\.dismiss) private var dismiss
@@ -73,11 +78,19 @@ struct ImmersiveDecisionView: View {
         
         return Array(Set(districts)).sorted()
     }
+
+    private var canGoNextFromCategory: Bool {
+        !selectedCategories.isEmpty || mode == .dontWantToEat
+    }
     
     var body: some View {
         ZStack {
             // 背景层：弥散渐变
             DiffuseGradientBackground()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    dismissByBackgroundTap()
+                }
             
             // 内容层
             VStack(spacing: 0) {
@@ -189,13 +202,16 @@ struct ImmersiveDecisionView: View {
                 }
             }
             
-            // 下一步按钮
-            if !selectedCategories.isEmpty || mode == .dontWantToEat {
-                ImmersiveNextButton(title: "下一步") {
+            HStack(spacing: 12) {
+                ImmersiveBackButton(title: "上一步") {
+                    goToPreviousStep()
+                }
+
+                ImmersiveNextButton(title: "下一步", enabled: canGoNextFromCategory) {
                     goToNextStep()
                 }
-                .padding(.top, 20)
             }
+            .padding(.top, 20)
         }
     }
     
@@ -220,9 +236,14 @@ struct ImmersiveDecisionView: View {
                 }
             }
             
-            // 下一步按钮
-            ImmersiveNextButton(title: "下一步") {
-                goToNextStep()
+            HStack(spacing: 12) {
+                ImmersiveBackButton(title: "上一步") {
+                    goToPreviousStep()
+                }
+
+                ImmersiveNextButton(title: "下一步") {
+                    goToNextStep()
+                }
             }
             .padding(.top, 20)
         }
@@ -235,8 +256,14 @@ struct ImmersiveDecisionView: View {
                 .font(.system(size: 14))
                 .foregroundColor(AppTheme.Colors.textSecondary)
             
-            ImmersiveActionButton(title: "开始挑选") {
-                startSelection()
+            HStack(spacing: 12) {
+                ImmersiveBackButton(title: "上一步") {
+                    goToPreviousStep()
+                }
+
+                ImmersiveActionButton(title: "开始挑选") {
+                    startSelection()
+                }
             }
         }
     }
@@ -259,28 +286,25 @@ struct ImmersiveDecisionView: View {
     }
     
     // MARK: - 步骤切换动画（120fps优化）
-    private func transitionToNextStep() {
+    private func transitionToStep(_ targetStep: ImmersiveDecisionStep, direction: StepTransitionDirection) {
         guard !isTransitioning else { return }
         isTransitioning = true
         
         // 当前内容向四周散开消失 - 更快的退出动画
         withAnimation(.easeOut(duration: 0.2)) {
-            titleOffset = -40
+            titleOffset = direction == .forward ? -40 : 40
             titleOpacity = 0
-            optionsOffset = 40
+            optionsOffset = direction == .forward ? 40 : -40
             optionsOpacity = 0
         }
         
         // 延迟后显示新内容
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            // 更新步骤
-            if let nextStep = ImmersiveDecisionStep(rawValue: currentStep.rawValue + 1) {
-                currentStep = nextStep
-            }
+            currentStep = targetStep
             
             // 重置动画状态
-            titleOffset = -80
-            optionsOffset = 80
+            titleOffset = direction == .forward ? -80 : 80
+            optionsOffset = direction == .forward ? 80 : -80
             
             // 新内容弹入 - 更流畅的入场
             withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
@@ -308,7 +332,9 @@ struct ImmersiveDecisionView: View {
         
         // 延迟后进入下一步
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            transitionToNextStep()
+            if let nextStep = ImmersiveDecisionStep(rawValue: currentStep.rawValue + 1) {
+                transitionToStep(nextStep, direction: .forward)
+            }
         }
     }
     
@@ -344,7 +370,37 @@ struct ImmersiveDecisionView: View {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
-        transitionToNextStep()
+        if let nextStep = ImmersiveDecisionStep(rawValue: currentStep.rawValue + 1) {
+            transitionToStep(nextStep, direction: .forward)
+        }
+    }
+
+    // MARK: - 返回上一步
+    private func goToPreviousStep() {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+
+        guard let previousStep = ImmersiveDecisionStep(rawValue: currentStep.rawValue - 1) else { return }
+        transitionToStep(previousStep, direction: .backward)
+    }
+
+    // MARK: - 点击空白退出
+    private func dismissByBackgroundTap() {
+        guard !isTransitioning else { return }
+
+        let generator = UIImpactFeedbackGenerator(style: .soft)
+        generator.impactOccurred()
+
+        withAnimation(.easeIn(duration: 0.22)) {
+            titleOffset = -30
+            titleOpacity = 0
+            optionsOffset = 30
+            optionsOpacity = 0
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+            dismiss()
+        }
     }
     
     // MARK: - 开始挑选
@@ -480,6 +536,7 @@ struct ImmersiveTag: View {
 // MARK: - 沉浸式下一步按钮
 struct ImmersiveNextButton: View {
     let title: String
+    var enabled: Bool = true
     let action: () -> Void
     
     var body: some View {
@@ -497,6 +554,34 @@ struct ImmersiveNextButton: View {
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color(hex: "#FFFFFF"))
+            )
+        }
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
+        .buttonStyle(ImmersiveButtonStyle())
+    }
+}
+
+// MARK: - 沉浸式上一步按钮
+struct ImmersiveBackButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.left")
+                    .font(.system(size: 15, weight: .semibold))
+
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+            }
+            .foregroundColor(AppTheme.Colors.darkText)
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(hex: "#FFFFFF").opacity(0.9))
             )
         }
         .buttonStyle(ImmersiveButtonStyle())

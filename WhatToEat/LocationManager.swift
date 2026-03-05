@@ -56,6 +56,21 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         // 检查当前权限状态
         authorizationStatus = locationManager.authorizationStatus
+
+        // 启动即复用系统最近定位，避免首屏“智能排序”先乱序后回正
+        if let bootstrapLocation = locationManager.location {
+            locationCache = LocationCache(
+                location: bootstrapLocation,
+                timestamp: Date(),
+                cityName: currentCity
+            )
+            userLocation = bootstrapLocation
+        }
+
+        // 已有权限时静默刷新，逐步提高位置精度
+        if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
+            refreshLocationIfNeeded()
+        }
     }
     
     // MARK: - 权限管理

@@ -43,11 +43,6 @@ struct WhatToEatApp: App {
         DispatchQueue.global(qos: .utility).async {
             Self.setupRegionsFile()
         }
-        
-        // 预初始化键盘，避免首次输入框激活卡顿
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            let _ = UITextField()
-        }
     }
 
     private static func setupRegionsFile() {
@@ -90,6 +85,9 @@ struct WhatToEatApp: App {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(resolvedAppearance)
+                .onAppear {
+                    KeyboardWarmupService.shared.warmUpIfNeeded()
+                }
         }
         .modelContainer(sharedModelContainer)
     }

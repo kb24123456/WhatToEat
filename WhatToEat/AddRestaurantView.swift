@@ -206,8 +206,6 @@ struct AddRestaurantView: View {
                     topLeadingColor: Color.fixedHex("#17365A"),
                     topTrailingColor: Color.fixedHex("#2C4256"),
                     bottomColor: Color.fixedHex("#0B1422"),
-                    warmGlowColor: Color.fixedHex("#3B3140"),
-                    useGlobalDarkPalette: false,
                     blurRadius: 90,
                     colorOpacity: 0.36
                 )
