@@ -135,21 +135,28 @@ private class RestaurantSpatialIndex {
 
 // MARK: - 聚类缓存键
 private struct ClusterCacheKey: Hashable {
-    let minLat: Double
-    let maxLat: Double
-    let minLon: Double
-    let maxLon: Double
+    let centerLatBucket: Int
+    let centerLonBucket: Int
+    let spanLatBucket: Int
+    let spanLonBucket: Int
     let zoomLevel: MapZoomLevel
     
     init(region: MKCoordinateRegion, zoomLevel: MapZoomLevel) {
-        let halfLat = region.span.latitudeDelta / 2
-        let halfLon = region.span.longitudeDelta / 2
-        self.minLat = region.center.latitude - halfLat
-        self.maxLat = region.center.latitude + halfLat
-        self.minLon = region.center.longitude - halfLon
-        self.maxLon = region.center.longitude + halfLon
+        let maxSpan = max(region.span.latitudeDelta, region.span.longitudeDelta)
+        let centerStep = max(maxSpan * (zoomLevel == .close ? 0.08 : 0.14), zoomLevel == .close ? 0.0018 : 0.006)
+        let spanStep = max(maxSpan * 0.1, zoomLevel == .close ? 0.0012 : 0.004)
+
+        self.centerLatBucket = Int((region.center.latitude / centerStep).rounded())
+        self.centerLonBucket = Int((region.center.longitude / centerStep).rounded())
+        self.spanLatBucket = Int((region.span.latitudeDelta / spanStep).rounded())
+        self.spanLonBucket = Int((region.span.longitudeDelta / spanStep).rounded())
         self.zoomLevel = zoomLevel
     }
+}
+
+private struct ClusterGridKey: Hashable {
+    let x: Int
+    let y: Int
 }
 
 // MARK: - 餐厅地图视图 (食图页面)
@@ -181,17 +188,16 @@ struct RestaurantMapView: View {
     @State private var lastClusteringRegion: MKCoordinateRegion?
     @State private var clusteringThrottleTimer: Timer?
     @State private var isClusteringPending: Bool = false
+    @State private var lastUpdateTimestamp: CFTimeInterval = 0
     
     // MARK: - 滑动检测与延迟计算
     @State private var isMapDragging: Bool = false
     @State private var dragEndTimer: Timer?
-    private let dragEndDelay: TimeInterval = 0.75  // 滑动停止后等待0.75秒再计算
-    
-    // 最大显示餐厅数量
-    private let maxVisibleRestaurants = 10
+    private let dragEndDelay: TimeInterval = 0.12  // 滑动停止后快速恢复精细渲染
+    @State private var lastDragUpdateRegion: MKCoordinateRegion?
     
     // 可视区域边距比例（上下渐变区域不显示餐厅）
-    private let visibleAreaInsetRatio: CGFloat = 0.25
+    private let visibleAreaInsetRatio: CGFloat = 0.0
     
     // 地图缩放级别对应的聚类距离
     private var dynamicClusteringDistance: CLLocationDistance {
@@ -221,6 +227,158 @@ struct RestaurantMapView: View {
         } else {
             return .close
         }
+    }
+
+    // 网格聚合步长（单位：经纬度）- 固定分档，避免轻微滑动导致聚合抖动
+    private var clusteringGridStep: Double {
+        switch currentZoomLevel {
+        case .far:
+            return 0.20
+        case .medium:
+            return 0.06
+        case .close:
+            return 0.0
+        }
+    }
+
+    // 近景时仍允许“局部再聚合”，避免高密度点位遮挡；超近景则完全展开单点
+    private var closeRangeClusteringStep: Double {
+        guard let region = visibleRegion else { return 0.0018 }
+        let spanDelta = max(region.span.latitudeDelta, region.span.longitudeDelta)
+        if spanDelta < 0.012 { return 0.0 }      // 超近景：全部单点
+        if spanDelta < 0.022 { return 0.0009 }   // 约 100m 级别网格
+        if spanDelta < 0.04 { return 0.0014 }    // 约 155m 级别网格
+        return 0.0020                              // 约 220m 级别网格
+    }
+
+    private var effectiveClusteringGridStep: Double {
+        currentZoomLevel == .close ? closeRangeClusteringStep : clusteringGridStep
+    }
+
+    // 近距离防重叠：仅对部分点展示名称和评论，其余只显示图标
+    private func detailVisibleRestaurantIDs(from clusters: [RestaurantCluster]) -> Set<UUID> {
+        guard currentZoomLevel == .close else { return [] }
+
+        let candidates = clusters.compactMap { cluster -> Restaurant? in
+            guard !cluster.isCluster else { return nil }
+            return cluster.restaurants.first
+        }
+        guard !candidates.isEmpty else { return [] }
+
+        var ids: Set<UUID> = []
+        ids.reserveCapacity(max(2, candidates.count / 3))
+        var selected: [Restaurant] = []
+        let thresholds = detailCollisionThresholds(candidateCount: candidates.count)
+        let detailBudget = detailDisplayBudget(candidateCount: candidates.count)
+
+        // 已选中的餐厅优先展示完整信息
+        if let selectedRestaurant {
+            ids.insert(selectedRestaurant.id)
+            selected.append(selectedRestaurant)
+        }
+
+        // 打卡次数高的优先展示，提升信息价值密度
+        for restaurant in candidates.sorted(by: { $0.checkInCount > $1.checkInCount }) {
+            if ids.contains(restaurant.id) { continue }
+            if selected.count >= detailBudget { break }
+
+            var overlaps = false
+            for kept in selected {
+                let (verticalMeters, horizontalMeters) = projectedDistanceMeters(between: restaurant, and: kept)
+                if verticalMeters < thresholds.vertical && horizontalMeters < thresholds.horizontal {
+                    overlaps = true
+                    break
+                }
+            }
+
+            if !overlaps {
+                ids.insert(restaurant.id)
+                selected.append(restaurant)
+            }
+        }
+
+        // 小样本场景兜底：若当前画面仅有少量点，且彼此间距足够，至少展示 2 个详情
+        let minimumVisibleDetails = candidates.count <= 6 ? min(2, candidates.count) : 1
+        if selected.count < minimumVisibleDetails {
+            let relaxed = (horizontal: thresholds.horizontal * 0.72, vertical: thresholds.vertical * 0.68)
+            for restaurant in candidates.sorted(by: { $0.checkInCount > $1.checkInCount }) {
+                if ids.contains(restaurant.id) { continue }
+                if selected.count >= detailBudget { break }
+
+                var overlaps = false
+                for kept in selected {
+                    let (verticalMeters, horizontalMeters) = projectedDistanceMeters(between: restaurant, and: kept)
+                    if verticalMeters < relaxed.vertical && horizontalMeters < relaxed.horizontal {
+                        overlaps = true
+                        break
+                    }
+                }
+
+                if !overlaps {
+                    ids.insert(restaurant.id)
+                    selected.append(restaurant)
+                }
+
+                if selected.count >= minimumVisibleDetails {
+                    break
+                }
+            }
+        }
+
+        return ids
+    }
+
+    private func detailDisplayBudget(candidateCount: Int) -> Int {
+        switch candidateCount {
+        case 0...8:
+            return 8
+        case 9...14:
+            return 6
+        case 15...24:
+            return 4
+        case 25...36:
+            return 3
+        case 37...60:
+            return 2
+        default:
+            return 1
+        }
+    }
+
+    private func detailCollisionThresholds(candidateCount: Int) -> (horizontal: CLLocationDistance, vertical: CLLocationDistance) {
+        guard let region = visibleRegion else { return (horizontal: 220, vertical: 130) }
+        let spanDelta = max(region.span.latitudeDelta, region.span.longitudeDelta)
+        let baseHorizontal: CLLocationDistance
+        let baseVertical: CLLocationDistance
+        if spanDelta < 0.015 {
+            baseHorizontal = 180
+            baseVertical = 110
+        } else if spanDelta < 0.03 {
+            baseHorizontal = 220
+            baseVertical = 130
+        } else {
+            baseHorizontal = 260
+            baseVertical = 150
+        }
+        let crowdFactor: Double
+        if candidateCount > 80 {
+            crowdFactor = 1.45
+        } else if candidateCount > 45 {
+            crowdFactor = 1.25
+        } else {
+            crowdFactor = 1.0
+        }
+        return (
+            horizontal: min(baseHorizontal * crowdFactor, 420),
+            vertical: min(baseVertical * crowdFactor, 260)
+        )
+    }
+
+    private func projectedDistanceMeters(between lhs: Restaurant, and rhs: Restaurant) -> (vertical: CLLocationDistance, horizontal: CLLocationDistance) {
+        let latMeters = abs(lhs.latitude - rhs.latitude) * 111_000
+        let midLatitude = ((lhs.latitude + rhs.latitude) / 2) * .pi / 180
+        let lonMeters = abs(lhs.longitude - rhs.longitude) * 111_000 * max(cos(midLatitude), 0.35)
+        return (vertical: latMeters, horizontal: lonMeters)
     }
     
     // 选中的餐厅（用于详情抽屉）
@@ -276,10 +434,15 @@ struct RestaurantMapView: View {
             
             // 计算中间可视区域的边界（排除上下 25% 的渐变区域）
             let visibleHalfLat = halfLat * (1.0 - visibleAreaInsetRatio * 2)
-            let minLat = region.center.latitude - visibleHalfLat
-            let maxLat = region.center.latitude + visibleHalfLat
-            let minLon = region.center.longitude - halfLon
-            let maxLon = region.center.longitude + halfLon
+            // 添加可视区缓冲，减少轻微拖动导致的边缘抖动重聚合
+            let preloadRatio = currentZoomLevel == .close ? 0.18 : 0.24
+            let latPadding = visibleHalfLat * preloadRatio
+            let lonPadding = halfLon * preloadRatio
+
+            let minLat = max(-90, region.center.latitude - visibleHalfLat - latPadding)
+            let maxLat = min(90, region.center.latitude + visibleHalfLat + latPadding)
+            let minLon = max(-180, region.center.longitude - halfLon - lonPadding)
+            let maxLon = min(180, region.center.longitude + halfLon + lonPadding)
             
             // 使用空间索引查询
             if let index = spatialIndex {
@@ -405,6 +568,7 @@ struct RestaurantMapView: View {
                         isDestination: true,
                         simplified: false,
                         showBubble: true,
+                        showTitle: true,
                         onSelect: { _ in }
                     )
                 }
@@ -412,11 +576,14 @@ struct RestaurantMapView: View {
                 // 分层渲染策略：根据缩放级别决定显示内容
                 let zoomLevel = currentZoomLevel
                 let clusters = clusteredRestaurants
+                let shouldRenderLightweight = isMapDragging || isClusteringPending
+                let detailVisibleIDs = detailVisibleRestaurantIDs(from: clusters)
+                let farCityClusters = cityLevelClusters(from: clusters)
                 
                 switch zoomLevel {
                 case .far:
-                    // 大范围：只显示城市级聚合点（最多5个）
-                    ForEach(Array(clusters.prefix(5))) { cluster in
+                    // 大范围：仅显示城市级聚合，不显示单个地点图标
+                    ForEach(farCityClusters) { cluster in
                         mapAnnotation(for: cluster, simplified: true, showBubble: false)
                     }
                     
@@ -427,9 +594,15 @@ struct RestaurantMapView: View {
                     }
                     
                 case .close:
-                    // 小范围：显示完整大头针（显示气泡）
+                    // 小范围：静止时显示完整信息，拖动过程中改为轻量渲染保证流畅
                     ForEach(clusters) { cluster in
-                        mapAnnotation(for: cluster, simplified: false, showBubble: true)
+                        let shouldShowDetail = cluster.representativeRestaurantID.map { detailVisibleIDs.contains($0) } ?? false
+                        mapAnnotation(
+                            for: cluster,
+                            simplified: shouldRenderLightweight,
+                            showBubble: !shouldRenderLightweight && shouldShowDetail,
+                            showTitle: !shouldRenderLightweight && shouldShowDetail
+                        )
                     }
                 }
             }
@@ -501,11 +674,21 @@ struct RestaurantMapView: View {
     
     // MARK: - 地图标注
     @MapContentBuilder
-    private func mapAnnotation(for cluster: RestaurantCluster, simplified: Bool = false, showBubble: Bool = true) -> some MapContent {
+    private func mapAnnotation(
+        for cluster: RestaurantCluster,
+        simplified: Bool = false,
+        showBubble: Bool = true,
+        showTitle: Bool = true
+    ) -> some MapContent {
         if cluster.isCluster {
             Annotation("", coordinate: cluster.coordinate) {
-                ClusterAnnotationView(count: cluster.restaurants.count)
-                    .frame(minWidth: 50, minHeight: 50) // 确保显示完整
+                if let label = cluster.clusterLabel, !label.isEmpty {
+                    CityClusterAnnotationView(cityName: label, count: cluster.restaurants.count)
+                        .frame(minWidth: 116, minHeight: 56, alignment: .leading)
+                } else {
+                    ClusterAnnotationView(count: cluster.restaurants.count)
+                        .frame(minWidth: 50, minHeight: 50) // 确保显示完整
+                }
             }
         } else if let restaurant = cluster.restaurants.first {
             let isDest = isNavigating && selectedRestaurant?.id == restaurant.id
@@ -516,6 +699,7 @@ struct RestaurantMapView: View {
                     isDestination: isDest,
                     simplified: simplified,
                     showBubble: showBubble,
+                    showTitle: showTitle,
                     onSelect: handleRestaurantSelection
                 )
                 .frame(minWidth: 60, minHeight: simplified ? 50 : 100) // 确保显示完整，特别是气泡和名称
@@ -806,54 +990,195 @@ struct RestaurantMapView: View {
         }
     }
     
-    // MARK: - 计算聚合点（简化版：每个聚类只显示一家代表餐厅）
+    // MARK: - 计算聚合点（网格聚合，O(n)）
     private func calculateClusters(from restaurants: [Restaurant]) -> [RestaurantCluster] {
         guard !restaurants.isEmpty else { return [] }
-        
-        var clusters: [RestaurantCluster] = []
-        var processed = Set<UUID>()
-        
-        // 使用坐标差值近似计算距离，避免频繁的 CLLocation 计算
-        let clusteringDelta = dynamicClusteringDistance / 111000.0 // 粗略转换为度数（1度≈111km）
-        
-        for restaurant in restaurants {
-            guard !processed.contains(restaurant.id) else { continue }
-            
-            // 找到附近的所有餐厅（使用简单的坐标差值比较）
-            var nearbyRestaurants: [Restaurant] = [restaurant]
-            processed.insert(restaurant.id)
-            
-            for other in restaurants {
-                guard !processed.contains(other.id) else { continue }
-                
-                // 简化的距离判断：使用坐标差值近似
-                let latDiff = abs(restaurant.latitude - other.latitude)
-                let lonDiff = abs(restaurant.longitude - other.longitude)
-                
-                // 如果在聚类范围内（使用简单的矩形判断代替精确距离）
-                if latDiff < clusteringDelta && lonDiff < clusteringDelta {
-                    nearbyRestaurants.append(other)
-                    processed.insert(other.id)
-                }
-            }
-            
-            // 简化：每个聚类只显示第一家餐厅，不显示聚类数量
-            // 用户放大后自然能看到其他餐厅
-            let representativeRestaurant = nearbyRestaurants.first!
-            
-            let cluster = RestaurantCluster(
-                id: representativeRestaurant.id,
-                coordinate: CLLocationCoordinate2D(
-                    latitude: representativeRestaurant.latitude,
-                    longitude: representativeRestaurant.longitude
-                ),
-                restaurants: [representativeRestaurant], // 只包含代表餐厅
-                isCluster: false // 标记为非聚类，使用普通大头针显示
-            )
-            clusters.append(cluster)
+
+        let step = adaptiveClusteringStep(restaurantCount: restaurants.count)
+
+        // 超近景直接展示所有单点，确保不会遗漏地点
+        if step <= 0 {
+            return pointClusters(from: restaurants)
         }
-        
-        return clusters
+        var buckets: [ClusterGridKey: [Restaurant]] = [:]
+        buckets.reserveCapacity(restaurants.count / 2 + 1)
+
+        for restaurant in restaurants {
+            let key = ClusterGridKey(
+                x: Int(floor(restaurant.latitude / step)),
+                y: Int(floor(restaurant.longitude / step))
+            )
+            buckets[key, default: []].append(restaurant)
+        }
+
+        var clusters: [RestaurantCluster] = []
+        clusters.reserveCapacity(buckets.count)
+
+        for (key, groupedRestaurants) in buckets {
+            if groupedRestaurants.count == 1, let restaurant = groupedRestaurants.first {
+                clusters.append(singleCluster(for: restaurant))
+                continue
+            }
+
+            let center = averageCoordinate(for: groupedRestaurants)
+            let representative = groupedRestaurants.max { lhs, rhs in
+                lhs.checkInCount < rhs.checkInCount
+            } ?? groupedRestaurants[0]
+
+            clusters.append(
+                RestaurantCluster(
+                    id: "cluster-\(currentZoomLevel.rawValue)-\(Int((step * 100_000).rounded()))-\(key.x)-\(key.y)",
+                    coordinate: center,
+                    restaurants: groupedRestaurants.sorted { $0.checkInCount > $1.checkInCount },
+                    isCluster: true,
+                    representativeRestaurantID: representative.id,
+                    clusterLabel: nil
+                )
+            )
+        }
+
+        return clusters.sorted { lhs, rhs in
+            if lhs.isCluster != rhs.isCluster {
+                return lhs.isCluster
+            }
+            if lhs.restaurants.count != rhs.restaurants.count {
+                return lhs.restaurants.count > rhs.restaurants.count
+            }
+            return lhs.id < rhs.id
+        }
+    }
+
+    private func adaptiveClusteringStep(restaurantCount: Int) -> Double {
+        var step = effectiveClusteringGridStep
+        guard currentZoomLevel == .close else { return step }
+        guard let region = visibleRegion else { return step }
+
+        let spanDelta = max(region.span.latitudeDelta, region.span.longitudeDelta)
+
+        // 超近景保持全展开，避免用户放大后仍然看不到单点
+        if spanDelta < 0.006 {
+            return 0.0
+        }
+
+        // 高密度区域优先聚合，避免名称/评论/图标堆叠
+        if restaurantCount >= 70 {
+            step = max(step, 0.0030)
+        } else if restaurantCount >= 50 {
+            step = max(step, 0.0025)
+        } else if restaurantCount >= 34 {
+            step = max(step, 0.0021)
+        } else if restaurantCount >= 24 {
+            step = max(step, 0.0017)
+        }
+
+        // 接近超近景时降低聚合强度，保证可逐步展开
+        if spanDelta < 0.012 {
+            step = min(step, 0.0010)
+        }
+
+        return step
+    }
+
+    private func pointClusters(from restaurants: [Restaurant]) -> [RestaurantCluster] {
+        restaurants
+            .sorted { $0.checkInCount > $1.checkInCount }
+            .map { singleCluster(for: $0) }
+    }
+
+    private func singleCluster(for restaurant: Restaurant) -> RestaurantCluster {
+        RestaurantCluster(
+            id: "point-\(restaurant.id.uuidString)",
+            coordinate: CLLocationCoordinate2D(
+                latitude: restaurant.latitude,
+                longitude: restaurant.longitude
+            ),
+            restaurants: [restaurant],
+            isCluster: false,
+            representativeRestaurantID: restaurant.id,
+            clusterLabel: nil
+        )
+    }
+
+    private func averageCoordinate(for restaurants: [Restaurant]) -> CLLocationCoordinate2D {
+        guard !restaurants.isEmpty else {
+            return CLLocationCoordinate2D(latitude: 0, longitude: 0)
+        }
+        let lat = restaurants.reduce(0.0) { $0 + $1.latitude } / Double(restaurants.count)
+        let lon = restaurants.reduce(0.0) { $0 + $1.longitude } / Double(restaurants.count)
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    // 大范围展示：按城市聚合，确保一个城市只显示一个数字图标
+    private func cityLevelClusters(from clusters: [RestaurantCluster]) -> [RestaurantCluster] {
+        var groupedByCity: [String: [Restaurant]] = [:]
+        groupedByCity.reserveCapacity(max(1, clusters.count / 2))
+
+        for cluster in clusters {
+            for restaurant in cluster.restaurants {
+                let cityKey = normalizedCityKey(for: restaurant)
+                groupedByCity[cityKey, default: []].append(restaurant)
+            }
+        }
+
+        var cityClusters: [RestaurantCluster] = []
+        cityClusters.reserveCapacity(groupedByCity.count)
+
+        for (cityKey, cityRestaurants) in groupedByCity {
+            guard !cityRestaurants.isEmpty else { continue }
+            let sorted = cityRestaurants.sorted { $0.checkInCount > $1.checkInCount }
+            let representative = sorted.first
+            cityClusters.append(
+                RestaurantCluster(
+                    id: "city-\(cityKey)",
+                    coordinate: averageCoordinate(for: sorted),
+                    restaurants: sorted,
+                    isCluster: true,
+                    representativeRestaurantID: representative?.id,
+                    clusterLabel: cityKey
+                )
+            )
+        }
+
+        return cityClusters.sorted { lhs, rhs in
+            if lhs.restaurants.count != rhs.restaurants.count {
+                return lhs.restaurants.count > rhs.restaurants.count
+            }
+            return lhs.id < rhs.id
+        }
+    }
+
+    private func normalizedCityKey(for restaurant: Restaurant) -> String {
+        let trimmedCity = restaurant.city.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedCity.isEmpty {
+            return normalizeCityName(trimmedCity)
+        }
+
+        let trimmedDistrict = restaurant.district.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedDistrict.isEmpty {
+            return "unknown-\(trimmedDistrict)"
+        }
+        return "unknown"
+    }
+
+    private func normalizeCityName(_ city: String) -> String {
+        var normalized = city
+        let suffixes = [
+            "特别行政区",
+            "维吾尔自治区",
+            "壮族自治区",
+            "回族自治区",
+            "自治区",
+            "自治州",
+            "地区",
+            "盟",
+            "省",
+            "市"
+        ]
+        for suffix in suffixes where normalized.hasSuffix(suffix) {
+            normalized = String(normalized.dropLast(suffix.count))
+            break
+        }
+        return normalized.isEmpty ? city : normalized
     }
     
     // MARK: - 计算两点距离（米）
@@ -1064,28 +1389,56 @@ struct RestaurantMapView: View {
             initialCenterCoordinate = newCenter
         }
         
-        // 如果正在滑动，不立即计算，等待滑动停止
+        // 拖动/缩放过程中按固定频率刷新聚合，保证视觉连续
+        let now = CACurrentMediaTime()
         if isMapDragging {
+            let minUpdateInterval: CFTimeInterval = currentZoomLevel == .close ? 0.13 : 0.22
+            guard now - lastUpdateTimestamp > minUpdateInterval else { return }
+
+            if let lastRegion = lastDragUpdateRegion {
+                let movedDistance = calculateDistance(from: lastRegion.center, to: newRegion.center)
+                let lastSpan = max(lastRegion.span.latitudeDelta, lastRegion.span.longitudeDelta)
+                let currentSpan = max(newRegion.span.latitudeDelta, newRegion.span.longitudeDelta)
+                let spanRatio = lastSpan > 0 ? abs(currentSpan - lastSpan) / lastSpan : 1
+                let movementThreshold: CLLocationDistance = currentZoomLevel == .close ? 220 : 420
+
+                if movedDistance < movementThreshold && spanRatio < 0.22 {
+                    return
+                }
+            }
+
+            lastUpdateTimestamp = now
+            lastDragUpdateRegion = newRegion
+            scheduleClusteringUpdate(
+                delay: currentZoomLevel == .close ? 0.08 : 0.15,
+                allowDuringDrag: true
+            )
             return
+        }
+
+        if shouldRecalculateClusters() {
+            lastUpdateTimestamp = now
+            scheduleClusteringUpdate(delay: 0.08, allowDuringDrag: true)
         }
     }
     
     // MARK: - 滑动检测处理
     private func handleMapDragStart() {
         isMapDragging = true
+        lastDragUpdateRegion = visibleRegion
         
         // 取消之前的计时器
         dragEndTimer?.invalidate()
     }
     
     private func handleMapDragEnd() {
-        // 延迟标记滑动结束（防止惯性滑动），等待0.75秒后重新开始计算
+        // 延迟标记滑动结束（防止惯性滑动）
         dragEndTimer?.invalidate()
         dragEndTimer = Timer.scheduledTimer(withTimeInterval: dragEndDelay, repeats: false) { _ in
             Task { @MainActor in
                 self.isMapDragging = false
-                // 直接触发聚类计算
-                self.scheduleClusteringUpdate()
+                self.lastDragUpdateRegion = nil
+                self.scheduleClusteringUpdate(delay: 0.03, allowDuringDrag: true)
             }
         }
     }
@@ -1123,14 +1476,21 @@ struct RestaurantMapView: View {
             to: currentRegion.center
         )
         
-        // 如果移动超过阈值，需要重新计算
-        let threshold = dynamicClusteringDistance * 0.5
-        return centerDistance > threshold
+        let currentSpan = max(currentRegion.span.latitudeDelta, currentRegion.span.longitudeDelta)
+        let lastSpan = max(lastRegion.span.latitudeDelta, lastRegion.span.longitudeDelta)
+        let spanDeltaRatio = lastSpan > 0 ? abs(currentSpan - lastSpan) / lastSpan : 1
+
+        // 小幅平移和极小缩放变化时复用缓存，降低 CPU 开销
+        let moveThreshold = max(
+            dynamicClusteringDistance * (currentZoomLevel == .close ? 0.55 : 0.48),
+            currentZoomLevel == .close ? 220 : 280
+        )
+        let zoomThreshold = currentZoomLevel == .close ? 0.20 : 0.15
+        return centerDistance > moveThreshold || spanDeltaRatio > zoomThreshold
     }
     
-    private func scheduleClusteringUpdate() {
-        // 如果正在滑动，不执行计算
-        if isMapDragging {
+    private func scheduleClusteringUpdate(delay: TimeInterval = 0.12, allowDuringDrag: Bool = false) {
+        if isMapDragging && !allowDuringDrag {
             return
         }
         
@@ -1139,8 +1499,8 @@ struct RestaurantMapView: View {
         // 取消之前的定时器
         clusteringThrottleTimer?.invalidate()
         
-        // 延迟 0.3 秒后执行聚类计算
-        clusteringThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+        // 延迟后执行聚类计算（拖动期间更短，静止后更精细）
+        clusteringThrottleTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { _ in
             self.performClustering()
         }
     }
@@ -1164,15 +1524,22 @@ struct RestaurantMapView: View {
         }
         
         let filtered = filterRestaurants()
-        let limitedRestaurants = Array(filtered.prefix(maxVisibleRestaurants))
-        let clusters = calculateClusters(from: limitedRestaurants)
+        let clusters = calculateClusters(from: filtered)
         
         // 更新 UI
-        cachedClusters = clusters
-        lastClusteringRegion = region
-        clusterCache[cacheKey] = clusters
-        isClusteringPending = false
-        
+        let applyClusters = {
+            cachedClusters = clusters
+            lastClusteringRegion = region
+            clusterCache[cacheKey] = clusters
+            isClusteringPending = false
+        }
+        let animation: Animation = isMapDragging
+            ? .linear(duration: 0.1)
+            : .spring(response: 0.24, dampingFraction: 0.9)
+        withAnimation(animation) {
+            applyClusters()
+        }
+
         // 限制缓存大小，避免内存溢出
         if clusterCache.count > 50 {
             clusterCache.removeAll(keepingCapacity: true)
@@ -1204,7 +1571,7 @@ struct RestaurantMapView: View {
 }
 
 // MARK: - 地图缩放级别
-enum MapZoomLevel {
+enum MapZoomLevel: Int, Hashable {
     case far      // 大范围
     case medium   // 中等范围
     case close    // 小范围
@@ -1212,10 +1579,12 @@ enum MapZoomLevel {
 
 // MARK: - 餐厅聚合模型
 struct RestaurantCluster: Identifiable {
-    let id: UUID
+    let id: String
     let coordinate: CLLocationCoordinate2D
     let restaurants: [Restaurant]
     let isCluster: Bool
+    let representativeRestaurantID: UUID?
+    let clusterLabel: String?
 }
 
 // MARK: - Misty Oreo 大头针组件 (GourmetAnnotation)
@@ -1226,7 +1595,8 @@ struct GourmetAnnotation: View, Equatable {
         lhs.isNavigating == rhs.isNavigating &&
         lhs.isDestination == rhs.isDestination &&
         lhs.simplified == rhs.simplified &&
-        lhs.showBubble == rhs.showBubble
+        lhs.showBubble == rhs.showBubble &&
+        lhs.showTitle == rhs.showTitle
     }
 
     let restaurant: Restaurant
@@ -1234,6 +1604,7 @@ struct GourmetAnnotation: View, Equatable {
     let isDestination: Bool
     let simplified: Bool
     let showBubble: Bool
+    let showTitle: Bool
     @State private var appearScale: CGFloat = 0.0
     @State private var appearOffset: CGFloat = 20
     var onSelect: (Restaurant) -> Void
@@ -1340,7 +1711,7 @@ struct GourmetAnnotation: View, Equatable {
                 .opacity(appearScale)
 
             // 餐厅名称
-            if !simplified {
+            if !simplified && showTitle {
                 Text(restaurant.name)
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(isCheckedIn ? AppTheme.Colors.xhsRed : AppTheme.Colors.darkText)
@@ -1352,10 +1723,14 @@ struct GourmetAnnotation: View, Equatable {
             }
         }
         .onAppear {
+            if simplified || UIAccessibility.isReduceMotionEnabled {
+                appearScale = 1.0
+                appearOffset = 0
+                return
+            }
             appearScale = 0.0
-            appearOffset = 20
-            let delay = Double.random(in: 0.0...0.3)
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(delay)) {
+            appearOffset = 14
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 appearScale = 1.0
                 appearOffset = 0
             }
@@ -1419,32 +1794,57 @@ struct ClusterAnnotationView: View {
     let count: Int
     
     var body: some View {
+        let width: CGFloat = count >= 100 ? 64 : (count >= 10 ? 58 : 52)
+
         ZStack {
-            // 外圈光晕效果
-            Circle()
-                .fill(AppTheme.Colors.accent.opacity(0.15))
-                .frame(width: 56, height: 56)
-            
-            // 主圆形背景
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            AppTheme.Colors.accent,
-                            AppTheme.Colors.accent.opacity(0.8)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+            Capsule()
+                .fill(.white.opacity(0.5))
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(.white.opacity(0.85), lineWidth: 1)
                 )
-                .frame(width: 44, height: 44)
-                .shadow(color: AppTheme.Colors.accent.opacity(0.4), radius: 8, x: 0, y: 4)
-            
-            // 数量文字
-            Text("\(count)")
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .overlay(
+                    Capsule()
+                        .stroke(.black.opacity(0.05), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
+                .frame(width: width, height: 44)
+
+            Text(count, format: .number)
+                .font(.system(size: 17, weight: .black, design: .rounded))
+                .foregroundStyle(.black.opacity(0.9))
+                .contentTransition(.numericText())
         }
+        .compositingGroup()
+    }
+}
+
+struct CityClusterAnnotationView: View {
+    let cityName: String
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ClusterAnnotationView(count: count)
+
+            Text(cityName)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.black.opacity(0.82))
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule()
+                        .fill(.white.opacity(0.48))
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(.white.opacity(0.85), lineWidth: 1)
+                        )
+                )
+        }
+        .compositingGroup()
     }
 }
 

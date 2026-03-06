@@ -91,7 +91,7 @@ struct ExpandedCardOverlay<Content: View>: View {
     private let verticalInset: CGFloat = 32
     private let minHeight: CGFloat = 300
     private let maxHeightRatio: CGFloat = 0.88
-    private let headerHeight: CGFloat = 66
+    private let headerHeight: CGFloat = 50
     private let contentBottomPadding: CGFloat = 26
     private let contentTopPadding: CGFloat = 6
 
@@ -119,12 +119,6 @@ struct ExpandedCardOverlay<Content: View>: View {
                 }
 
                 VStack(spacing: 0) {
-                    Capsule()
-                        .fill(Color.black.opacity(0.13))
-                        .frame(width: 42, height: 5)
-                        .padding(.top, 10)
-                        .padding(.bottom, 8)
-
                     HStack(spacing: 12) {
                         Text(title)
                             .font(.system(size: 18, weight: .bold, design: .rounded))
@@ -147,6 +141,7 @@ struct ExpandedCardOverlay<Content: View>: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                     .padding(.horizontal, 20)
+                    .padding(.top, 18)
                     .padding(.bottom, 10)
 
                     Group {
@@ -203,6 +198,7 @@ struct ExpandedCardOverlay<Content: View>: View {
                 )
             }
             .onAppear {
+                NotificationCenter.default.post(name: .hideTabBar, object: nil)
                 // 使用延迟确保布局计算完成后再开始动画，减少首次卡顿
                 DispatchQueue.main.async {
                     withAnimation(.easeOut(duration: 0.2)) {
@@ -230,6 +226,7 @@ struct ExpandedCardOverlay<Content: View>: View {
                 }
             }
             .onDisappear {
+                NotificationCenter.default.post(name: .restoreTabBar, object: nil)
                 // 移除键盘监听
                 NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
                 NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillHideNotification, object: nil)

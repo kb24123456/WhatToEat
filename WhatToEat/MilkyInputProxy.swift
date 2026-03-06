@@ -7,7 +7,6 @@ import Combine
 @MainActor
 final class InputProxyManager: ObservableObject {
     static let shared = InputProxyManager()
-    static let smartInputProxySettingKey = AppSettingsKeys.smartInputProxyEnabled
     
     // MARK: - 代理状态
     /// 是否激活吸附栏模式
@@ -36,12 +35,7 @@ final class InputProxyManager: ObservableObject {
     }
 
     static func isSmartInputProxyEnabled() -> Bool {
-        let defaults = UserDefaults.standard
-        // 未设置时默认开启，保持现有交互习惯
-        guard defaults.object(forKey: smartInputProxySettingKey) != nil else {
-            return true
-        }
-        return defaults.bool(forKey: smartInputProxySettingKey)
+        true
     }
     
     // MARK: - 键盘高度监听

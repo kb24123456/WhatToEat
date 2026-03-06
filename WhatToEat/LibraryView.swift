@@ -73,6 +73,13 @@ struct LibraryView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var filteredRestaurantsCache: [Restaurant] = []
     @State private var selectableCategories: [String] = []
+    @State private var activeFilterDropdown: FilterDropdownType?
+    @State private var filterButtonFrames: [FilterDropdownType: CGRect] = [:]
+    @State private var libraryRootGlobalFrame: CGRect = .zero
+    @State private var isRepairingCityAssignments = false
+
+    private let dropdownSpring = Animation.spring(response: 0.34, dampingFraction: 0.82, blendDuration: 0.08)
+    private let listRefreshSpring = Animation.spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.12)
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -106,17 +113,53 @@ struct LibraryView: View {
                         selectedType: $selectedType,
                         sortOption: $sortOption,
                         categories: selectableCategories,
-                        districts: currentDistricts
+                        districts: currentDistricts,
+                        activeDropdown: activeFilterDropdown,
+                        onToggleDropdown: { dropdown in
+                            let generator = UIImpactFeedbackGenerator(style: .soft)
+                            generator.impactOccurred()
+                            withAnimation(dropdownSpring) {
+                                activeFilterDropdown = activeFilterDropdown == dropdown ? nil : dropdown
+                            }
+                        },
+                        onButtonFrameChange: { dropdown, frame in
+                            filterButtonFrames[dropdown] = frame
+                        }
                     )
+                    .zIndex(120)
                     
                     StackedRestaurantListView(
                         filteredRestaurants: filteredRestaurantsCache,
                         locationManager: locationManager,
                         navigationPath: $navigationPath,
-                        scrollOffset: $scrollOffset
+                        scrollOffset: $scrollOffset,
+                        refreshAnimation: listRefreshSpring
                     )
                 }
+
+                if let dropdown = activeFilterDropdown {
+                    filterDropdownOverlay(for: dropdown)
+                        .zIndex(260)
+                        .transition(
+                            .asymmetric(
+                                insertion: .offset(y: -8).combined(with: .opacity).combined(with: .scale(scale: 0.94, anchor: .topLeading)),
+                                removal: .offset(y: -4).combined(with: .opacity).combined(with: .scale(scale: 0.98, anchor: .topLeading))
+                            )
+                        )
+                }
             }
+            .animation(dropdownSpring, value: activeFilterDropdown)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear {
+                            libraryRootGlobalFrame = proxy.frame(in: .global)
+                        }
+                        .onChange(of: proxy.frame(in: .global)) { _, newValue in
+                            libraryRootGlobalFrame = newValue
+                        }
+                }
+            )
             .navigationDestination(for: Restaurant.self) { restaurant in
                 RestaurantDetailView(
                     restaurant: restaurant,
@@ -129,6 +172,9 @@ struct LibraryView: View {
                     selectedCity = savedCity
                 }
             }
+            .onAppear {
+                repairRestaurantCityAssignmentsIfNeeded()
+            }
             .toolbar(.visible, for: .tabBar)
             .sheet(isPresented: $showImportSheet) { ImportDataView() }
             .sheet(isPresented: $showCityPicker) {
@@ -136,24 +182,28 @@ struct LibraryView: View {
             }
             .onChange(of: selectedCity) { _, newCity in
                 UserDefaults.standard.set(newCity, forKey: kSavedCityKey)
-                refreshFilteredRestaurants()
+                refreshFilteredRestaurants(animated: true)
             }
             .onChange(of: restaurants, initial: true) { _, _ in
                 // 启动首帧直接完成筛选与排序，避免首屏列表短暂出现错误顺序
-                refreshDerivedData()
+                repairRestaurantCityAssignmentsIfNeeded()
+                refreshDerivedData(animated: false)
             }
             .onChange(of: selectedDistrict) { _, _ in
-                refreshFilteredRestaurants()
+                activeFilterDropdown = nil
+                refreshFilteredRestaurants(animated: true)
             }
             .onChange(of: selectedType) { _, _ in
-                refreshFilteredRestaurants()
+                activeFilterDropdown = nil
+                refreshFilteredRestaurants(animated: true)
             }
             .onChange(of: searchText) { _, _ in
-                refreshFilteredRestaurants()
+                refreshFilteredRestaurants(animated: true)
             }
             .onChange(of: sortOption) { _, _ in
+                activeFilterDropdown = nil
                 UserDefaults.standard.set(sortOption.rawValue, forKey: kSavedSortOptionKey)
-                refreshFilteredRestaurants()
+                refreshFilteredRestaurants(animated: true)
             }
             .onReceive(
                 locationManager.$userLocation
@@ -170,10 +220,189 @@ struct LibraryView: View {
                     .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
             ) { _ in
                 if sortOption == .smart || sortOption == .distance {
-                    refreshFilteredRestaurants()
+                    refreshFilteredRestaurants(animated: false)
                 }
             }
             // 状态栏适配由全局主题控制（system/light/dark）
+        }
+    }
+
+    private func repairRestaurantCityAssignmentsIfNeeded() {
+        guard !isRepairingCityAssignments else { return }
+        guard !restaurants.isEmpty else { return }
+
+        isRepairingCityAssignments = true
+        defer { isRepairingCityAssignments = false }
+
+        var changed = false
+
+        for restaurant in restaurants {
+            guard restaurant.modelContext != nil else { continue }
+
+            let normalized = RestaurantCityNormalizer.normalize(
+                address: restaurant.address,
+                district: restaurant.district,
+                fallbackCity: restaurant.city
+            )
+
+            if restaurant.city != normalized.city {
+                restaurant.city = normalized.city
+                changed = true
+            }
+
+            if !normalized.district.isEmpty, restaurant.district != normalized.district {
+                restaurant.district = normalized.district
+                changed = true
+            }
+        }
+
+        guard changed else { return }
+
+        do {
+            try modelContext.save()
+        } catch {
+            print("修复城市归属失败: \(error.localizedDescription)")
+        }
+    }
+
+    private struct FilterDropdownRow: Identifiable {
+        let id: String
+        let title: String
+        let isSelected: Bool
+        let isDestructive: Bool
+        let action: () -> Void
+    }
+
+    @ViewBuilder
+    private func filterDropdownOverlay(for dropdown: FilterDropdownType) -> some View {
+        GeometryReader { proxy in
+            let panelWidth = min(max(proxy.size.width * 0.48, 190), 280)
+            let panelMaxHeight = min(max(proxy.size.height * 0.34, 180), 340)
+            let baseFrame = filterButtonFrames[dropdown] ?? .zero
+            let rawX = baseFrame.midX - libraryRootGlobalFrame.minX - panelWidth / 2
+            let panelX = min(max(rawX, 24), max(24, proxy.size.width - panelWidth - 24))
+            let panelY = max(0, baseFrame.maxY - libraryRootGlobalFrame.minY + 8)
+
+            ZStack(alignment: .topLeading) {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(dropdownSpring) {
+                            activeFilterDropdown = nil
+                        }
+                    }
+
+                VStack(spacing: 0) {
+                    ScrollView(.vertical, showsIndicators: true) {
+                        LazyVStack(spacing: 2) {
+                            ForEach(filterDropdownRows(for: dropdown)) { row in
+                                Button {
+                                    row.action()
+                                    withAnimation(dropdownSpring) {
+                                        activeFilterDropdown = nil
+                                    }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Text(row.title)
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(row.isDestructive ? AppTheme.Colors.destructive : AppTheme.Colors.darkText)
+                                            .lineLimit(1)
+                                        Spacer(minLength: 4)
+                                        if row.isSelected {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundColor(AppTheme.Colors.babyBlue)
+                                        }
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 11)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(row.isSelected ? AppTheme.Colors.babyBlue.opacity(colorScheme == .dark ? 0.14 : 0.09) : .clear)
+                                )
+                            }
+                        }
+                        .padding(8)
+                    }
+                    .frame(maxHeight: panelMaxHeight)
+                }
+                .frame(width: panelWidth)
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(AppTheme.Colors.surfacePrimary)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .stroke(AppTheme.Colors.rimLight.opacity(colorScheme == .dark ? 0.12 : 0.2), lineWidth: 0.6)
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(AppTheme.Colors.headerPillBorder.opacity(colorScheme == .dark ? 0.7 : 0.85), lineWidth: 0.8)
+                )
+                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.16), radius: 20, x: 0, y: 12)
+                .offset(x: panelX, y: panelY)
+            }
+        }
+    }
+
+    private func filterDropdownRows(for dropdown: FilterDropdownType) -> [FilterDropdownRow] {
+        switch dropdown {
+        case .district:
+            let allRow = FilterDropdownRow(
+                id: "district_all",
+                title: "全区",
+                isSelected: selectedDistrict == nil,
+                isDestructive: false
+            ) {
+                selectedDistrict = nil
+            }
+            let districtRows = currentDistricts.map { district in
+                FilterDropdownRow(
+                    id: "district_\(district)",
+                    title: district,
+                    isSelected: selectedDistrict == district,
+                    isDestructive: false
+                ) {
+                    selectedDistrict = district
+                }
+            }
+            return [allRow] + districtRows
+        case .category:
+            let allRow = FilterDropdownRow(
+                id: "type_all",
+                title: "全部分类",
+                isSelected: selectedType == nil,
+                isDestructive: false
+            ) {
+                selectedType = nil
+            }
+            let categoryRows = selectableCategories.map { type in
+                FilterDropdownRow(
+                    id: "type_\(type)",
+                    title: type,
+                    isSelected: selectedType == type,
+                    isDestructive: false
+                ) {
+                    selectedType = type
+                }
+            }
+            return [allRow] + categoryRows
+        case .sort:
+            return SortOption.allCases.map { option in
+                FilterDropdownRow(
+                    id: "sort_\(option.rawValue)",
+                    title: option.displayName,
+                    isSelected: sortOption == option,
+                    isDestructive: false
+                ) {
+                    sortOption = option
+                }
+            }
         }
     }
 
@@ -283,6 +512,7 @@ struct LibraryView: View {
         let locationManager: LocationManager
         @Binding var navigationPath: NavigationPath
         @Binding var scrollOffset: CGFloat
+        let refreshAnimation: Animation
         @State private var checkInRestaurant: Restaurant? = nil
         @State private var showCheckInSheet = false
         @State private var cardStates: [UUID: CardStackState] = [:]
@@ -313,8 +543,15 @@ struct LibraryView: View {
                                 .opacity(phase.isIdentity ? 1 : 0)
                                 .scaleEffect(phase.isIdentity ? 1 : 0.92)
                         }
+                        .transition(
+                            .asymmetric(
+                                insertion: .offset(y: 14).combined(with: .opacity).combined(with: .scale(scale: 0.98)),
+                                removal: .opacity.combined(with: .scale(scale: 0.97))
+                            )
+                        )
                     }
                 }
+                .animation(refreshAnimation, value: filteredRestaurants.map(\.id))
                 // 底部内边距：为导航条留出空间（减少间距让卡片更靠近导航栏）
                 .padding(.bottom, 20)
                 .background(
@@ -543,7 +780,7 @@ struct LibraryView: View {
         }
     }
     
-    // MARK: - 排序选项枚举
+// MARK: - 排序选项枚举
 enum SortOption: String, CaseIterable {
     case smart = "智能排序"
     case distance = "距离最近"
@@ -556,6 +793,20 @@ enum SortOption: String, CaseIterable {
     }
 }
 
+private enum FilterDropdownType: Hashable {
+    case district
+    case category
+    case sort
+}
+
+private struct FilterButtonFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [FilterDropdownType: CGRect] = [:]
+
+    static func reduce(value: inout [FilterDropdownType: CGRect], nextValue: () -> [FilterDropdownType: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
 // MARK: - 筛选按钮栏子视图 (奥利奥黑白平衡)
 private struct FilterBarView: View {
     let selectedCity: String
@@ -564,72 +815,98 @@ private struct FilterBarView: View {
     @Binding var sortOption: SortOption
     let categories: [String]
     let districts: [String]
+    let activeDropdown: FilterDropdownType?
+    let onToggleDropdown: (FilterDropdownType) -> Void
+    let onButtonFrameChange: (FilterDropdownType, CGRect) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             // 1. 地区筛选胶囊
-            Menu {
-                Button("全区") { selectedDistrict = nil }
-                Divider()
-                ForEach(districts, id: \.self) { district in
-                    Button(district) { selectedDistrict = district }
-                }
+            Button {
+                onToggleDropdown(.district)
             } label: {
                 filterCapsuleLabel(
                     title: selectedDistrict ?? "地区",
-                    isSelected: selectedDistrict != nil
+                    isSelected: selectedDistrict != nil,
+                    isExpanded: activeDropdown == .district
                 )
             }
+            .buttonStyle(.plain)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: FilterButtonFramePreferenceKey.self,
+                        value: [.district: proxy.frame(in: .global)]
+                    )
+                }
+            )
 
             // 2. 品类筛选胶囊（使用统一的品类管理，包含用户自定义品类）
-            Menu {
-                Button("全部分类") { selectedType = nil }
-                Divider()
-                ForEach(categories, id: \.self) { type in
-                    Button(type) { selectedType = type }
-                }
+            Button {
+                onToggleDropdown(.category)
             } label: {
                 filterCapsuleLabel(
                     title: selectedType ?? "品类",
-                    isSelected: selectedType != nil
+                    isSelected: selectedType != nil,
+                    isExpanded: activeDropdown == .category
                 )
             }
+            .buttonStyle(.plain)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: FilterButtonFramePreferenceKey.self,
+                        value: [.category: proxy.frame(in: .global)]
+                    )
+                }
+            )
 
             // 3. 排序筛选胶囊
-            Menu {
-                ForEach(SortOption.allCases, id: \.self) { option in
-                    Button(option.displayName) { sortOption = option }
-                }
+            Button {
+                onToggleDropdown(.sort)
             } label: {
                 filterCapsuleLabel(
                     title: sortOption.displayName,
-                    isSelected: false
+                    isSelected: false,
+                    isExpanded: activeDropdown == .sort
                 )
             }
+            .buttonStyle(.plain)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: FilterButtonFramePreferenceKey.self,
+                        value: [.sort: proxy.frame(in: .global)]
+                    )
+                }
+            )
 
             // 4. 清除筛选按钮（有筛选条件时显示）
             if selectedDistrict != nil || selectedType != nil {
                 Button {
-                    // 触觉反馈
                     let generator = UIImpactFeedbackGenerator(style: .light)
                     generator.impactOccurred()
-                    
+
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedDistrict = nil
                         selectedType = nil
                     }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(AppTheme.Colors.darkText)
-                        .frame(width: 28, height: 28)
+                        .frame(width: 30, height: 30)
                         .background(
-                            Circle()
-                                .fill(AppTheme.Colors.surfaceSecondary)
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(AppTheme.Colors.headerPillBorder, lineWidth: 0.6)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(AppTheme.Colors.surfacePrimary)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(AppTheme.Colors.headerPillBorder.opacity(0.85), lineWidth: 0.8)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(AppTheme.Colors.rimLight.opacity(0.12), lineWidth: 0.6)
+                                )
                         )
                 }
                 .buttonStyle(LiquidFusionButtonStyle())
@@ -645,38 +922,53 @@ private struct FilterBarView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 8)
+        .onPreferenceChange(FilterButtonFramePreferenceKey.self) { newValue in
+            for (key, frame) in newValue {
+                onButtonFrameChange(key, frame)
+            }
+        }
     }
-    
-    // MARK: - 筛选胶囊标签（奶白背景 + darkText 文本）
-    private func filterCapsuleLabel(title: String, isSelected: Bool) -> some View {
+
+    // MARK: - 筛选胶囊标签（与餐厅卡片样式一致）
+    private func filterCapsuleLabel(title: String, isSelected: Bool, isExpanded: Bool) -> some View {
         // 截断文本：超过4个字显示省略号
         let displayTitle = title.count > 4 ? String(title.prefix(3)) + "…" : title
-        
+
         return HStack(spacing: 4) {
             Text(displayTitle)
-                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(AppTheme.Colors.darkText)
                 .frame(width: 52, height: 18, alignment: .center)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
                 .font(.system(size: 8))
+                .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 .foregroundColor(isSelected ? AppTheme.Colors.babyBlue : AppTheme.Colors.mediumGray)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        // 与餐厅卡片一致的背景
         .background(
-            Capsule()
-                .fill(isSelected ? AppTheme.Colors.surfacePrimary : AppTheme.Colors.surfaceSecondary)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(AppTheme.Colors.surfacePrimary)
         )
+        // 与餐厅卡片一致的双层描边
         .overlay(
-            Capsule()
-                .stroke(isSelected ? AppTheme.Colors.babyBlue.opacity(0.35) : AppTheme.Colors.headerPillBorder, lineWidth: 1)
+            ZStack {
+                // 内层：白色高光描边
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(AppTheme.Colors.rimLight.opacity(0.16), lineWidth: 0.5)
+                // 外层：极淡黑色物理边框
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.black.opacity(0.04), lineWidth: 0.5)
+            }
         )
+        // 与餐厅卡片一致的阴影
         .shadow(
-            color: Color.black.opacity(0.06),
-            radius: 4,
+            color: Color.black.opacity(0.05),
+            radius: 10,
             x: 0,
-            y: 2
+            y: 4
         )
     }
 }
@@ -724,9 +1016,9 @@ private struct FilterBarView: View {
         return score
     }
     
-    private func refreshDerivedData() {
+    private func refreshDerivedData(animated: Bool = true) {
         refreshSelectableCategories()
-        refreshFilteredRestaurants()
+        refreshFilteredRestaurants(animated: animated)
     }
 
     private func refreshSelectableCategories() {
@@ -736,8 +1028,23 @@ private struct FilterBarView: View {
         )
     }
 
-    private func refreshFilteredRestaurants() {
-        filteredRestaurantsCache = computeFilteredRestaurants(from: restaurants)
+    private func refreshFilteredRestaurants(animated: Bool = true) {
+        let newValue = computeFilteredRestaurants(from: restaurants)
+        let oldIDs = filteredRestaurantsCache.map(\.id)
+        let newIDs = newValue.map(\.id)
+
+        guard oldIDs != newIDs else {
+            filteredRestaurantsCache = newValue
+            return
+        }
+
+        if animated {
+            withAnimation(listRefreshSpring) {
+                filteredRestaurantsCache = newValue
+            }
+        } else {
+            filteredRestaurantsCache = newValue
+        }
     }
 
     /// 过滤和排序后的餐厅列表

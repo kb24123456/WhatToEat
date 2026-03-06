@@ -29,10 +29,19 @@ enum TabItem: String, CaseIterable {
 
 // MARK: - 主视图
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var selectedTab: TabItem = .library
     @Namespace private var animationNamespace
     @State private var isAdding: Bool = false
     @State private var isTabBarHidden: Bool = false
+    @State private var hasTriggeredCloudMigration = false
+    @StateObject private var appLockManager = AppLockManager.shared
+
+    private let tabBarVisibilityAnimation = Animation.interactiveSpring(
+        response: 0.42,
+        dampingFraction: 0.86,
+        blendDuration: 0.14
+    )
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -73,23 +82,48 @@ struct ContentView: View {
             // 导航条放置在安全区域内，紧贴底部
             if !isTabBarHidden {
                 customTabBar
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .bottom)
+                                .combined(with: .opacity)
+                                .combined(with: .scale(scale: 0.94, anchor: .bottom)),
+                            removal: .move(edge: .bottom)
+                                .combined(with: .opacity)
+                                .combined(with: .scale(scale: 0.96, anchor: .bottom))
+                        )
+                    )
             }
             
             // MARK: - 键盘吸附栏（全局输入代理）
             AccessoryInputView()
                 .zIndex(100)  // 确保在最上层
+
+            if appLockManager.isLocked {
+                appLockOverlay
+                    .zIndex(500)
+                    .transition(.opacity)
+            }
         }
         // 忽略键盘安全区域
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .animation(tabBarVisibilityAnimation, value: isTabBarHidden)
         .onReceive(NotificationCenter.default.publisher(for: .hideTabBar)) { _ in
-            withAnimation {
+            withAnimation(tabBarVisibilityAnimation) {
                 isTabBarHidden = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .restoreTabBar)) { _ in
-            withAnimation {
+            withAnimation(tabBarVisibilityAnimation) {
                 isTabBarHidden = false
             }
+        }
+        .onAppear {
+            appLockManager.evaluateColdStartIfNeeded()
+        }
+        .task {
+            guard !hasTriggeredCloudMigration else { return }
+            hasTriggeredCloudMigration = true
+            await CloudSyncManager.shared.runPendingMigrationIfNeeded(modelContext: modelContext)
         }
     }
     
@@ -215,6 +249,59 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: 60)
         }
         .buttonStyle(.plain)
+    }
+
+    private var appLockOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.42)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                Image(systemName: "faceid")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Text("已启用面容 ID")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+
+                Text("验证成功后即可进入 App")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.82))
+
+                if let errorText = appLockManager.lastErrorMessage, !errorText.isEmpty {
+                    Text(errorText)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                }
+
+                Button("重试解锁") {
+                    appLockManager.unlockWithFaceID()
+                }
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(0.2))
+                )
+                .padding(.top, 6)
+            }
+            .padding(22)
+            .frame(maxWidth: 280)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.black.opacity(0.5))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+            )
+            .padding(.horizontal, 24)
+        }
     }
 }
 

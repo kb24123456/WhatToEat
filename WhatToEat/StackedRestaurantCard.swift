@@ -4,6 +4,7 @@ import SwiftData
 
 // MARK: - iOS 锁屏通知风格堆叠卡片
 struct StackedRestaurantCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let restaurant: Restaurant
     @ObservedObject var locationManager: LocationManager
     let index: Int
@@ -241,6 +242,27 @@ struct StackedRestaurantCard: View {
     
     // MARK: - 打卡勋章（圆形容器样式 - 参考图）
     @State private var isPressed = false
+
+    private var checkInBadgeBackground: Color {
+        if colorScheme == .dark {
+            return Color.fixedHex("#1D2A3B").opacity(0.96)
+        }
+        return Color.white.opacity(0.9)
+    }
+
+    private var checkInBadgeBorder: Color {
+        if colorScheme == .dark {
+            return Color.white.opacity(0.12)
+        }
+        return Color.black.opacity(0.06)
+    }
+
+    private var checkInBadgeShadow: Color {
+        if colorScheme == .dark {
+            return Color.black.opacity(0.28)
+        }
+        return Color.black.opacity(0.04)
+    }
     
     private var checkInBadge: some View {
         Button(action: {
@@ -251,10 +273,14 @@ struct StackedRestaurantCard: View {
             onCheckInTap?()
         }) {
             ZStack {
-                // 圆形背景
+                // 圆形背景：浅色保持白色，深色适配为深蓝灰
                 Circle()
-                    .fill(AppTheme.Colors.surfaceSecondary)
+                    .fill(checkInBadgeBackground)
                     .frame(width: 36, height: 36)
+                    .overlay(
+                        Circle()
+                            .stroke(checkInBadgeBorder, lineWidth: 0.6)
+                    )
                 
                 // 打钩图标 + 数字
                 HStack(spacing: 2) {
@@ -269,8 +295,7 @@ struct StackedRestaurantCard: View {
                     }
                 }
             }
-            // 轻量阴影
-            .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+            .shadow(color: checkInBadgeShadow, radius: 4, x: 0, y: 1)
             // 灵动的缩放动效
             .scaleEffect(isPressed ? 0.88 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)

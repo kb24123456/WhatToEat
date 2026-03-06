@@ -110,7 +110,7 @@ struct AddRestaurantView: View {
     }
 
     private var addPanelBackground: Color {
-        colorScheme == .dark ? Color.fixedHex("#1E2C40").opacity(0.82) : AppTheme.Colors.surfaceSecondary
+        colorScheme == .dark ? Color.fixedHex("#1E2C40").opacity(0.82) : Color.white.opacity(0.95)
     }
     
     // MARK: - Body
@@ -200,19 +200,10 @@ struct AddRestaurantView: View {
     
     // MARK: - Background（弥散渐变背景）
     private var backgroundGradient: some View {
-        Group {
-            if colorScheme == .dark {
-                DiffuseGradientBackground(
-                    topLeadingColor: Color.fixedHex("#17365A"),
-                    topTrailingColor: Color.fixedHex("#2C4256"),
-                    bottomColor: Color.fixedHex("#0B1422"),
-                    blurRadius: 90,
-                    colorOpacity: 0.36
-                )
-            } else {
-                DiffuseGradientBackground()
-            }
-        }
+        DiffuseGradientBackground(
+            blurRadius: colorScheme == .dark ? 86 : 72,
+            colorOpacity: colorScheme == .dark ? 0.44 : 0.5
+        )
     }
     
     // MARK: - Scroll Content（无父容器，组件直接显示 - 参考 CheckInView）

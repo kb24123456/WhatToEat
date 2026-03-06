@@ -31,5 +31,7 @@
 	<string>593a1836e9ce546f3fceef18f3d5af94</string>
 	<key>APIKeyJuheConstellation</key>
 	<string>1e861daeabe2b998323b2380807b381e</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>用于在你开启“面容 ID”后进行冷启动安全验证。</string>
 </dict>
 </plist>

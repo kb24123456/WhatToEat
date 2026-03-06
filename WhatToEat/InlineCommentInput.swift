@@ -9,6 +9,7 @@ import Combine
 /// 3. 编辑内容只在 inputAccessoryView 中，不实时同步到页面
 /// 4. 点击"发送"才保存到页面；点击"返回"不保存，但保留草稿供下次编辑
 struct InlineCommentInput: UIViewRepresentable {
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var text: String
     var placeholder: String = "点击添加点评..."
     var onSave: (() -> Void)? = nil
@@ -58,10 +59,20 @@ struct InlineCommentInput: UIViewRepresentable {
     private func updatePageDisplay(textView: UITextView) {
         if text.isEmpty {
             textView.text = placeholder
-            textView.textColor = UIColor.placeholderText
+            textView.textColor = UIColor(dynamicProvider: { traits in
+                if traits.userInterfaceStyle == .dark {
+                    return UIColor(red: 127 / 255, green: 145 / 255, blue: 171 / 255, alpha: 1)
+                }
+                return UIColor.placeholderText
+            })
         } else {
             textView.text = text
-            textView.textColor = UIColor.label
+            textView.textColor = UIColor(dynamicProvider: { traits in
+                if traits.userInterfaceStyle == .dark {
+                    return UIColor(red: 220 / 255, green: 230 / 255, blue: 246 / 255, alpha: 1)
+                }
+                return UIColor.label
+            })
         }
     }
     
@@ -77,12 +88,24 @@ struct InlineCommentInput: UIViewRepresentable {
         
         // 创建输入框容器 - 胶囊样式
         let inputContainer = UIView()
-        inputContainer.backgroundColor = UIColor.systemBackground
+        inputContainer.backgroundColor = UIColor(dynamicProvider: { traits in
+            if traits.userInterfaceStyle == .dark {
+                return UIColor(red: 24 / 255, green: 38 / 255, blue: 56 / 255, alpha: 0.96)
+            }
+            return UIColor.white
+        })
         inputContainer.layer.cornerRadius = 22
         inputContainer.layer.shadowColor = UIColor.black.cgColor
         inputContainer.layer.shadowOffset = CGSize(width: 0, height: 2)
-        inputContainer.layer.shadowRadius = 8
-        inputContainer.layer.shadowOpacity = 0.15
+        inputContainer.layer.shadowRadius = 10
+        inputContainer.layer.shadowOpacity = colorScheme == .dark ? 0.32 : 0.15
+        inputContainer.layer.borderWidth = 0.8
+        inputContainer.layer.borderColor = UIColor(dynamicProvider: { traits in
+            if traits.userInterfaceStyle == .dark {
+                return UIColor(red: 48 / 255, green: 74 / 255, blue: 103 / 255, alpha: 0.75)
+            }
+            return UIColor.gray.withAlphaComponent(0.14)
+        }).cgColor
         inputContainer.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(inputContainer)
         
@@ -90,7 +113,12 @@ struct InlineCommentInput: UIViewRepresentable {
         let inputTextView = UITextView()
         inputTextView.delegate = context.coordinator
         inputTextView.font = UIFont.systemFont(ofSize: 16)
-        inputTextView.textColor = UIColor.label
+        inputTextView.textColor = UIColor(dynamicProvider: { traits in
+            if traits.userInterfaceStyle == .dark {
+                return UIColor(red: 220 / 255, green: 230 / 255, blue: 246 / 255, alpha: 1)
+            }
+            return UIColor.label
+        })
         inputTextView.backgroundColor = UIColor.clear
         inputTextView.isScrollEnabled = true
         inputTextView.showsVerticalScrollIndicator = false
@@ -102,7 +130,12 @@ struct InlineCommentInput: UIViewRepresentable {
         // 创建清除按钮（仿照 UITextField 的 clearButtonMode）
         let clearButton = UIButton(type: .system)
         clearButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        clearButton.tintColor = UIColor.placeholderText
+        clearButton.tintColor = UIColor(dynamicProvider: { traits in
+            if traits.userInterfaceStyle == .dark {
+                return UIColor(red: 139 / 255, green: 160 / 255, blue: 188 / 255, alpha: 1)
+            }
+            return UIColor.placeholderText
+        })
         clearButton.alpha = 0  // 初始隐藏
         clearButton.translatesAutoresizingMaskIntoConstraints = false
         clearButton.addTarget(context.coordinator, action: #selector(Coordinator.handleClearButtonTapped), for: .touchUpInside)
@@ -291,10 +324,20 @@ struct InlineCommentInput: UIViewRepresentable {
             // 更新页面显示
             if finalText.isEmpty {
                 textView?.text = parent.placeholder
-                textView?.textColor = UIColor.placeholderText
+                textView?.textColor = UIColor(dynamicProvider: { traits in
+                    if traits.userInterfaceStyle == .dark {
+                        return UIColor(red: 127 / 255, green: 145 / 255, blue: 171 / 255, alpha: 1)
+                    }
+                    return UIColor.placeholderText
+                })
             } else {
                 textView?.text = finalText
-                textView?.textColor = UIColor.label
+                textView?.textColor = UIColor(dynamicProvider: { traits in
+                    if traits.userInterfaceStyle == .dark {
+                        return UIColor(red: 220 / 255, green: 230 / 255, blue: 246 / 255, alpha: 1)
+                    }
+                    return UIColor.label
+                })
             }
             
             // 执行保存回调
@@ -320,22 +363,32 @@ struct InlineCommentInputView: View {
             .frame(minHeight: 80, maxHeight: 120)
             .background(
                 ZStack {
-                    // 底部阴影层（营造立体感）
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.black.opacity(colorScheme == .dark ? 0.18 : 0.03))
-                        .offset(y: 2)
-                    
-                    // 主背景层
+                        .fill(Color.black.opacity(colorScheme == .dark ? 0.2 : 0.02))
+                        .offset(y: colorScheme == .dark ? 2 : 1)
+
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(AppTheme.Colors.surfaceSecondary)
-                    
-                    // 顶部高光（营造凸起感）
+                        .fill(
+                            colorScheme == .dark
+                            ? Color.fixedHex("#1A2A3D").opacity(0.82)
+                            : Color.white.opacity(0.98)
+                        )
+
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(AppTheme.Colors.headerPillBorder, lineWidth: 1)
-                    
-                    // 内阴影效果
+                        .stroke(
+                            colorScheme == .dark
+                            ? Color.fixedHex("#355273").opacity(0.62)
+                            : Color.white.opacity(0.8),
+                            lineWidth: colorScheme == .dark ? 0.8 : 1
+                        )
+
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.black.opacity(0.04), lineWidth: 0.5)
+                        .stroke(
+                            colorScheme == .dark
+                            ? Color.white.opacity(0.08)
+                            : Color.gray.opacity(0.15),
+                            lineWidth: 0.5
+                        )
                 }
             )
     }

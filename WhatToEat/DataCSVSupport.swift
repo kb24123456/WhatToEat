@@ -23,10 +23,65 @@ struct CSVTextDocument: FileDocument {
 }
 
 enum DataCSVSupport {
-    static let restaurantImportVersion = "WTE-RESTAURANT-CSV-v1"
-    static let consumptionExportVersion = "WTE-CONSUMPTION-CSV-v1"
+    nonisolated static let restaurantImportVersion = "WTE-RESTAURANT-CSV-v1"
+    nonisolated static let consumptionExportVersion = "WTE-CONSUMPTION-CSV-v1"
 
-    static func makeRestaurantCSV(restaurants: [Restaurant]) -> String {
+    nonisolated static func makeRestaurantTemplateCSV(defaultCity: String = "重庆") -> String {
+        let headers = [
+            "name",
+            "type",
+            "rating",
+            "district",
+            "address",
+            "review",
+            "schema_version",
+            "city",
+            "average_price",
+            "tags",
+            "latitude",
+            "longitude",
+            "created_at"
+        ]
+
+        let nowString = filenameSafeDateFormatter.string(from: Date())
+        let rows: [[String]] = [
+            headers,
+            [
+                "示例餐厅A",
+                "火锅",
+                "4.5",
+                "渝中区",
+                "解放碑示例路 88 号",
+                "食材新鲜，环境不错",
+                restaurantImportVersion,
+                defaultCity,
+                "98.00",
+                "聚会|二刷",
+                "29.563010",
+                "106.551557",
+                nowString
+            ],
+            [
+                "示例餐厅B",
+                "川菜",
+                "4.2",
+                "两江新区",
+                "金开大道示例段 66 号",
+                "出餐快，性价比高",
+                restaurantImportVersion,
+                defaultCity,
+                "62.00",
+                "工作餐|回头客",
+                "29.613700",
+                "106.510300",
+                nowString
+            ]
+        ]
+
+        return rows.map(csvLine).joined(separator: "\r\n")
+    }
+
+    nonisolated static func makeRestaurantCSV(restaurants: [Restaurant]) -> String {
         let headers = [
             "name",
             "type",
@@ -67,7 +122,7 @@ enum DataCSVSupport {
         return rows.map(csvLine).joined(separator: "\r\n")
     }
 
-    static func makeConsumptionCSV(logs: [VisitLog]) -> String {
+    nonisolated static func makeConsumptionCSV(logs: [VisitLog]) -> String {
         let headers = [
             "schema_version",
             "visit_date",
@@ -117,7 +172,7 @@ enum DataCSVSupport {
         return rows.map(csvLine).joined(separator: "\r\n")
     }
 
-    static func makeExportFilename(prefix: String) -> String {
+    nonisolated static func makeExportFilename(prefix: String) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone.current
@@ -125,16 +180,16 @@ enum DataCSVSupport {
         return "\(prefix)_\(formatter.string(from: Date()))"
     }
 
-    private static func csvLine(_ columns: [String]) -> String {
+    nonisolated private static func csvLine(_ columns: [String]) -> String {
         columns.map(csvCell).joined(separator: ",")
     }
 
-    private static func csvCell(_ value: String) -> String {
+    nonisolated private static func csvCell(_ value: String) -> String {
         let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
         return "\"\(escaped)\""
     }
 
-    private static let filenameSafeDateFormatter: DateFormatter = {
+    nonisolated private static let filenameSafeDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone.current

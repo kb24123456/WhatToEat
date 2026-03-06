@@ -103,18 +103,17 @@ struct RestaurantFlowView: View {
                         }
                     
                     // 决策内容
-                    ImmersiveDecisionView { filteredRestaurants, targetID in
-                        // 先关闭决策视图（背景恢复清晰）
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            showDecisionAssistant = false
-                        }
-                        
+                    ImmersiveDecisionView(onDecisionMade: { filteredRestaurants, targetID in
                         // 延迟后开始随机选择
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                             // 接收决策助手的筛选结果
                             handleDecisionResult(filteredRestaurants: filteredRestaurants, targetID: targetID)
                         }
-                    }
+                    }, onClose: {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            showDecisionAssistant = false
+                        }
+                    })
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .scale(scale: 0.9)),
                         removal: .opacity.combined(with: .scale(scale: 1.1))

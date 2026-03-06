@@ -16,11 +16,11 @@ private enum StepTransitionDirection {
 
 // MARK: - 沉浸式决策视图
 struct ImmersiveDecisionView: View {
-    @Environment(\.dismiss) private var dismiss
     @Query var restaurants: [Restaurant]
     
     // 回调闭包
-    var onDecisionMade: (([Restaurant], UUID?) -> Void)?
+    var onDecisionMade: (([Restaurant], UUID?) -> Void)? = nil
+    var onClose: (() -> Void)? = nil
     
     // 当前步骤
     @State private var currentStep: ImmersiveDecisionStep = .modeSelection
@@ -399,7 +399,7 @@ struct ImmersiveDecisionView: View {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-            dismiss()
+            onClose?()
         }
     }
     
@@ -424,7 +424,7 @@ struct ImmersiveDecisionView: View {
         // 延迟后关闭并回调
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             onDecisionMade?(filteredRestaurants, targetRestaurant?.id)
-            dismiss()
+            onClose?()
         }
     }
     

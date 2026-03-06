@@ -12,10 +12,13 @@ import PhotosUI
 import UIKit
 import CoreLocation
 import UniformTypeIdentifiers
+import AuthenticationServices
 
 // MARK: - Profile View
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query(sort: \Restaurant.createdAt, order: .reverse) private var restaurants: [Restaurant]
     @Query(sort: \VisitLog.date, order: .reverse) private var visitLogs: [VisitLog]
     
@@ -24,19 +27,25 @@ struct ProfileView: View {
     @State private var showDashboardCards = false
     @State private var selectedGateway: GatewayType = .settings
     @StateObject private var locationManager = LocationManager.shared
+    @StateObject private var authManager = AuthManager.shared
+    @StateObject private var appLockManager = AppLockManager.shared
     @AppStorage(AppSettingsKeys.preferredMapApp) private var preferredMapApp: String = ""
     @AppStorage(AppSettingsKeys.userSelectedCity) private var defaultCity: String = "重庆"
-    @AppStorage(AppSettingsKeys.libraryDefaultSortOption) private var libraryDefaultSortOption: String = "智能排序"
-    @AppStorage(AppSettingsKeys.smartInputProxyEnabled) private var smartInputProxyEnabled: Bool = true
     @AppStorage(AppSettingsKeys.appAppearanceMode) private var appAppearanceMode: String = AppAppearanceMode.system.rawValue
-    @State private var showSettingsCityPicker = false
-    @State private var showResetSettingsAlert = false
+    @AppStorage(AppSettingsKeys.hapticFeedbackEnabled) private var hapticFeedbackEnabled: Bool = true
+    @AppStorage(AppSettingsKeys.iCloudSyncEnabled) private var iCloudSyncEnabled: Bool = true
     @State private var showClearCacheAlert = false
     @State private var settingsToastMessage: String?
     @State private var showRestaurantImportPicker = false
+    @State private var showRestaurantImportAssistDialog = false
     @State private var showExportSheet = false
     @State private var exportDocument: CSVTextDocument?
     @State private var exportFilename: String = ""
+    @State private var showICloudRestartAlert = false
+    @State private var showSignOutAlert = false
+    @State private var showSwitchAccountAlert = false
+    @State private var edgeBackGestureOffset: CGFloat = 0
+    @State private var settingsTopBlurProgress: CGFloat = 0
     
     // 卡片尺寸定义（精调后）
     // 左列总高度: 156 + 212 + 184 + 158 = 710pt
@@ -57,6 +66,70 @@ struct ProfileView: View {
         dampingFraction: 0.88,
         blendDuration: 0.16
     )
+
+    private var headerTransitionAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.18)
+            : .interactiveSpring(response: 0.5, dampingFraction: 0.86, blendDuration: 0.14)
+    }
+
+    private var profileAvatarAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.16)
+            : .interactiveSpring(response: 0.44, dampingFraction: 0.84, blendDuration: 0.12)
+    }
+
+    private var settingsSectionAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.18)
+            : .interactiveSpring(response: 0.58, dampingFraction: 0.87, blendDuration: 0.18)
+    }
+
+    private var settingsCardGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.adaptiveHex(light: "#FBFBFD", dark: "#1B2636"),
+                Color.adaptiveHex(light: "#F2F4F8", dark: "#141E2D")
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var settingsCardStroke: Color {
+        Color.adaptiveHex(light: "#FFFFFF", dark: "#304056").opacity(colorScheme == .dark ? 0.9 : 0.92)
+    }
+
+    private var settingsCardInnerStroke: Color {
+        Color.adaptiveHex(light: "#FFFFFF", dark: "#223247").opacity(colorScheme == .dark ? 0.42 : 0.72)
+    }
+
+    private var settingsCardShadow: Color {
+        Color.black.opacity(colorScheme == .dark ? 0.24 : 0.05)
+    }
+
+    private var settingsPrimaryTextColor: Color { AppTheme.Colors.darkText }
+    private var settingsSecondaryTextColor: Color { Color.adaptiveHex(light: "#95A0A7", dark: "#8F9CB0") }
+    private var settingsTertiaryTextColor: Color { Color.adaptiveHex(light: "#636E72", dark: "#ABB6C8") }
+    private var settingsChevronColor: Color { Color.adaptiveHex(light: "#AAB2B9", dark: "#6F7E93") }
+    private var settingsSeparatorColor: Color { Color.adaptiveHex(light: "#E9EDF2", dark: "#29384B") }
+    private var settingsPillBackground: Color { Color.adaptiveHex(light: "#FFFFFF", dark: "#223149") }
+    private var settingsPillBorder: Color { Color.adaptiveHex(light: "#EDF1F5", dark: "#334760") }
+    private var settingsSegmentTrack: Color { Color.adaptiveHex(light: "#E9EDF2", dark: "#202C3E") }
+    private var settingsToggleTint: Color { Color.adaptiveHex(light: "#61C6FF", dark: "#6DB8FF") }
+
+    private var profileSurfaceColor: Color { Color.adaptiveHex(light: "#FFFFFF", dark: "#141E2C") }
+    private var profileSecondarySurfaceColor: Color { Color.adaptiveHex(light: "#F3F5F6", dark: "#223149") }
+    private var profileStrokeColor: Color { Color.adaptiveHex(light: "#FFFFFF", dark: "#2C3A50").opacity(colorScheme == .dark ? 0.88 : 0.9) }
+    private var profileSecondaryTextColor: Color { Color.adaptiveHex(light: "#B2BEC3", dark: "#8F9CAF") }
+    private var profileMutedTextColor: Color { Color.adaptiveHex(light: "#5E646B", dark: "#AAB6C7") }
+    private var profileProgressTrackColor: Color { Color.adaptiveHex(light: "#E6E8EA", dark: "#28384C") }
+    private var profileProgressFillColor: Color { Color.adaptiveHex(light: "#1E2430", dark: "#E9EFF9") }
+    private var profileAvatarRingColor: Color { Color.adaptiveHex(light: "#FFFFFF", dark: "#2F3C50") }
+    private var profileHeaderShadowColor: Color { Color.black.opacity(colorScheme == .dark ? 0.24 : 0.06) }
+    private var profileEditIconColor: Color { Color.adaptiveHex(light: "#636E72", dark: "#B3BED0") }
+    
+    private let edgeBackTriggerDistance: CGFloat = 88
     
     private enum GatewayType {
         case data
@@ -77,9 +150,7 @@ struct ProfileView: View {
                 VStack(spacing: 8) {
                     // 个人资料卡片（不参与展开）
                     profileHeader(isCompact: showDashboardCards)
-                        .scaleEffect(showDashboardCards ? 0.94 : 1.0, anchor: .top)
-                        .offset(y: showDashboardCards ? -14 : 0)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, showDashboardCards ? 24 : 20)
                     
                     if showDashboardCards {
                         collapseButton
@@ -93,21 +164,22 @@ struct ProfileView: View {
                     }
                     
                     if showDashboardCards {
-                        Group {
-                            if selectedGateway == .data {
-                                dashboardCardsGrid
-                            } else {
-                                settingsDashboard
-                            }
+                        if selectedGateway == .data {
+                            dashboardCardsGrid
+                                .padding(.horizontal, 24)
+                                .padding(.top, 6)
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                                        removal: .opacity
+                                    )
+                                )
+                        } else {
+                            settingsDashboard
+                                .padding(.horizontal, 24)
+                                .padding(.top, 6)
+                                .transition(settingsPanelTransition)
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.top, 6)
-                        .transition(
-                            .asymmetric(
-                                insertion: .move(edge: .bottom).combined(with: .opacity),
-                                removal: .opacity
-                            )
-                        )
                     } else {
                         gatewayCards
                             .padding(.horizontal, 24)
@@ -125,13 +197,36 @@ struct ProfileView: View {
                 }
                 .animation(dashboardTransition, value: showDashboardCards)
             }
+            .coordinateSpace(name: "ProfileScrollArea")
+            .offset(x: showDashboardCards ? edgeBackGestureOffset * 0.16 : 0)
             .background(AppTheme.Colors.pageBackground)
+            .onPreferenceChange(SettingsPanelOffsetPreferenceKey.self) { minY in
+                guard showDashboardCards, selectedGateway == .settings else {
+                    settingsTopBlurProgress = 0
+                    return
+                }
+                let progress = min(max((-minY - 4) / 36, 0), 1)
+                if abs(progress - settingsTopBlurProgress) > 0.015 {
+                    settingsTopBlurProgress = progress
+                }
+            }
+            
+            if showDashboardCards && selectedGateway == .settings {
+                settingsTopBlurOverlay
+                    .zIndex(50)
+                    .transition(.opacity)
+            }
             
             // 展开的卡片覆盖层
             if showDashboardCards, let expandedId = viewModel.expandedCardId {
                 expandedCardOverlay(id: expandedId)
                     .zIndex(100)
                     .transition(.opacity)
+            }
+            
+            if showDashboardCards {
+                edgeBackGestureHotZone
+                    .zIndex(160)
             }
 
             if let settingsToastMessage {
@@ -153,21 +248,42 @@ struct ProfileView: View {
             if defaultCity.isEmpty {
                 defaultCity = "重庆"
             }
-            if !librarySortOptions.contains(libraryDefaultSortOption) {
-                libraryDefaultSortOption = librarySortOptions[0]
-            }
         }
         .onChange(of: restaurants) { _, newRestaurants in
             viewModel.restaurants = newRestaurants
         }
-        .onChange(of: smartInputProxyEnabled) { _, enabled in
-            if !enabled, InputProxyManager.shared.isProxyActive {
-                InputProxyManager.shared.deactivate(commit: false)
+        .onChange(of: showDashboardCards) { _, shown in
+            if !shown {
+                edgeBackGestureOffset = 0
+                settingsTopBlurProgress = 0
             }
-            showSettingsToast(enabled ? "智能输入代理已开启" : "智能输入代理已关闭")
         }
-        .sheet(isPresented: $showSettingsCityPicker) {
-            CitySelectionView(selectedCity: $defaultCity)
+        .onChange(of: selectedGateway) { _, gateway in
+            if gateway != .settings {
+                settingsTopBlurProgress = 0
+            }
+        }
+        .onChange(of: hapticFeedbackEnabled) { _, enabled in
+            HapticManager.shared.setEnabled(enabled)
+            showSettingsToast(enabled ? "震动反馈已开启" : "震动反馈已关闭")
+        }
+        .onChange(of: iCloudSyncEnabled) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            handleICloudToggleChanged(to: newValue)
+        }
+        .sheet(isPresented: $authManager.showSignInSheet) {
+            appleSignInSheet
+        }
+        .confirmationDialog("是否需要示例文档？", isPresented: $showRestaurantImportAssistDialog, titleVisibility: .visible) {
+            Button("需要示例文档") {
+                exportRestaurantTemplate()
+            }
+            Button("直接导入 .csv") {
+                showRestaurantImportPicker = true
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("示例文档包含导入版本 \(DataCSVSupport.restaurantImportVersion) 与标准列格式。")
         }
         .fileImporter(
             isPresented: $showRestaurantImportPicker,
@@ -184,14 +300,6 @@ struct ProfileView: View {
         ) { result in
             handleDataExportResult(result)
         }
-        .alert("恢复系统默认设置", isPresented: $showResetSettingsAlert) {
-            Button("取消", role: .cancel) {}
-            Button("恢复", role: .destructive) {
-                resetSystemSettings()
-            }
-        } message: {
-            Text("将恢复默认城市、默认排序、默认导航应用和输入代理设置。")
-        }
         .alert("清理所有缓存", isPresented: $showClearCacheAlert) {
             Button("取消", role: .cancel) {}
             Button("确认清理", role: .destructive) {
@@ -200,21 +308,41 @@ struct ProfileView: View {
         } message: {
             Text("将清理图片、搜索、定位、食签与智能纠错等本地缓存。")
         }
+        .alert("iCloud 同步设置已更新", isPresented: $showICloudRestartAlert) {
+            Button("我知道了", role: .cancel) {}
+        } message: {
+            Text("重启 App 后生效。建议开启 iCloud 同步，避免数据丢失并保持多设备一致。")
+        }
+        .alert("退出账户", isPresented: $showSignOutAlert) {
+            Button("取消", role: .cancel) {}
+            Button("退出", role: .destructive) {
+                authManager.signOut(keepLocalData: true)
+                appLockManager.setFaceIDEnabled(false)
+                showSettingsToast("已退出账户，本机数据已保留")
+            }
+        } message: {
+            Text("仅退出 Apple ID 会话，本机餐厅与消费数据将保留。")
+        }
+        .alert("切换账户", isPresented: $showSwitchAccountAlert) {
+            Button("取消", role: .cancel) {}
+            Button("继续") {
+                authManager.switchAccount()
+            }
+        } message: {
+            Text("将先退出当前账户，再重新登录 Apple ID。")
+        }
     }
     
     private var collapseButton: some View {
         HStack {
             Text(selectedGateway == .settings ? "功能设置" : "我的数据")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(hex: "#95A0A7"))
+                .foregroundStyle(settingsSecondaryTextColor)
             
             Spacer()
             
             Button {
-                withAnimation(dashboardTransition) {
-                    viewModel.closeExpandedCard()
-                    showDashboardCards = false
-                }
+                collapseDashboard()
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.up")
@@ -222,16 +350,111 @@ struct ProfileView: View {
                     Text("收起")
                         .font(.system(size: 12, weight: .semibold))
                 }
-                .foregroundColor(Color(hex: "#636E72"))
+                .foregroundStyle(settingsTertiaryTextColor)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
                     Capsule()
-                        .fill(Color(hex: "#FFFFFF"))
-                        .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
+                        .fill(settingsPillBackground)
+                        .overlay(
+                            Capsule()
+                                .stroke(settingsPillBorder.opacity(0.92), lineWidth: 0.8)
+                        )
+                        .shadow(color: settingsCardShadow.opacity(0.7), radius: 10, x: 0, y: 4)
                 )
             }
             .buttonStyle(PlainButtonStyle())
+        }
+    }
+    
+    private var settingsPanelTransition: AnyTransition {
+        .asymmetric(
+            insertion: .modifier(
+                active: BlurSlideTransitionModifier(yOffset: 26, blurRadius: 6, opacity: 0, scale: 0.965),
+                identity: BlurSlideTransitionModifier(yOffset: 0, blurRadius: 0, opacity: 1, scale: 1)
+            ),
+            removal: .modifier(
+                active: BlurSlideTransitionModifier(yOffset: -14, blurRadius: 4, opacity: 0, scale: 0.985),
+                identity: BlurSlideTransitionModifier(yOffset: 0, blurRadius: 0, opacity: 1, scale: 1)
+            )
+        )
+    }
+    
+    private var settingsTopBlurOverlay: some View {
+        let progress = Double(settingsTopBlurProgress)
+        let topHeight = 54 + settingsTopBlurProgress * 24
+        
+        return VStack(spacing: 0) {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .frame(height: topHeight)
+                .overlay(
+                    LinearGradient(
+                        colors: [
+                            AppTheme.Colors.topOverlayStrong.opacity(progress * 0.95),
+                            AppTheme.Colors.topOverlaySoft.opacity(progress * 0.45),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .opacity(progress)
+            Spacer(minLength: 0)
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea(edges: .top)
+        .animation(.easeOut(duration: 0.18), value: progress)
+    }
+    
+    private var edgeBackGestureHotZone: some View {
+        HStack(spacing: 0) {
+            Color.clear
+                .frame(width: 24)
+                .contentShape(Rectangle())
+                .highPriorityGesture(edgeBackCollapseGesture)
+            Spacer(minLength: 0)
+        }
+        .ignoresSafeArea(.container, edges: .vertical)
+    }
+    
+    private var edgeBackCollapseGesture: some Gesture {
+        DragGesture(minimumDistance: 9, coordinateSpace: .global)
+            .onChanged { value in
+                guard showDashboardCards else { return }
+                guard value.startLocation.x <= 28 else { return }
+                guard abs(value.translation.height) < 64 else { return }
+                
+                let translation = max(value.translation.width, 0)
+                edgeBackGestureOffset = min(translation, 120)
+            }
+            .onEnded { value in
+                guard showDashboardCards else { return }
+                guard value.startLocation.x <= 28 else { return }
+                guard abs(value.translation.height) < 96 else {
+                    withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.86)) {
+                        edgeBackGestureOffset = 0
+                    }
+                    return
+                }
+                
+                let projectedTranslation = max(value.translation.width, value.predictedEndTranslation.width)
+                if projectedTranslation >= edgeBackTriggerDistance {
+                    collapseDashboard()
+                    return
+                }
+                
+                withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.86)) {
+                    edgeBackGestureOffset = 0
+                }
+            }
+    }
+    
+    private func collapseDashboard() {
+        withAnimation(dashboardTransition) {
+            viewModel.closeExpandedCard()
+            edgeBackGestureOffset = 0
+            showDashboardCards = false
         }
     }
     
@@ -349,19 +572,7 @@ struct ProfileView: View {
                 title: "全局偏好",
                 subtitle: "这些配置会影响整个 App 的默认行为"
             ) {
-                VStack(spacing: 10) {
-                    Button {
-                        showSettingsCityPicker = true
-                    } label: {
-                        settingsValueRow(
-                            icon: "mappin.and.ellipse",
-                            title: "默认城市",
-                            value: defaultCity,
-                            accent: Color(hex: "#61C6FF")
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-
+                VStack(spacing: 0) {
                     Menu {
                         Button("每次询问") { preferredMapApp = "" }
                         Button("苹果地图") { preferredMapApp = "apple" }
@@ -376,58 +587,22 @@ struct ProfileView: View {
                         )
                     }
 
-                    Menu {
-                        ForEach(AppAppearanceMode.allCases, id: \.rawValue) { mode in
-                            Button(mode.displayName) {
-                                appAppearanceMode = mode.rawValue
-                                showSettingsToast("已切换为\(mode.displayName)")
-                            }
-                        }
-                    } label: {
-                        settingsValueRow(
-                            icon: "circle.lefthalf.filled",
-                            title: "界面风格",
-                            value: appearanceModeName,
-                            accent: Color(hex: "#5C8DFF")
-                        )
-                    }
+                    settingsRowDivider()
+                    appearanceModeSegmentedRow
+                    settingsRowDivider()
 
-                    Menu {
-                        ForEach(librarySortOptions, id: \.self) { option in
-                            Button(option) {
-                                libraryDefaultSortOption = option
-                            }
-                        }
-                    } label: {
-                        settingsValueRow(
-                            icon: "arrow.up.arrow.down",
-                            title: "食库默认排序",
-                            value: libraryDefaultSortOption,
-                            accent: Color(hex: "#FFC857")
-                        )
-                    }
-
-                    Toggle(isOn: $smartInputProxyEnabled) {
+                    Toggle(isOn: $hapticFeedbackEnabled) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("智能输入代理")
+                            Text("震动反馈")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(Color(hex: "#2D3436"))
-                            Text("输入框位于底部时自动启用吸附输入栏")
+                                .foregroundStyle(settingsPrimaryTextColor)
+                            Text("关闭后全局禁用轻震动与提示反馈")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(Color(hex: "#95A0A7"))
+                                .foregroundStyle(settingsSecondaryTextColor)
                         }
                     }
-                    .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#61C6FF")))
-                    .padding(.top, 2)
-
-                    settingsActionButton(
-                        icon: "arrow.counterclockwise.circle",
-                        title: "恢复系统默认设置",
-                        tint: Color(hex: "#E17055"),
-                        isDestructive: true
-                    ) {
-                        showResetSettingsAlert = true
-                    }
+                    .toggleStyle(SwitchToggleStyle(tint: settingsToggleTint))
+                    .padding(.vertical, 12)
                 }
             }
 
@@ -435,7 +610,7 @@ struct ProfileView: View {
                 title: "数据与缓存",
                 subtitle: "导入导出与统一缓存清理"
             ) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 0) {
                     settingsActionButton(
                         icon: "trash.slash",
                         title: "清理所有缓存",
@@ -444,14 +619,16 @@ struct ProfileView: View {
                         showClearCacheAlert = true
                     }
 
+                    settingsRowDivider()
                     settingsActionButton(
                         icon: "square.and.arrow.down",
                         title: "导入餐厅数据",
                         tint: Color(hex: "#61C6FF")
                     ) {
-                        showRestaurantImportPicker = true
+                        showRestaurantImportAssistDialog = true
                     }
 
+                    settingsRowDivider()
                     settingsActionButton(
                         icon: "square.and.arrow.up",
                         title: "导出餐厅数据",
@@ -460,6 +637,7 @@ struct ProfileView: View {
                         exportRestaurantData()
                     }
 
+                    settingsRowDivider()
                     settingsActionButton(
                         icon: "chart.bar.doc.horizontal",
                         title: "导出消费数据",
@@ -468,7 +646,75 @@ struct ProfileView: View {
                         exportConsumptionData()
                     }
 
-                    dataImportExportHintCard
+                    settingsRowDivider()
+                    Toggle(isOn: $iCloudSyncEnabled) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("iCloud 同步")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(settingsPrimaryTextColor)
+                            Text("建议开启 iCloud 同步，避免数据丢失并保持多设备一致。")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(settingsSecondaryTextColor)
+                        }
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: settingsToggleTint))
+                    .padding(.vertical, 12)
+                }
+            }
+
+            settingsSectionCard(
+                title: "账户与安全",
+                subtitle: "Apple ID 登录与面容 ID 保护"
+            ) {
+                VStack(alignment: .leading, spacing: 0) {
+                    accountStatusRow
+
+                    if authManager.isSignedIn {
+                        settingsRowDivider()
+                        Toggle(isOn: faceIDEnabledBinding) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("开启面容 ID")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(settingsPrimaryTextColor)
+                                Text(faceIDHintText)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(settingsSecondaryTextColor)
+                            }
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: settingsToggleTint))
+                        .padding(.vertical, 12)
+                        .disabled(!appLockManager.isFaceIDAvailable)
+                    } else {
+                        settingsRowDivider()
+                        settingsActionButton(
+                            icon: "apple.logo",
+                            title: "使用 Apple ID 登录",
+                            tint: Color(hex: "#2D3436")
+                        ) {
+                            authManager.startSignIn()
+                        }
+                    }
+
+                    if authManager.isSignedIn {
+                        settingsRowDivider()
+                        settingsActionButton(
+                            icon: "arrow.triangle.2.circlepath",
+                            title: "切换账户",
+                            tint: Color(hex: "#5C8DFF")
+                        ) {
+                            showSwitchAccountAlert = true
+                        }
+
+                        settingsRowDivider()
+                        settingsActionButton(
+                            icon: "rectangle.portrait.and.arrow.right",
+                            title: "退出账户",
+                            tint: Color(hex: "#E17055"),
+                            isDestructive: true
+                        ) {
+                            showSignOutAlert = true
+                        }
+                    }
                 }
             }
 
@@ -479,17 +725,17 @@ struct ProfileView: View {
                 HStack(alignment: .center, spacing: 8) {
                     Image(systemName: "location.fill")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(Color(hex: "#61C6FF"))
+                        .foregroundStyle(Color(hex: "#61C6FF"))
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(Color(hex: "#61C6FF").opacity(0.14)))
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("定位权限")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(Color(hex: "#2D3436"))
+                            .foregroundStyle(settingsPrimaryTextColor)
                         Text(locationPermissionText)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color(hex: "#95A0A7"))
+                            .foregroundStyle(settingsSecondaryTextColor)
                     }
 
                     Spacer()
@@ -498,16 +744,29 @@ struct ProfileView: View {
                         handleLocationPermissionAction()
                     }
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Color(hex: "#2D3436"))
+                    .foregroundStyle(settingsPrimaryTextColor)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
                     .background(
                         Capsule()
-                            .fill(Color(hex: "#F3F5F6"))
+                            .fill(settingsPillBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(settingsPillBorder.opacity(0.86), lineWidth: 0.8)
+                            )
                     )
                 }
+                .padding(.vertical, 2)
             }
         }
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: SettingsPanelOffsetPreferenceKey.self,
+                    value: proxy.frame(in: .named("ProfileScrollArea")).minY
+                )
+            }
+        )
     }
 
     private func settingsSectionCard<Content: View>(
@@ -519,20 +778,107 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: "#2D3436"))
+                    .foregroundStyle(settingsPrimaryTextColor)
                 Text(subtitle)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: "#95A0A7"))
+                    .foregroundStyle(settingsSecondaryTextColor)
             }
 
             content()
         }
-        .padding(14)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 15)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(hex: "#FFFFFF"))
-                .shadow(color: Color.black.opacity(0.04), radius: 10, x: 0, y: 4)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(settingsCardGradient)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(settingsCardStroke, lineWidth: 1)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(settingsCardInnerStroke, lineWidth: 0.5)
+                        .padding(1.1)
+                )
+                .shadow(color: settingsCardShadow, radius: colorScheme == .dark ? 22 : 14, x: 0, y: colorScheme == .dark ? 10 : 6)
         )
+        .transition(settingsPanelTransition)
+        .animation(settingsSectionAnimation, value: showDashboardCards)
+    }
+
+    private func settingsRowDivider() -> some View {
+        Rectangle()
+            .fill(settingsSeparatorColor.opacity(colorScheme == .dark ? 0.84 : 1))
+            .frame(height: 1)
+            .padding(.leading, 38)
+    }
+    
+    private var appearanceModeSegmentedRow: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 9) {
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(hex: "#5C8DFF"))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(Color(hex: "#5C8DFF").opacity(0.14))
+                    )
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("界面风格")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(settingsPrimaryTextColor)
+                    Text(appearanceModeName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                }
+            }
+            
+            Spacer(minLength: 8)
+            
+            HStack(spacing: 4) {
+                appearanceModeButton(mode: .light, icon: "sun.max.fill")
+                appearanceModeButton(mode: .dark, icon: "moon.fill")
+                appearanceModeButton(mode: .system, icon: "circle.lefthalf.filled")
+            }
+            .padding(3)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(settingsSegmentTrack)
+            )
+        }
+        .padding(.vertical, 12)
+    }
+    
+    private func appearanceModeButton(mode: AppAppearanceMode, icon: String) -> some View {
+        let isActive = appAppearanceMode == mode.rawValue
+        
+        return Button {
+            guard appAppearanceMode != mode.rawValue else { return }
+            appAppearanceMode = mode.rawValue
+            showSettingsToast("已切换为\(mode.displayName)")
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isActive ? settingsPrimaryTextColor : settingsSecondaryTextColor)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(isActive ? settingsPillBackground : Color.clear)
+                        .overlay(
+                            Circle()
+                                .stroke(isActive ? settingsPillBorder.opacity(0.82) : Color.clear, lineWidth: 0.8)
+                        )
+                        .shadow(
+                            color: isActive ? settingsCardShadow.opacity(0.75) : Color.clear,
+                            radius: isActive ? 8 : 0,
+                            x: 0,
+                            y: 3
+                        )
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 
     private func settingsValueRow(
@@ -544,7 +890,7 @@ struct ProfileView: View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(accent)
+                .foregroundStyle(accent)
                 .frame(width: 28, height: 28)
                 .background(
                     Circle()
@@ -553,25 +899,21 @@ struct ProfileView: View {
 
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Color(hex: "#2D3436"))
+                .foregroundStyle(settingsPrimaryTextColor)
 
             Spacer()
 
             Text(value)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(hex: "#636E72"))
+                .foregroundStyle(settingsTertiaryTextColor)
                 .lineLimit(1)
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(Color(hex: "#AAB2B9"))
+                .foregroundStyle(settingsChevronColor)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(hex: "#F7F8FA"))
-        )
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private func settingsActionButton(
@@ -585,57 +927,116 @@ struct ProfileView: View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(tint)
+                    .foregroundStyle(tint)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(tint.opacity(0.14)))
 
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(isDestructive ? Color(hex: "#D63031") : Color(hex: "#2D3436"))
+                    .foregroundStyle(isDestructive ? Color(hex: "#D63031") : settingsPrimaryTextColor)
 
                 Spacer()
 
                 Image(systemName: "arrow.right")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(Color(hex: "#AAB2B9"))
+                    .foregroundStyle(settingsChevronColor)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(hex: "#F7F8FA"))
-            )
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
     }
 
-    private var dataImportExportHintCard: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("导入格式要求")
+    private var accountStatusRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "person.crop.circle.badge.checkmark")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color(hex: "#5C8DFF"))
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(Color(hex: "#5C8DFF").opacity(0.14))
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("账户状态")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(settingsPrimaryTextColor)
+                Text(authManager.isSignedIn ? authManager.displayLabel : "未登录 Apple ID")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(settingsSecondaryTextColor)
+            }
+
+            Spacer()
+
+            Text(authManager.isSignedIn ? "已登录" : "未登录")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(Color(hex: "#636E72"))
-            Text("版本：\(DataCSVSupport.restaurantImportVersion)")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "#7F8C8D"))
-            Text("文件：.csv（UTF-8 编码，首行为表头）")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "#7F8C8D"))
-            Text("必填列：name,type,rating,district,address,review")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "#7F8C8D"))
-            Text("导出会自动使用 UTF-8 BOM + 标准 CSV 转义，兼容 Excel/WPS/飞书。")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "#7F8C8D"))
+                .foregroundStyle(authManager.isSignedIn ? Color(hex: "#2ECC71") : Color(hex: "#E17055"))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(settingsPillBackground)
+                        .overlay(
+                            Capsule()
+                                .stroke(settingsPillBorder.opacity(0.86), lineWidth: 0.8)
+                        )
+                )
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#F7F8FA"))
+        .padding(.vertical, 12)
+    }
+
+    private var faceIDEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { appLockManager.isFaceIDEnabled },
+            set: { enabled in
+                if enabled && !appLockManager.isFaceIDAvailable {
+                    showSettingsToast("当前设备不支持面容 ID")
+                    return
+                }
+                appLockManager.setFaceIDEnabled(enabled)
+                showSettingsToast(enabled ? "面容 ID 已开启（冷启动验证）" : "面容 ID 已关闭")
+            }
         )
     }
 
-    private var librarySortOptions: [String] {
-        ["智能排序", "距离最近", "评分最高", "最近添加"]
+    private var faceIDHintText: String {
+        if !appLockManager.isFaceIDAvailable {
+            return "当前设备不可用，仅支持带 Face ID 的机型"
+        }
+        return "开启后 App 冷启动需要面容 ID 验证"
+    }
+
+    private var appleSignInSheet: some View {
+        VStack(spacing: 18) {
+            Text("登录 WhatToEat")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(Color(hex: "#2D3436"))
+
+            Text("使用 Apple ID 登录以启用账户切换、面容 ID 与 iCloud 同步关联。")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Color(hex: "#636E72"))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 18)
+
+            SignInWithAppleButton(.signIn) { request in
+                request.requestedScopes = [.fullName]
+            } onCompletion: { result in
+                showSettingsToast(authManager.handleAuthorizationResult(result))
+            }
+            .signInWithAppleButtonStyle(.black)
+            .frame(height: 48)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal, 18)
+
+            Button("稍后再说") {
+                authManager.showSignInSheet = false
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(Color(hex: "#636E72"))
+        }
+        .padding(.vertical, 22)
+        .presentationDetents([.height(260)])
     }
 
     private var preferredMapAppName: String {
@@ -696,13 +1097,18 @@ struct ProfileView: View {
         }
     }
 
-    private func resetSystemSettings() {
-        preferredMapApp = ""
-        defaultCity = "重庆"
-        libraryDefaultSortOption = librarySortOptions[0]
-        smartInputProxyEnabled = true
-        appAppearanceMode = AppAppearanceMode.system.rawValue
-        showSettingsToast("系统设置已恢复默认")
+    private func handleICloudToggleChanged(to enabled: Bool) {
+        if enabled {
+            CloudSyncManager.shared.prepareMigrationPayloadIfNeeded(
+                restaurants: restaurants,
+                logs: visitLogs
+            )
+            UserDefaults.standard.set(false, forKey: AppSettingsKeys.didMigrateToICloud)
+        }
+
+        CloudSyncManager.shared.setICloudSyncEnabled(enabled)
+        showSettingsToast(enabled ? "iCloud 同步已开启，重启后生效" : "iCloud 同步已关闭，重启后生效")
+        showICloudRestartAlert = true
     }
 
     private func clearAllCaches() {
@@ -724,6 +1130,13 @@ struct ProfileView: View {
                 showSettingsToast("本地缓存已清理")
             }
         }
+    }
+
+    private func exportRestaurantTemplate() {
+        let csv = DataCSVSupport.makeRestaurantTemplateCSV(defaultCity: defaultCity)
+        exportDocument = CSVTextDocument(text: csv)
+        exportFilename = DataCSVSupport.makeExportFilename(prefix: "whattoeat_restaurant_template")
+        showExportSheet = true
     }
 
     private func handleRestaurantImport(_ result: Result<[URL], Error>) {
@@ -804,29 +1217,150 @@ struct ProfileView: View {
         VStack {
             Text(message)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(hex: "#2D3436"))
+                .foregroundStyle(settingsPrimaryTextColor)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(Color(hex: "#FFFFFF"))
-                        .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 3)
+                        .fill(settingsPillBackground)
+                        .overlay(
+                            Capsule()
+                                .stroke(settingsPillBorder.opacity(0.86), lineWidth: 0.8)
+                        )
+                        .shadow(color: settingsCardShadow.opacity(0.82), radius: 10, x: 0, y: 3)
                 )
             Spacer()
         }
         .padding(.top, 10)
     }
     
-    // MARK: - Profile Header（头像穿透半透明卡片的Hero效果）
+    // MARK: - Profile Header
     private func profileHeader(isCompact: Bool) -> some View {
+        ZStack {
+            if isCompact {
+                compactProfileHeader
+                    .transition(
+                        .asymmetric(
+                            insertion: .modifier(
+                                active: BlurSlideTransitionModifier(yOffset: -10, blurRadius: 0, opacity: 0, scale: 0.95),
+                                identity: BlurSlideTransitionModifier(yOffset: 0, blurRadius: 0, opacity: 1, scale: 1)
+                            ),
+                            removal: .modifier(
+                                active: BlurSlideTransitionModifier(yOffset: 12, blurRadius: 0, opacity: 0, scale: 1.01),
+                                identity: BlurSlideTransitionModifier(yOffset: 0, blurRadius: 0, opacity: 1, scale: 1)
+                            )
+                        )
+                    )
+            } else {
+                expandedProfileHeader
+                    .transition(
+                        .asymmetric(
+                            insertion: .modifier(
+                                active: BlurSlideTransitionModifier(yOffset: 16, blurRadius: 0, opacity: 0, scale: 0.975),
+                                identity: BlurSlideTransitionModifier(yOffset: 0, blurRadius: 0, opacity: 1, scale: 1)
+                            ),
+                            removal: .modifier(
+                                active: BlurSlideTransitionModifier(yOffset: -12, blurRadius: 0, opacity: 0, scale: 0.965),
+                                identity: BlurSlideTransitionModifier(yOffset: 0, blurRadius: 0, opacity: 1, scale: 1)
+                            )
+                        )
+                    )
+            }
+        }
+        .animation(headerTransitionAnimation, value: isCompact)
+        .sheet(isPresented: $viewModel.showingEditProfile) {
+            EditProfileView(userProfile: $viewModel.userProfile)
+        }
+    }
+
+    // MARK: - 紧凑头部（给展开面板腾空间）
+    private var compactProfileHeader: some View {
+        let levelProgress = min(
+            CGFloat(viewModel.totalCheckIns) / CGFloat(max(viewModel.getNextLevelRequirement(), 1)),
+            1.0
+        )
+        let progressPercent = Int((levelProgress * 100).rounded())
+        let levelTitle = "Lv.\(viewModel.calculateLevel()) · \(viewModel.getLevelTitle())"
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Button {
+                    viewModel.showingEditProfile = true
+                } label: {
+                    profileAvatar(size: 48, shadowRadius: 10, shadowYOffset: 4, showsHalo: false)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(viewModel.userProfile.nickname)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(settingsPrimaryTextColor)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        Text(levelTitle)
+                            .lineLimit(1)
+                        Spacer(minLength: 6)
+                        Text("\(progressPercent)%")
+                            .contentTransition(.numericText())
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(settingsTertiaryTextColor)
+                }
+
+                Button {
+                    viewModel.showingEditProfile = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(profileEditIconColor)
+                        .frame(width: 30, height: 30)
+                        .background(
+                            Circle()
+                                .fill(profileSecondarySurfaceColor)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(profileProgressTrackColor)
+                        .frame(height: 6)
+
+                    Capsule()
+                        .fill(profileProgressFillColor)
+                        .frame(width: geometry.size.width * levelProgress, height: 6)
+                        .animation(.spring(response: 0.45, dampingFraction: 0.84), value: levelProgress)
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(profileSurfaceColor)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(profileStrokeColor.opacity(0.9), lineWidth: 0.9)
+                )
+                .shadow(color: profileHeaderShadowColor, radius: 12, x: 0, y: 5)
+        )
+        .matchedGeometryEffect(id: "profile-summary-card", in: animationNamespace)
+    }
+
+    // MARK: - 展开前头部（原始大头像名片）
+    private var expandedProfileHeader: some View {
         // 使用屏幕宽度计算，确保头像尺寸正确
         let screenWidth = ScreenMetrics.bounds.width - 40  // 减去左右 padding(20)
-        let avatarSize = screenWidth * (isCompact ? 0.54 : 0.67)
-        let cardOverlap = avatarSize * (isCompact ? 0.15 : 0.1)
-        let avatarTopOffset = avatarSize * (isCompact ? 0.07 : 0.15)
+        let avatarSize = screenWidth * 0.67
+        let cardOverlap = avatarSize * 0.1
+        let avatarTopOffset = avatarSize * 0.15
         let infoCardTopOffset = avatarTopOffset + avatarSize - cardOverlap
         let avatarOffsetInCard = avatarTopOffset - infoCardTopOffset
-        let infoCardHeight: CGFloat = isCompact ? 148 : 164
+        let infoCardHeight: CGFloat = 164
         let containerHeight = infoCardTopOffset + infoCardHeight
         
         return ZStack(alignment: .top) {
@@ -840,7 +1374,7 @@ struct ProfileView: View {
             // 卡片顶部位置 = 头像偏移 + 头像高度 - 卡片覆盖部分
             glassInfoCard(
                 cardOverlap: cardOverlap,
-                isCompact: isCompact,
+                isCompact: false,
                 cardHeight: infoCardHeight,
                 avatarSize: avatarSize,
                 avatarOffsetInCard: avatarOffsetInCard
@@ -851,12 +1385,14 @@ struct ProfileView: View {
         .frame(maxWidth: .infinity, minHeight: containerHeight, maxHeight: containerHeight, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color(hex: "#FFFFFF"))
+                .fill(profileSurfaceColor)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(profileStrokeColor.opacity(0.82), lineWidth: 1)
+                )
         )
         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .sheet(isPresented: $viewModel.showingEditProfile) {
-            EditProfileView(userProfile: $viewModel.userProfile)
-        }
+        .shadow(color: profileHeaderShadowColor.opacity(0.9), radius: 16, x: 0, y: 8)
     }
     
     // MARK: - 头像层
@@ -866,35 +1402,59 @@ struct ProfileView: View {
         }) {
             ZStack {
                 // 头像背景光晕
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color(hex: "#FFB6C1").opacity(0.4),
-                                Color(hex: "#FFC0CB").opacity(0.1),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: size * 0.25,
-                            endRadius: size * 0.6
-                        )
-                    )
-                    .frame(width: size * 1.15, height: size * 1.15)
-                
-                // 头像主体
-                avatarPhoto(size: size)
-                .overlay(
-                    Circle()
-                        .stroke(Color.white, lineWidth: 4)
-                )
-                .background(
-                    Circle()
-                        .fill(Color(hex: "#FFFFFF"))
-                        .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
+                profileAvatar(
+                    size: size,
+                    shadowRadius: 20,
+                    shadowYOffset: 10,
+                    showsHalo: true
                 )
             }
         }
         .buttonStyle(PlainButtonStyle())
+    }
+
+    private func profileAvatar(
+        size: CGFloat,
+        shadowRadius: CGFloat,
+        shadowYOffset: CGFloat,
+        showsHalo: Bool
+    ) -> some View {
+        ZStack {
+            if showsHalo {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(hex: "#FFB6C1").opacity(0.34),
+                                Color(hex: "#FFC0CB").opacity(0.08),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: size * 0.22,
+                            endRadius: size * 0.62
+                        )
+                    )
+                    .frame(width: size * 1.16, height: size * 1.16)
+                    .transition(.opacity)
+            }
+
+            Circle()
+                .fill(profileSurfaceColor)
+                .frame(width: size, height: size)
+                .shadow(color: profileHeaderShadowColor.opacity(0.98), radius: shadowRadius, x: 0, y: shadowYOffset)
+                .matchedGeometryEffect(id: "profile-avatar-shell", in: animationNamespace)
+
+            avatarPhoto(size: size)
+                .matchedGeometryEffect(id: "profile-avatar-image", in: animationNamespace)
+
+            Circle()
+                .stroke(profileAvatarRingColor, lineWidth: 3)
+                .frame(width: size, height: size)
+                .matchedGeometryEffect(id: "profile-avatar-ring", in: animationNamespace)
+        }
+        .frame(width: size, height: size)
+        .compositingGroup()
+        .animation(profileAvatarAnimation, value: showDashboardCards)
     }
     
     @ViewBuilder
@@ -910,7 +1470,7 @@ struct ProfileView: View {
                     .resizable()
                     .scaledToFit()
                     .padding(size * 0.2)
-                    .foregroundColor(Color(hex: "#FFB6C1"))
+                    .foregroundStyle(Color(hex: "#FFB6C1"))
             }
         }
         .frame(width: size, height: size)
@@ -951,11 +1511,11 @@ struct ProfileView: View {
                 VStack(alignment: .leading, spacing: nameSubtitleSpacing) {
                     Text(viewModel.userProfile.nickname)
                         .font(.system(size: nameFont, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(hex: "#2D3436"))
+                        .foregroundStyle(settingsPrimaryTextColor)
                     
                     Text(viewModel.userProfile.bio)
                         .font(.system(size: subtitleFont, weight: .medium))
-                        .foregroundColor(Color(hex: "#B2BEC3"))
+                        .foregroundStyle(profileSecondaryTextColor)
                 }
                 
                 Spacer(minLength: 8)
@@ -966,13 +1526,13 @@ struct ProfileView: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(levelTitle)
                     .font(.system(size: verificationFont, weight: .medium))
-                    .foregroundColor(Color(hex: "#5E646B"))
+                    .foregroundStyle(profileMutedTextColor)
                 
                 Spacer()
                 
                 Text("\(progressPercent)%")
                     .font(.system(size: percentageFont, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: "#2D3436"))
+                    .foregroundStyle(settingsPrimaryTextColor)
                     .contentTransition(.numericText())
             }
             .padding(.top, sectionTopInset)
@@ -980,11 +1540,11 @@ struct ProfileView: View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(Color(hex: "#E6E8EA"))
+                        .fill(profileProgressTrackColor)
                         .frame(height: progressBarHeight)
                     
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(Color(hex: "#1E2430"))
+                        .fill(profileProgressFillColor)
                         .frame(width: geometry.size.width * levelProgress, height: progressBarHeight)
                         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: levelProgress)
                 }
@@ -999,7 +1559,7 @@ struct ProfileView: View {
             // 文本位于上层，模糊仅作用于底层背景
             ZStack(alignment: .top) {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color(hex: "#FFFFFF"))
+                    .fill(profileSurfaceColor)
                 
                 overlapBlurBand(
                     avatarSize: avatarSize,
@@ -1009,7 +1569,12 @@ struct ProfileView: View {
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .shadow(color: Color.black.opacity(0.06), radius: 20, x: 0, y: 10)
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(profileStrokeColor.opacity(0.8), lineWidth: 0.9)
+        )
+        .shadow(color: profileHeaderShadowColor.opacity(0.92), radius: 20, x: 0, y: 10)
+        .matchedGeometryEffect(id: "profile-summary-card", in: animationNamespace)
         // 注意：不在卡片外部添加 padding，由 profileHeader 的调用方控制
     }
     
@@ -1037,12 +1602,12 @@ struct ProfileView: View {
             Rectangle()
                 .fill(.ultraThinMaterial)
                 .frame(height: overlapBlurHeight)
-                .opacity(0.01)
+                .opacity(colorScheme == .dark ? 0.08 : 0.01)
         }
         .frame(maxWidth: .infinity, minHeight: overlapBlurHeight, maxHeight: overlapBlurHeight, alignment: .top)
         .overlay(
             Rectangle()
-                .fill(Color(hex: "#FFFFFF").opacity(0.03))
+                .fill(Color.adaptiveHex(light: "#FFFFFF", dark: "#223149").opacity(colorScheme == .dark ? 0.12 : 0.03))
         )
         .mask(
             Rectangle()
@@ -1084,11 +1649,11 @@ struct ProfileView: View {
         }) {
             Image(systemName: "pencil")
                 .font(.system(size: iconSize, weight: .semibold))
-                .foregroundColor(Color(hex: "#636E72"))
+                .foregroundStyle(profileEditIconColor)
                 .frame(width: buttonSize, height: buttonSize)
                 .background(
                     Circle()
-                        .fill(Color(.systemGray6))
+                        .fill(profileSecondarySurfaceColor)
                 )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1309,6 +1874,36 @@ struct LevelBadgeView: View {
                     lineWidth: info.hasGoldRim ? 1.5 : 1
                 )
         )
+    }
+}
+
+private struct BlurSlideTransitionModifier: ViewModifier {
+    let yOffset: CGFloat
+    let blurRadius: CGFloat
+    let opacity: Double
+    let scale: CGFloat
+
+    init(yOffset: CGFloat, blurRadius: CGFloat, opacity: Double, scale: CGFloat = 1) {
+        self.yOffset = yOffset
+        self.blurRadius = blurRadius
+        self.opacity = opacity
+        self.scale = scale
+    }
+    
+    func body(content: Content) -> some View {
+        content
+            .offset(y: yOffset)
+            .scaleEffect(scale, anchor: .top)
+            .blur(radius: blurRadius)
+            .opacity(opacity)
+    }
+}
+
+private struct SettingsPanelOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

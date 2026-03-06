@@ -123,42 +123,12 @@ class CityRecognizer {
     
     /// 从地址识别城市
     func recognizeCity(from address: String, district: String) -> (city: String, district: String) {
-        let allCities = RegionManager.shared.allCities
-        var recognizedCity = defaultCity
-        var finalDistrict = district
-        
-        // 1. 优先从地址中匹配城市
-        for city in allCities {
-            if address.contains(city) {
-                recognizedCity = city
-                break
-            }
-        }
-        
-        // 2. 特殊处理：永川区属于重庆
-        if address.contains("永川") || district.contains("永川") {
-            recognizedCity = "重庆"
-            if district.contains("永川") {
-                finalDistrict = "永川"
-            } else if address.contains("永川区") {
-                finalDistrict = "永川"
-            }
-        }
-        
-        // 3. 其他特殊处理可以在这里添加
-        // 例如：涪陵区、万州区等都属于重庆
-        let chongqingDistricts = ["涪陵", "万州", "合川", "江津", "南川", "綦江", "大足", "璧山", "铜梁", "潼南", "荣昌", "开州", "梁平", "武隆"]
-        for d in chongqingDistricts {
-            if address.contains(d) || district.contains(d) {
-                recognizedCity = "重庆"
-                if district.contains(d) {
-                    finalDistrict = d
-                }
-                break
-            }
-        }
-        
-        return (recognizedCity, finalDistrict)
+        let normalized = RestaurantCityNormalizer.normalize(
+            address: address,
+            district: district,
+            fallbackCity: defaultCity
+        )
+        return (normalized.city, normalized.district)
     }
 }
 

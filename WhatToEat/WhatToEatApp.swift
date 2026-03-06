@@ -29,19 +29,45 @@ struct WhatToEatApp: App {
             VisitLog.self,
             UserCategory.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let localConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+
+        if CloudSyncManager.isICloudSyncEnabled() {
+            do {
+                let cloudConfiguration = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: false,
+                    cloudKitDatabase: .automatic
+                )
+                return try ModelContainer(for: schema, configurations: [cloudConfiguration])
+            } catch {
+                print("CloudKit model container unavailable, fallback to local: \(error.localizedDescription)")
+            }
+        }
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(for: schema, configurations: [localConfiguration])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
     }()
 
     init() {
+        HapticManager.installGlobalHooksIfNeeded()
+        bootstrapDefaultSettings()
+
         // 避免在启动关键路径执行文件 I/O，降低首帧白屏时长
         DispatchQueue.global(qos: .utility).async {
             Self.setupRegionsFile()
+        }
+    }
+
+    private func bootstrapDefaultSettings() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: AppSettingsKeys.hapticFeedbackEnabled) == nil {
+            defaults.set(true, forKey: AppSettingsKeys.hapticFeedbackEnabled)
+        }
+        if defaults.object(forKey: AppSettingsKeys.iCloudSyncEnabled) == nil {
+            defaults.set(true, forKey: AppSettingsKeys.iCloudSyncEnabled)
         }
     }
 
