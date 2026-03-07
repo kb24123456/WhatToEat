@@ -14,10 +14,11 @@ final class AppLockManager: ObservableObject {
     private init() {}
 
     var isFaceIDEnabled: Bool {
-        UserDefaults.standard.bool(forKey: AppSettingsKeys.faceIDEnabled)
+        UserDefaults.standard.bool(forKey: AppSettingsKeys.faceIDEnabled) && PrimeAccessManager.shared.isPrimeActive
     }
 
     func setFaceIDEnabled(_ enabled: Bool) {
+        guard PrimeAccessManager.shared.isPrimeActive || !enabled else { return }
         UserDefaults.standard.set(enabled, forKey: AppSettingsKeys.faceIDEnabled)
     }
 

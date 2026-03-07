@@ -6,51 +6,36 @@
 //
 
 import SwiftUI
+import SwiftData
 
 // MARK: - Restaurants Card
 struct RestaurantsCardPreview: View {
     let viewModel: ProfileViewModel
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("常去餐厅")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.lightText)
-                .tracking(0.5)
-            
+        VStack(alignment: .leading, spacing: 10) {
+            PreviewCardTitle(title: "常去餐厅")
+
             let topRestaurants = viewModel.getTopRestaurants(limit: 1)
             if let top = topRestaurants.first {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(top.name)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.Colors.darkText)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.75)
 
                     Text("\(top.logs.count)次打卡")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppTheme.Colors.mediumGray)
                 }
             } else {
-                Text("暂无数据")
-                    .font(.system(size: 16))
+                Text("暂无常去餐厅")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.mediumGray)
             }
 
             Spacer(minLength: 0)
-
-            // TOP3 预览
-            HStack(spacing: 8) {
-                ForEach(0..<min(3, viewModel.getTopRestaurants(limit: 3).count), id: \.self) { index in
-                    Circle()
-                        .fill(AppTheme.Colors.coralRed.opacity(0.1))
-                        .frame(width: 28, height: 28)
-                        .overlay(
-                            Text("\(index + 1)")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(AppTheme.Colors.darkText)
-                        )
-                }
-            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -157,38 +142,36 @@ struct TimelineCardPreview: View {
     let viewModel: ProfileViewModel
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("美食足迹")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.lightText)
-                .tracking(0.5)
-            
+        VStack(alignment: .leading, spacing: 10) {
+            PreviewCardTitle(title: "美食足迹")
+
             let recentLogs = viewModel.getRecentLogsWithRestaurant(limit: 1)
             if let latest = recentLogs.first {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(latest.restaurantName)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.Colors.darkText)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.75)
 
                     Text(latest.log.date.chineseDateOnly)
-                        .font(.system(size: 12))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundColor(AppTheme.Colors.mediumGray)
                 }
             } else {
-                Text("暂无记录")
-                    .font(.system(size: 16))
+                Text("暂无足迹")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.mediumGray)
             }
 
             Spacer(minLength: 0)
 
-            // 最近3天指示
-            HStack(spacing: 4) {
-                ForEach(0..<3) { i in
-                    Circle()
-                        .fill(i == 0 ? AppTheme.Colors.xhsRed : AppTheme.Colors.softBackground)
-                        .frame(width: 6, height: 6)
+            HStack(spacing: 6) {
+                if let latest = recentLogs.first {
+                    PreviewChip(text: "¥\(Int(latest.log.expense))")
+                    PreviewChip(text: "\(latest.log.peopleCount)人")
+                } else {
+                    PreviewChip(text: "下一次打卡会出现在这里")
                 }
             }
         }
@@ -246,10 +229,24 @@ struct TimelineCardDetail: View {
         }
         .sheet(isPresented: $viewModel.showCheckInHistory) {
             CheckInHistoryView()
+                .modifier(CheckInHistoryContainerBridge(modelContext: viewModel.modelContext))
                 .presentationBackground(AppTheme.Colors.milkWhite)
         }
         .onAppear {
             localController.beginExpansion()
+        }
+    }
+}
+
+private struct CheckInHistoryContainerBridge: ViewModifier {
+    let modelContext: ModelContext?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let container = modelContext?.container {
+            content.modelContainer(container)
+        } else {
+            content
         }
     }
 }
@@ -323,46 +320,31 @@ struct ZodiacCardPreview: View {
     let viewModel: ProfileViewModel
     
     var body: some View {
-        HStack(spacing: 12) {
-            // 左侧：图标
+        VStack(alignment: .leading, spacing: 10) {
+            PreviewCardTitle(title: "味蕾星盘")
+
             if let zodiac = ZodiacUtil.loadZodiacSign() {
-                Text(viewModel.zodiacSymbol(for: zodiac))
-                    .font(.system(size: 36))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(zodiac)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+
+                    Text(viewModel.zodiacSymbol(for: zodiac))
+                        .font(.system(size: 18))
+                }
             } else {
-                Image(systemName: "star")
-                    .font(.system(size: 24))
+                Text("未设置")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.darkText)
-                    .frame(width: 36, height: 36)
             }
 
-            // 右侧：文字信息
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text("味蕾星盘")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.lightText)
+            Spacer(minLength: 0)
 
-                    Spacer()
-                }
-
-                if let zodiac = ZodiacUtil.loadZodiacSign() {
-                    Text(zodiac)
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.darkText)
-
-                    if let birthDate = ZodiacUtil.loadBirthDate() {
-                        Text(viewModel.formatBirthDate(birthDate))
-                            .font(.system(size: 11))
-                            .foregroundColor(AppTheme.Colors.mediumGray)
-                    }
+            HStack(spacing: 6) {
+                if let birthDate = ZodiacUtil.loadBirthDate() {
+                    PreviewChip(text: viewModel.formatBirthDate(birthDate))
                 } else {
-                    Text("未设置")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.darkText)
-
-                    Text("点击设置生辰")
-                        .font(.system(size: 11))
-                        .foregroundColor(AppTheme.Colors.mediumGray)
+                    PreviewChip(text: "点击补全生日")
                 }
             }
         }

@@ -82,6 +82,60 @@ struct ExpandableCard<Preview: View, Detail: View>: View {
     }
 }
 
+struct ZoomNavigationCard<Preview: View, Destination: View>: View {
+    let id: String
+    let cardSize: CardSize
+    @ViewBuilder let preview: () -> Preview
+    @ViewBuilder let destination: () -> Destination
+
+    let namespace: Namespace.ID
+
+    private let previewCornerRadius: CGFloat = 20
+
+    var body: some View {
+        NavigationLink {
+            destination()
+                .navigationTransition(.zoom(sourceID: transitionSourceID, in: namespace))
+        } label: {
+            sourceCardContainer
+        }
+        .buttonStyle(DashboardCardPressStyle())
+        .accessibilityIdentifier("dashboard-card-\(id)")
+    }
+
+    private var transitionSourceID: String {
+        "dashboard-card-\(id)"
+    }
+
+    private var sourceCardContainer: some View {
+        ZStack(alignment: .topLeading) {
+            cardShell(cornerRadius: previewCornerRadius)
+
+            preview()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: cardSize.fixedHeight)
+        .clipShape(RoundedRectangle(cornerRadius: previewCornerRadius, style: .continuous))
+        .matchedTransitionSource(id: transitionSourceID, in: namespace)
+        .contentShape(RoundedRectangle(cornerRadius: previewCornerRadius, style: .continuous))
+    }
+
+    private func cardShell(cornerRadius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color.profileDashboardCardSurface)
+            .overlay(
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.profileDashboardCardHighlightStroke, lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.profileDashboardCardStroke, lineWidth: 0.5)
+                }
+            )
+            .shadow(color: Color.profileDashboardCardShadow, radius: 10, x: 0, y: 4)
+    }
+}
+
 private struct DashboardCardDetailPage<Content: View>: View {
     @ViewBuilder let content: () -> Content
 

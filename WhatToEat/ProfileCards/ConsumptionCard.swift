@@ -13,31 +13,25 @@ struct ConsumptionCardPreview: View {
     let viewModel: ProfileViewModel
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 标题
-            Text("消费洞察")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.lightText)
-                .tracking(0.5)
-            
-            // 本月消费
-            VStack(alignment: .leading, spacing: 4) {
-                Text("本月消费")
-                    .font(.system(size: 12))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
-                
+        VStack(alignment: .leading, spacing: 10) {
+            PreviewCardTitle(title: "消费洞察")
+
+            HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text(viewModel.formatCurrency(viewModel.totalExpense))
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.darkText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+
+                Text("总消费")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppTheme.Colors.mediumGray)
             }
-            
+
             Spacer(minLength: 0)
-            
-            // 迷你趋势图
+
             ConsumptionMiniChart(viewModel: viewModel)
-                .frame(height: 36)
+                .frame(height: 30)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)

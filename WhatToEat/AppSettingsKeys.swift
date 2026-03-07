@@ -15,4 +15,8 @@ enum AppSettingsKeys {
     static let appleUserDisplayName = "appleUserDisplayName"
     static let searchHistory = "searchHistory"
     static let categoryCorrectionMap = "categoryCorrectionMap"
+    static let primeOfferStartDay = "primeOfferStartDay"
+    static let primeOfferStartTimestamp = "primeOfferStartTimestamp"
+    static let primeMembershipPlan = "primeMembershipPlan"
+    static let didDeduplicateVisitLogsV1 = "didDeduplicateVisitLogsV1"
 }

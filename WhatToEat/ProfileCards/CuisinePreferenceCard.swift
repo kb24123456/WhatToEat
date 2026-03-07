@@ -12,64 +12,76 @@ struct CuisinePreferenceCardPreview: View {
     let viewModel: ProfileViewModel
     
     var body: some View {
+        let data = viewModel.getCuisineTypeDistribution()
+
         VStack(alignment: .leading, spacing: 10) {
-            // 标题
-            HStack {
-                Text("餐饮偏好")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.lightText)
-                    .tracking(0.5)
-                
-                Spacer()
-            }
-            
-            // 圆环图 + 主要偏好
-            let data = viewModel.getCuisineTypeDistribution()
-            HStack(spacing: 12) {
-                // 迷你圆环图
+            PreviewCardTitle(title: "餐饮偏好")
+
+            if data.first != nil {
                 CuisineMiniRingChart(data: data)
-                    .frame(width: 60, height: 60)
-                
-                // 主要偏好文字
-                if let topType = data.first {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(topType.type)
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.Colors.darkText)
-                        
-                        Text("最爱吃的品类")
-                            .font(.system(size: 12))
-                            .foregroundColor(AppTheme.Colors.mediumGray)
-                    }
+                    .frame(width: 92, height: 92)
+            } else {
+                ZStack {
+                    Circle()
+                        .stroke(AppTheme.Colors.softBackground, lineWidth: 10)
+
+                    Text("暂无\n偏好")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                        .multilineTextAlignment(.center)
                 }
-                
-                Spacer(minLength: 0)
+                .frame(width: 92, height: 92)
             }
-            
+
             Spacer(minLength: 0)
-            
-            // 品类预览
-            HStack(spacing: 6) {
-                ForEach(data.prefix(3), id: \.type) { item in
-                    HStack(spacing: 2) {
-                        Circle()
-                            .fill(item.color)
-                            .frame(width: 6, height: 6)
-                        Text(item.type)
-                            .font(.system(size: 10))
-                            .foregroundColor(AppTheme.Colors.mediumGray)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule()
-                            .fill(AppTheme.Colors.softBackground)
-                    )
-                }
-            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Mini Ring Chart
+private struct CuisineMiniRingChart: View {
+    let data: [(type: String, count: Int, percent: Double, color: Color)]
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(AppTheme.Colors.softBackground, lineWidth: 10)
+
+            ForEach(Array(data.prefix(3).enumerated()), id: \.offset) { index, item in
+                Circle()
+                    .trim(from: getStartAngle(for: index), to: getEndAngle(for: index))
+                    .stroke(
+                        item.color,
+                        style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+            }
+
+            if let topType = data.first {
+                VStack(spacing: 2) {
+                    Text(topType.type)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.darkText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+
+                    Text("\(Int(topType.percent * 100))%")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.Colors.mediumGray)
+                }
+            }
+        }
+    }
+
+    private func getStartAngle(for index: Int) -> CGFloat {
+        let previousPercentages = data.prefix(index).map { $0.percent }
+        return previousPercentages.reduce(0, +)
+    }
+
+    private func getEndAngle(for index: Int) -> CGFloat {
+        getStartAngle(for: index) + data[index].percent
     }
 }
 
@@ -197,48 +209,6 @@ struct CuisinePreferenceCardDetail: View {
         .onAppear {
             localController.beginExpansion()
         }
-    }
-}
-
-// MARK: - Mini Ring Chart
-private struct CuisineMiniRingChart: View {
-    let data: [(type: String, count: Int, percent: Double, color: Color)]
-    
-    var body: some View {
-        ZStack {
-            // 背景圆环
-            Circle()
-                .stroke(AppTheme.Colors.softBackground, lineWidth: 8)
-            
-            // 数据圆环 - 多层叠加
-            ForEach(Array(data.prefix(3).enumerated()), id: \.offset) { index, item in
-                Circle()
-                    .trim(from: getStartAngle(for: index), to: getEndAngle(for: index))
-                    .stroke(
-                        item.color,
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(-90))
-            }
-            
-            // 中心文字
-            if let topType = data.first {
-                VStack(spacing: 0) {
-                    Text("\(Int(topType.percent * 100))%")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.darkText)
-                }
-            }
-        }
-    }
-    
-    private func getStartAngle(for index: Int) -> CGFloat {
-        let previousPercentages = data.prefix(index).map { $0.percent }
-        return previousPercentages.reduce(0, +)
-    }
-    
-    private func getEndAngle(for index: Int) -> CGFloat {
-        return getStartAngle(for: index) + data[index].percent
     }
 }
 

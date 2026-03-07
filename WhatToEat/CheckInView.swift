@@ -55,6 +55,7 @@ struct CheckInView: View {
     @State private var selectedMood: MoodType?
     
     @State private var showConfetti = false
+    @State private var isSaving = false
     
     @State private var animatedPerPersonPrice: Double = 0
     
@@ -554,7 +555,8 @@ struct CheckInView: View {
             )
         }
         .buttonStyle(ScaleButtonStyle())
-        .disabled(expense <= 0)
+        .disabled(expense <= 0 || isSaving)
+        .opacity(isSaving ? 0.72 : 1)
     }
     
     // MARK: - 辅助方法
@@ -586,8 +588,12 @@ struct CheckInView: View {
     }
     
     private func saveCheckIn() {
+        guard !isSaving else { return }
+
         let goodDishesString = goodTags.joined(separator: "，")
         let badDishesString = badTags.joined(separator: "，")
+
+        isSaving = true
         
         if let editingLog = editingLog {
             editingLog.date = date
@@ -598,6 +604,35 @@ struct CheckInView: View {
             editingLog.review = ""
             editingLog.mood = selectedMood?.rawValue
         } else {
+            let newSignature = checkInSignature(
+                restaurantID: restaurant.id,
+                date: date,
+                expense: expense,
+                peopleCount: peopleCount,
+                goodDishes: goodDishesString,
+                badDishes: badDishesString,
+                review: "",
+                mood: selectedMood?.rawValue,
+                photoFilenames: []
+            )
+
+            if restaurant.logs.contains(where: {
+                checkInSignature(
+                    restaurantID: restaurant.id,
+                    date: $0.date,
+                    expense: $0.expense,
+                    peopleCount: $0.peopleCount,
+                    goodDishes: $0.goodDishes,
+                    badDishes: $0.badDishes,
+                    review: $0.review,
+                    mood: $0.mood,
+                    photoFilenames: $0.photoFilenames
+                ) == newSignature
+            }) {
+                onClose()
+                return
+            }
+
             let newLog = VisitLog(
                 date: date,
                 expense: expense,
@@ -611,6 +646,14 @@ struct CheckInView: View {
         }
         
         updateRestaurantAveragePrice()
+
+        do {
+            try modelContext.save()
+        } catch {
+            print("保存打卡失败: \(error)")
+            isSaving = false
+            return
+        }
         
         withAnimation(AppTheme.Animations.standardSpring) {
             showConfetti = true
@@ -620,6 +663,30 @@ struct CheckInView: View {
             showConfetti = false
             onClose()
         }
+    }
+
+    private func checkInSignature(
+        restaurantID: UUID,
+        date: Date,
+        expense: Double,
+        peopleCount: Int,
+        goodDishes: String,
+        badDishes: String,
+        review: String,
+        mood: String?,
+        photoFilenames: [String]
+    ) -> String {
+        [
+            restaurantID.uuidString,
+            String(format: "%.3f", date.timeIntervalSince1970),
+            String(format: "%.2f", expense),
+            String(peopleCount),
+            goodDishes,
+            badDishes,
+            review,
+            mood ?? "",
+            photoFilenames.sorted().joined(separator: ",")
+        ].joined(separator: "|")
     }
     
     private func updateRestaurantAveragePrice() {

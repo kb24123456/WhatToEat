@@ -12,37 +12,26 @@ struct StatsCardPreview: View {
     let viewModel: ProfileViewModel
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 标题
-            Text("数据概览")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.lightText)
-                .tracking(0.5)
-            
-            // 核心数据：总打卡数
+        VStack(alignment: .leading, spacing: 10) {
+            PreviewCardTitle(title: "数据概览")
+
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text("\(viewModel.totalCheckIns)")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.Colors.darkText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 
                 Text("次打卡")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
+                    .foregroundStyle(AppTheme.Colors.mediumGray)
             }
-            
+
             Spacer(minLength: 0)
-            
-            // 次要数据
-            HStack(spacing: 12) {
-                Label("\(viewModel.totalRestaurants)", systemImage: "fork.knife")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
-                
-                Label(viewModel.formatCurrency(viewModel.totalExpense), systemImage: "creditcard")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
+
+            HStack(spacing: 6) {
+                PreviewChip(text: "\(viewModel.totalRestaurants)家餐厅")
+                PreviewChip(text: viewModel.formatCurrency(viewModel.totalExpense))
             }
         }
         .padding(16)

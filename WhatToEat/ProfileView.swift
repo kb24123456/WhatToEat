@@ -29,10 +29,12 @@ struct ProfileView: View {
     @StateObject private var locationManager = LocationManager.shared
     @StateObject private var authManager = AuthManager.shared
     @StateObject private var appLockManager = AppLockManager.shared
+    @StateObject private var primeAccessManager = PrimeAccessManager.shared
     @AppStorage(AppSettingsKeys.userSelectedCity) private var defaultCity: String = "重庆"
     @AppStorage(AppSettingsKeys.appAppearanceMode) private var appAppearanceMode: String = AppAppearanceMode.system.rawValue
     @AppStorage(AppSettingsKeys.hapticFeedbackEnabled) private var hapticFeedbackEnabled: Bool = true
     @AppStorage(AppSettingsKeys.iCloudSyncEnabled) private var iCloudSyncEnabled: Bool = true
+    @AppStorage(AppSettingsKeys.primeOfferStartTimestamp) private var primeOfferStartTimestamp: Double = 0
     @State private var showClearCacheAlert = false
     @State private var settingsToastMessage: String?
     @State private var showRestaurantImportPicker = false
@@ -43,23 +45,23 @@ struct ProfileView: View {
     @State private var showICloudRestartAlert = false
     @State private var showSignOutAlert = false
     @State private var showSwitchAccountAlert = false
-    @State private var edgeBackGestureOffset: CGFloat = 0
     @State private var settingsTopBlurProgress: CGFloat = 0
     @State private var gatewayIndicatorScale: CGFloat = 1
     @State private var lastGatewayAnimationDirection: GatewayAnimationDirection = .next
+    @State private var selectedMembershipPlan: MembershipPlan = .yearly
     
     // 卡片尺寸定义（精调后）
     // 左列总高度: 156 + 212 + 184 + 158 = 710pt
     // 右列总高度: 186 + 212 + 154 + 158 = 710pt
     private let cardSizes: [String: CardSize] = [
-        "stats": .small(height: 156),        // 数据概览
-        "consumption": .large(height: 212),  // 消费洞察
-        "tags": .medium(height: 184),        // 我的标签
-        "cuisine": .medium(height: 158),     // 餐饮偏好
-        "categories": .medium(height: 186),  // 品类管理
-        "restaurants": .large(height: 212),  // 常去餐厅
-        "timeline": .medium(height: 158),    // 美食足迹
-        "zodiac": .small(height: 154)        // 味蕾星盘
+        "stats": .medium(height: 172),
+        "consumption": .medium(height: 172),
+        "tags": .medium(height: 172),
+        "cuisine": .medium(height: 172),
+        "categories": .medium(height: 172),
+        "restaurants": .medium(height: 172),
+        "timeline": .medium(height: 172),
+        "zodiac": .medium(height: 172)
     ]
     
     private let dashboardTransition = Animation.interactiveSpring(
@@ -119,18 +121,28 @@ struct ProfileView: View {
         dashboardHighlightStrokeColor
     }
 
-    private var settingsCardShadow: Color { dashboardShadowColor }
+    private var settingsCardShadow: Color {
+        colorScheme == .dark ? Color.black.opacity(0.18) : dashboardShadowColor
+    }
 
     private var settingsPrimaryTextColor: Color { AppTheme.Colors.darkText }
-    private var settingsSecondaryTextColor: Color { Color.adaptiveHex(light: "#95A0A7", dark: "#8F9CB0") }
+    private var settingsSecondaryTextColor: Color {
+        Color.adaptiveHex(light: "#95A0A7", dark: "#A7B5C8")
+    }
     private var settingsTertiaryTextColor: Color { Color.adaptiveHex(light: "#636E72", dark: "#ABB6C8") }
     private var settingsChevronColor: Color { Color.adaptiveHex(light: "#AAB2B9", dark: "#6F7E93") }
     private var settingsSeparatorColor: Color {
         colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
     }
-    private var settingsPillBackground: Color { AppTheme.Colors.surfacePrimary }
-    private var settingsPillBorder: Color { dashboardStrokeColor }
-    private var settingsSegmentTrack: Color { AppTheme.Colors.surfacePrimary }
+    private var settingsPillBackground: Color {
+        Color.adaptiveHex(light: "#FFFFFF", dark: "#2E384A")
+    }
+    private var settingsPillBorder: Color {
+        colorScheme == .dark ? Color.white.opacity(0.1) : dashboardStrokeColor
+    }
+    private var settingsSegmentTrack: Color {
+        Color.adaptiveHex(light: "#FFFFFF", dark: "#1A2230")
+    }
     private var settingsToggleTint: Color {
         Color.adaptiveHex(light: "#1A1A1A", dark: "#2A3140")
     }
@@ -147,7 +159,7 @@ struct ProfileView: View {
     private var profileEditIconColor: Color { Color.adaptiveHex(light: "#636E72", dark: "#B3BED0") }
     
     private let edgeBackTriggerDistance: CGFloat = 88
-    
+
     private enum GatewayType {
         case data
         case settings
@@ -171,6 +183,61 @@ struct ProfileView: View {
     private enum GatewayAnimationDirection {
         case previous
         case next
+    }
+
+    private enum MembershipPlan: String, CaseIterable {
+        case monthly
+        case yearly
+        case lifetime
+
+        var title: String {
+            switch self {
+            case .monthly:
+                return "月付"
+            case .yearly:
+                return "年付"
+            case .lifetime:
+                return "永久"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .monthly:
+                return "先体验完整 Prime"
+            case .yearly:
+                return "长期记录更划算"
+            case .lifetime:
+                return "一次开通，长期使用"
+            }
+        }
+
+        var accent: Color {
+            switch self {
+            case .monthly:
+                return Color(hex: "#61C6FF")
+            case .yearly:
+                return Color(hex: "#8C7AE6")
+            case .lifetime:
+                return Color(hex: "#F6B93B")
+            }
+        }
+
+        var primePlan: PrimeMembershipPlan {
+            switch self {
+            case .monthly:
+                return .monthly
+            case .yearly:
+                return .yearly
+            case .lifetime:
+                return .lifetime
+            }
+        }
+    }
+
+    private struct MembershipOfferStatus {
+        let isDiscountActive: Bool
+        let remainingSeconds: Int
     }
 
     init() {
@@ -267,7 +334,6 @@ struct ProfileView: View {
             }
             .onChange(of: showDashboardCards) { _, shown in
                 if !shown {
-                    edgeBackGestureOffset = 0
                     settingsTopBlurProgress = 0
                 }
             }
@@ -297,6 +363,11 @@ struct ProfileView: View {
     private var profileScrollLayer: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 8) {
+                ProfileScrollViewConfigurator(
+                    shouldLockDirection: showDashboardCards && selectedGateway == .membership
+                )
+                .frame(height: 0)
+
                 profileHeader(isCompact: showDashboardCards)
                     .padding(.horizontal, showDashboardCards ? 24 : 20)
 
@@ -317,8 +388,8 @@ struct ProfileView: View {
             }
             .animation(dashboardTransition, value: showDashboardCards)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .coordinateSpace(name: "ProfileScrollArea")
-        .offset(x: showDashboardCards ? edgeBackGestureOffset * 0.16 : 0)
         .background(AppTheme.Colors.pageBackground)
         .onPreferenceChange(SettingsPanelOffsetPreferenceKey.self) { minY in
             guard showDashboardCards, selectedGateway == .settings else {
@@ -541,7 +612,7 @@ struct ProfileView: View {
         .ignoresSafeArea(edges: .top)
         .animation(.easeOut(duration: 0.18), value: progress)
     }
-    
+
     private var edgeBackGestureHotZone: some View {
         HStack(spacing: 0) {
             Color.clear
@@ -552,42 +623,23 @@ struct ProfileView: View {
         }
         .ignoresSafeArea(.container, edges: .vertical)
     }
-    
+
     private var edgeBackCollapseGesture: some Gesture {
         DragGesture(minimumDistance: 9, coordinateSpace: .global)
-            .onChanged { value in
-                guard showDashboardCards else { return }
-                guard value.startLocation.x <= 28 else { return }
-                guard abs(value.translation.height) < 64 else { return }
-                
-                let translation = max(value.translation.width, 0)
-                edgeBackGestureOffset = min(translation, 120)
-            }
             .onEnded { value in
                 guard showDashboardCards else { return }
                 guard value.startLocation.x <= 28 else { return }
-                guard abs(value.translation.height) < 96 else {
-                    withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.86)) {
-                        edgeBackGestureOffset = 0
-                    }
-                    return
-                }
-                
+                guard abs(value.translation.height) < 96 else { return }
+
                 let projectedTranslation = max(value.translation.width, value.predictedEndTranslation.width)
                 if projectedTranslation >= edgeBackTriggerDistance {
                     collapseDashboard()
-                    return
-                }
-                
-                withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.86)) {
-                    edgeBackGestureOffset = 0
                 }
             }
     }
     
     private func collapseDashboard() {
         withAnimation(dashboardTransition) {
-            edgeBackGestureOffset = 0
             showDashboardCards = false
         }
     }
@@ -603,7 +655,6 @@ struct ProfileView: View {
         animateGatewayIndicatorBounce()
 
         withAnimation(dashboardTransition) {
-            edgeBackGestureOffset = 0
             settingsTopBlurProgress = 0
             selectedGateway = gateway
         }
@@ -749,22 +800,18 @@ struct ProfileView: View {
     }
 
     private var dashboardCardsGrid: some View {
-        // 两列卡片布局 - 8个卡片，左右各4个
-        // 美食足迹(timeline)放在右侧最下方
         HStack(alignment: .top, spacing: 8) {
-            // 左列：4个卡片
             VStack(spacing: 8) {
                 cardForId("stats")
-                cardForId("consumption")
-                cardForId("tags")
+                cardForId("categories")
                 cardForId("cuisine")
+                cardForId("restaurants")
             }
             .frame(maxWidth: .infinity)
             
-            // 右列：4个卡片 - timeline放在最下方
             VStack(spacing: 8) {
-                cardForId("categories")
-                cardForId("restaurants")
+                cardForId("consumption")
+                cardForId("tags")
                 cardForId("zodiac")
                 cardForId("timeline")
             }
@@ -849,22 +896,10 @@ struct ProfileView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     accountStatusRow
 
-                    if authManager.isSignedIn {
-                        settingsRowDivider()
-                        Toggle(isOn: faceIDEnabledBinding) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("开启面容 ID")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(settingsPrimaryTextColor)
-                                Text(faceIDHintText)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(settingsSecondaryTextColor)
-                            }
-                        }
-                        .toggleStyle(SwitchToggleStyle(tint: settingsToggleTint))
-                        .padding(.vertical, 12)
-                        .disabled(!appLockManager.isFaceIDAvailable)
-                    } else {
+                    settingsRowDivider()
+                    faceIDSettingsRow
+
+                    if !authManager.isSignedIn {
                         settingsRowDivider()
                         settingsActionButton(
                             icon: "apple.logo",
@@ -987,38 +1022,71 @@ struct ProfileView: View {
         VStack(spacing: 10) {
             membershipHeroCard
 
-            settingsSectionCard(title: "核心权益") {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(membershipBenefits.indices, id: \.self) { index in
-                        let benefit = membershipBenefits[index]
-                        profileNoteRow(
-                            icon: benefit.icon,
-                            tint: benefit.tint,
-                            title: benefit.title,
-                            body: benefit.body
-                        )
+            settingsSectionCard(title: "选择方案") {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let offerStatus = currentMembershipOfferStatus(at: context.date)
 
-                        if index != membershipBenefits.indices.last {
-                            settingsRowDivider()
+                    VStack(alignment: .leading, spacing: 14) {
+                        if offerStatus.isDiscountActive {
+                            membershipOfferBanner(offerStatus: offerStatus)
                         }
+
+                        GeometryReader { proxy in
+                            let cardWidth = max((proxy.size.width - 20) / 3, 0)
+
+                            HStack(spacing: 10) {
+                                ForEach(MembershipPlan.allCases, id: \.rawValue) { plan in
+                                    membershipPlanCard(
+                                        plan: plan,
+                                        offerStatus: offerStatus,
+                                        width: cardWidth
+                                    )
+                                }
+                            }
+                        }
+                        .frame(height: 94)
+
+                        Button {
+                            handleMembershipPurchase(selectedMembershipPlan, offerStatus: offerStatus)
+                        } label: {
+                            Text(membershipCTAButtonTitle(for: selectedMembershipPlan))
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                        .fill(Color.black)
+                                )
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            handleMembershipRestore()
+                        } label: {
+                            Text("恢复购买")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(settingsSecondaryTextColor)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
 
-            settingsSectionCard(title: "开放计划") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("首版先把身份感、权益结构和产品价值讲清楚，不接支付，也不改变当前基础功能。")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(settingsSecondaryTextColor)
+            settingsSectionCard(title: "解锁 7 项 Prime 权益") {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(membershipBenefits.indices, id: \.self) { index in
+                        let benefit = membershipBenefits[index]
+                        membershipBenefitCompactRow(
+                            icon: benefit.icon,
+                            tint: benefit.tint,
+                            title: benefit.title
+                        )
 
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(membershipRoadmap.indices, id: \.self) { index in
-                            let item = membershipRoadmap[index]
-                            membershipRoadmapRow(item: item)
-
-                            if index != membershipRoadmap.indices.last {
-                                settingsRowDivider()
-                            }
+                        if index != membershipBenefits.indices.last {
+                            settingsRowDivider()
                         }
                     }
                 }
@@ -1158,62 +1226,63 @@ struct ProfileView: View {
 
     private var membershipBenefits: [(icon: String, tint: Color, title: String, body: String)] {
         [
-            ("wand.and.stars", Color(hex: "#8C7AE6"), "更强的吃什么建议", "在随机推荐之外，提供更懂你历史偏好的高级推荐视图，让选择更像有人在替你做功课。"),
-            ("bookmark.circle.fill", Color(hex: "#61C6FF"), "更细的个人记录", "支持更完整的标签、备注、偏好沉淀，让你的个人食谱越来越准。"),
-            ("chart.xyaxis.line", Color(hex: "#2ECC71"), "更深入的数据分析", "解锁进阶趋势、阶段报告与城市/品类维度的饮食洞察。"),
-            ("person.2.crop.square.stack.fill", Color(hex: "#F6B93B"), "更懂你的陪伴感", "把探索、记录、推荐串成一条持续陪伴你的外食主线，而不只是工具入口。")
-        ]
-    }
-
-    private var membershipRoadmap: [(phase: String, title: String, body: String)] {
-        [
-            ("Phase 1", "建立身份感与权益结构", "先把会员页面的视觉语言、核心权益和适用人群讲清楚。"),
-            ("Phase 2", "接入试用与权益开关", "逐步补齐会员专属模块、试用提示和轻量权益控制。"),
-            ("Phase 3", "视需要再接入开通闭环", "只有在页面价值与使用意愿被验证后，再考虑支付与正式产品化。")
+            ("infinity", Color(hex: "#F6B93B"), "无限制餐厅数量", "不再担心记录越多越接近上限，把 WhatToEat 真正当成长期数据库来使用。"),
+            ("map.fill", Color(hex: "#61C6FF"), "美食地图与洞察", "把记录从列表变成地图与足迹，看到城市分布、探索轨迹和个人偏好。"),
+            ("arrow.trianglehead.2.clockwise.rotate.90.icloud.fill", Color(hex: "#8C7AE6"), "同步、备份与恢复", "让你的数据不再只停留在一台设备里，也降低意外丢失记录的风险。"),
+            ("square.and.arrow.up.fill", Color(hex: "#2ECC71"), "导出与迁移", "随时导出餐厅、消费与标签数据，让美食记录成为可保存、可迁移的个人资产。"),
+            ("rectangle.stack.badge.person.crop.fill", Color(hex: "#F39C12"), "批量管理", "为重度用户准备更高效的整理能力，批量编辑、归类与维护长期积累的餐厅库。"),
+            ("faceid", Color(hex: "#5C8DFF"), "Prime 专属面容 ID", "为 App 冷启动增加面容 ID 验证，让长期记录更私密、更安心。"),
+            ("sparkles.rectangle.stack.fill", Color(hex: "#E7A8B8"), "Prime 标识与食签", "保留一点属于 Prime 的专属感，在长期记录之外，也拥有恰到好处的仪式感。")
         ]
     }
 
     private var membershipHeroCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("会员预览")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "#8C7AE6"))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.72))
-                        )
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("WhatToEat Prime")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundStyle(Color(hex: "#5D4D2C"))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.76))
+                    )
 
-                    Text("WhatToEat Prime")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                    Text("把吃过的地方，沉淀成你自己的美食资产")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundStyle(settingsPrimaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    Text("不是更复杂，而是让吃什么、记什么、为什么喜欢它这三件事连成一条更高级的个人体验。")
+                    Text("解锁无限餐厅容量、地图洞察、同步备份与导出能力，让每一次记录都能长期保存、持续生长。")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(settingsSecondaryTextColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Spacer(minLength: 12)
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("当前状态")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(settingsSecondaryTextColor)
-                    Text("Preview")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundStyle(settingsPrimaryTextColor)
-                }
+                Spacer(minLength: 0)
             }
 
-            HStack(spacing: 8) {
-                membershipHighlightPill(title: "身份感优先", tint: Color(hex: "#8C7AE6"))
-                membershipHighlightPill(title: "权益分层", tint: Color(hex: "#61C6FF"))
-                membershipHighlightPill(title: "后续可产品化", tint: Color(hex: "#F6B93B"))
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 88), spacing: 8, alignment: .leading)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                membershipHighlightPill(title: "无限容量", tint: Color(hex: "#F6B93B"))
+                membershipHighlightPill(title: "地图洞察", tint: Color(hex: "#61C6FF"))
+                membershipHighlightPill(title: "同步导出", tint: Color(hex: "#8C7AE6"))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("Prime 首先是一组长期能力，同时也会优先支持 WhatToEat 继续迭代同步、地图与数据能力。")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(settingsSecondaryTextColor)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 18)
@@ -1222,20 +1291,38 @@ struct ProfileView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.adaptiveHex(light: "#F6F1FF", dark: "#221B35"),
-                            Color.adaptiveHex(light: "#EEF3FF", dark: "#172032"),
-                            Color.adaptiveHex(light: "#FCFCFF", dark: "#131A28")
+                            Color.adaptiveHex(light: "#FAFBFF", dark: "#1D2330"),
+                            Color.adaptiveHex(light: "#F8F3EA", dark: "#241F18"),
+                            Color.adaptiveHex(light: "#F4F6FB", dark: "#171D2A")
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
+                .overlay(alignment: .center) {
+                    membershipDotPattern
+                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                }
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .stroke(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.55), lineWidth: 0.8)
                 )
                 .shadow(color: dashboardShadowColor.opacity(0.9), radius: 16, x: 0, y: 8)
         )
+    }
+
+    private var membershipDotPattern: some View {
+        Canvas { context, size in
+            let dotColor = Color.black.opacity(colorScheme == .dark ? 0.08 : 0.045)
+            let spacing: CGFloat = 20
+            for x in stride(from: spacing / 2, through: size.width, by: spacing) {
+                for y in stride(from: spacing / 2, through: size.height, by: spacing) {
+                    let rect = CGRect(x: x, y: y, width: 2.2, height: 2.2)
+                    context.fill(Path(ellipseIn: rect), with: .color(dotColor))
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     private func membershipHighlightPill(title: String, tint: Color) -> some View {
@@ -1246,8 +1333,225 @@ struct ProfileView: View {
             .padding(.vertical, 7)
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.7))
+                    .fill(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.76))
             )
+    }
+
+    private func membershipOfferBanner(offerStatus: MembershipOfferStatus) -> some View {
+        ViewThatFits(in: .vertical) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("今日限时 5 折")
+                        .font(.system(size: 19, weight: .bold, design: .rounded))
+                        .foregroundStyle(settingsPrimaryTextColor)
+
+                    Text("距恢复原价还剩 \(formattedCountdown(offerStatus.remainingSeconds))")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                }
+
+                Spacer(minLength: 0)
+
+                membershipOfferBadge
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("今日限时 5 折")
+                        .font(.system(size: 19, weight: .bold, design: .rounded))
+                        .foregroundStyle(settingsPrimaryTextColor)
+
+                    Text("距恢复原价还剩 \(formattedCountdown(offerStatus.remainingSeconds))")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                }
+
+                membershipOfferBadge
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(colorScheme == .dark ? 0.05 : 0.68))
+        )
+    }
+
+    private var membershipOfferBadge: some View {
+        Text("50% OFF")
+            .font(.system(size: 18, weight: .bold, design: .rounded))
+            .foregroundStyle(Color(hex: "#B9770E"))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(Color(hex: "#FFF1C9"))
+            )
+    }
+
+    private func membershipPlanCard(
+        plan: MembershipPlan,
+        offerStatus: MembershipOfferStatus,
+        width: CGFloat
+    ) -> some View {
+        let isSelected = selectedMembershipPlan == plan
+        let isDiscountActive = offerStatus.isDiscountActive
+        let currentPrice = membershipPrice(for: plan, isDiscountActive: isDiscountActive)
+        let originalPrice = membershipPrice(for: plan, isDiscountActive: false)
+
+        return Button {
+            withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.82, blendDuration: 0.08)) {
+                selectedMembershipPlan = plan
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                        Text("¥\(currentPrice)")
+                            .font(.system(size: 27, weight: .bold, design: .rounded))
+                            .foregroundStyle(isSelected ? Color.white : settingsPrimaryTextColor)
+                    }
+
+                    if isDiscountActive {
+                        Text("原价 ¥\(originalPrice)")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(isSelected ? Color.white.opacity(0.62) : settingsSecondaryTextColor)
+                            .strikethrough()
+                    }
+
+                    Text(plan.title)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(isSelected ? Color.white : settingsPrimaryTextColor)
+
+                    Text(membershipPlanFooterText(for: plan, isDiscountActive: isDiscountActive))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.8) : settingsSecondaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(width: width, height: 94, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [Color.black, Color(hex: "#1A1A1A")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            : AnyShapeStyle(settingsCardGradient)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(
+                                isSelected ? plan.accent.opacity(0.9) : settingsPillBorder.opacity(0.45),
+                                lineWidth: isSelected ? 1.2 : 0.8
+                            )
+                    )
+                    .shadow(color: isSelected ? plan.accent.opacity(0.22) : dashboardShadowColor.opacity(0.45), radius: 12, x: 0, y: 6)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func membershipBenefitCompactRow(
+        icon: String,
+        tint: Color,
+        title: String
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(settingsPrimaryTextColor)
+                .frame(width: 28, height: 28)
+
+            Text(title)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(settingsPrimaryTextColor)
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(tint.opacity(0.92))
+        }
+        .padding(.vertical, 14)
+    }
+
+    private func currentMembershipOfferStatus(at date: Date) -> MembershipOfferStatus {
+        guard primeOfferStartTimestamp > 0 else {
+            return MembershipOfferStatus(isDiscountActive: false, remainingSeconds: 0)
+        }
+
+        let startDate = Date(timeIntervalSince1970: primeOfferStartTimestamp)
+        let remaining = max(0, 1800 - Int(date.timeIntervalSince(startDate)))
+        return MembershipOfferStatus(isDiscountActive: remaining > 0, remainingSeconds: remaining)
+    }
+
+    private func membershipPrice(for plan: MembershipPlan, isDiscountActive: Bool) -> Int {
+        switch (plan, isDiscountActive) {
+        case (.monthly, true):
+            return 3
+        case (.monthly, false):
+            return 6
+        case (.yearly, true):
+            return 10
+        case (.yearly, false):
+            return 20
+        case (.lifetime, true):
+            return 15
+        case (.lifetime, false):
+            return 30
+        }
+    }
+
+    private func membershipPlanFooterText(for plan: MembershipPlan, isDiscountActive: Bool) -> String {
+        switch plan {
+        case .monthly:
+            return "先体验完整 Prime"
+        case .yearly:
+            return "长期记录更划算"
+        case .lifetime:
+            return "一次开通，长期使用"
+        }
+    }
+
+    private func membershipCTAButtonTitle(for plan: MembershipPlan) -> String {
+        switch plan {
+        case .monthly:
+            return "按月开通 Prime"
+        case .yearly:
+            return "按年开通 Prime"
+        case .lifetime:
+            return "永久解锁 Prime"
+        }
+    }
+
+    private func formattedCountdown(_ remainingSeconds: Int) -> String {
+        let minutes = remainingSeconds / 60
+        let seconds = remainingSeconds % 60
+        let minuteString = minutes.formatted(.number.precision(.integerLength(2)))
+        let secondString = seconds.formatted(.number.precision(.integerLength(2)))
+        return "\(minuteString):\(secondString)"
+    }
+
+    private func handleMembershipPurchase(_ plan: MembershipPlan, offerStatus: MembershipOfferStatus) {
+        let price = membershipPrice(for: plan, isDiscountActive: offerStatus.isDiscountActive)
+        let offerPrefix = offerStatus.isDiscountActive ? "限时优惠" : "当前价格"
+        primeAccessManager.activate(plan.primePlan)
+        showSettingsToast("已模拟开通\(plan.title) Prime（\(offerPrefix) ¥\(price)），真实支付接口待接入")
+    }
+
+    private func handleMembershipRestore() {
+        let restored = primeAccessManager.restore()
+        showSettingsToast(restored ? "已恢复本机 Prime 状态，真实恢复购买接口待接入" : "当前没有可恢复的 Prime 记录")
     }
 
     private func achievementMainPage(
@@ -1333,26 +1637,6 @@ struct ProfileView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-    }
-
-    private func membershipRoadmapRow(item: (phase: String, title: String, body: String)) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.phase)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color(hex: "#8C7AE6"))
-                Text(item.title)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(settingsPrimaryTextColor)
-                Text(item.body)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(settingsSecondaryTextColor)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
         .padding(.vertical, 12)
     }
 
@@ -1541,6 +1825,18 @@ struct ProfileView: View {
         Binding(
             get: { appLockManager.isFaceIDEnabled },
             set: { enabled in
+                if enabled && !primeAccessManager.isPrimeActive {
+                    showSettingsToast("面容 ID 为 Prime 专属功能")
+                    withAnimation(settingsSectionAnimation) {
+                        selectedGateway = .membership
+                    }
+                    return
+                }
+                if enabled && !authManager.isSignedIn {
+                    showSettingsToast("请先登录 Apple ID 再启用面容 ID")
+                    authManager.startSignIn()
+                    return
+                }
                 if enabled && !appLockManager.isFaceIDAvailable {
                     showSettingsToast("当前设备不支持面容 ID")
                     return
@@ -1552,10 +1848,80 @@ struct ProfileView: View {
     }
 
     private var faceIDHintText: String {
+        if !primeAccessManager.isPrimeActive {
+            return "Prime 专属功能，开通后可为 App 冷启动增加面容 ID 验证"
+        }
+        if !authManager.isSignedIn {
+            return "Prime 已开通，请先登录 Apple ID 后再启用"
+        }
         if !appLockManager.isFaceIDAvailable {
             return "当前设备不可用，仅支持带 Face ID 的机型"
         }
         return "开启后 App 冷启动需要面容 ID 验证"
+    }
+
+    private var faceIDSettingsRow: some View {
+        Group {
+            if primeAccessManager.isPrimeActive {
+                Toggle(isOn: faceIDEnabledBinding) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("开启面容 ID")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(settingsPrimaryTextColor)
+                        Text(faceIDHintText)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(settingsSecondaryTextColor)
+                    }
+                }
+                .toggleStyle(SwitchToggleStyle(tint: settingsToggleTint))
+                .padding(.vertical, 12)
+                .disabled(!authManager.isSignedIn || !appLockManager.isFaceIDAvailable)
+            } else {
+                Button {
+                    showSettingsToast("面容 ID 为 Prime 专属功能")
+                    withAnimation(settingsSectionAnimation) {
+                        selectedGateway = .membership
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "faceid")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color(hex: "#5C8DFF"))
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(Color(hex: "#5C8DFF").opacity(0.14)))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("开启面容 ID")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(settingsPrimaryTextColor)
+                            Text(faceIDHintText)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(settingsSecondaryTextColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Text("Prime 专属")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color(hex: "#B9770E"))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color(hex: "#FFF1C9"))
+                            )
+
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(settingsChevronColor)
+                    }
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private var appleSignInSheet: some View {
@@ -1564,7 +1930,7 @@ struct ProfileView: View {
                 .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: "#2D3436"))
 
-            Text("使用 Apple ID 登录以启用账户切换、面容 ID 与 iCloud 同步关联。")
+            Text("使用 Apple ID 登录以启用账户切换、iCloud 同步，以及 Prime 面容 ID 验证。")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(Color(hex: "#636E72"))
                 .multilineTextAlignment(.center)
@@ -2248,11 +2614,18 @@ struct ProfileView: View {
             )
             
         case "timeline":
-            ExpandableCard(
+            ZoomNavigationCard(
                 id: id,
                 cardSize: size,
                 preview: { TimelineCardPreview(viewModel: viewModel) },
-                detail: { TimelineCardDetail(viewModel: viewModel) },
+                destination: {
+                    if let container = viewModel.modelContext?.container {
+                        CheckInHistoryView()
+                            .modelContainer(container)
+                    } else {
+                        CheckInHistoryView()
+                    }
+                },
                 namespace: animationNamespace
             )
             
@@ -2338,6 +2711,94 @@ private struct SettingsPanelOffsetPreferenceKey: PreferenceKey {
     
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+private struct ProfileScrollViewConfigurator: UIViewRepresentable {
+    let shouldLockDirection: Bool
+
+    func makeUIView(context: Context) -> UIView {
+        let view = ScrollConfigProbeView()
+        view.shouldLockDirection = shouldLockDirection
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if let probe = uiView as? ScrollConfigProbeView {
+            probe.shouldLockDirection = shouldLockDirection
+            probe.applyConfigurationIfPossible()
+        }
+    }
+}
+
+private final class ScrollConfigProbeView: UIView {
+    var shouldLockDirection = false
+    private var contentOffsetObservation: NSKeyValueObservation?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        applyConfigurationIfPossible()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        applyConfigurationIfPossible()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        applyConfigurationIfPossible()
+    }
+
+    func applyConfigurationIfPossible() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let scrollView = self.enclosingScrollView() else { return }
+            scrollView.alwaysBounceHorizontal = false
+            scrollView.isDirectionalLockEnabled = self.shouldLockDirection
+            scrollView.bounces = true
+
+            if self.shouldLockDirection {
+                self.installHorizontalLockIfNeeded(on: scrollView)
+            } else {
+                self.contentOffsetObservation?.invalidate()
+                self.contentOffsetObservation = nil
+            }
+        }
+    }
+
+    private func installHorizontalLockIfNeeded(on scrollView: UIScrollView) {
+        guard contentOffsetObservation == nil else { return }
+
+        contentOffsetObservation = scrollView.observe(\.contentOffset, options: [.new]) { [weak scrollView] _, _ in
+            guard let scrollView else { return }
+            let lockedX = -scrollView.adjustedContentInset.left
+            guard abs(scrollView.contentOffset.x - lockedX) > 0.5 else { return }
+
+            var offset = scrollView.contentOffset
+            offset.x = lockedX
+            scrollView.setContentOffset(offset, animated: false)
+        }
+    }
+
+    private func enclosingScrollView() -> UIScrollView? {
+        var current = superview
+        while let candidate = current {
+            if let scrollView = candidate as? UIScrollView {
+                return scrollView
+            }
+            current = candidate.superview
+        }
+        return nil
     }
 }
 

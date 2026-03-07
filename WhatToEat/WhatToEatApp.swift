@@ -69,6 +69,26 @@ struct WhatToEatApp: App {
         if defaults.object(forKey: AppSettingsKeys.iCloudSyncEnabled) == nil {
             defaults.set(true, forKey: AppSettingsKeys.iCloudSyncEnabled)
         }
+        refreshDailyPrimeOfferIfNeeded(defaults: defaults)
+    }
+
+    private func refreshDailyPrimeOfferIfNeeded(defaults: UserDefaults) {
+        let todayKey = Self.membershipOfferDayKey(for: Date())
+        let savedDay = defaults.string(forKey: AppSettingsKeys.primeOfferStartDay)
+
+        guard savedDay != todayKey else { return }
+
+        defaults.set(todayKey, forKey: AppSettingsKeys.primeOfferStartDay)
+        defaults.set(Date().timeIntervalSince1970, forKey: AppSettingsKeys.primeOfferStartTimestamp)
+    }
+
+    private static func membershipOfferDayKey(for date: Date) -> String {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        let year = components.year ?? 0
+        let month = components.month ?? 0
+        let day = components.day ?? 0
+        return "\(year)-\(String(format: "%02d", month))-\(String(format: "%02d", day))"
     }
 
     private static func setupRegionsFile() {
@@ -113,6 +133,7 @@ struct WhatToEatApp: App {
                 .preferredColorScheme(resolvedAppearance)
                 .onAppear {
                     KeyboardWarmupService.shared.warmUpIfNeeded()
+                    VisitLogDeduplicationService.runIfNeeded(in: sharedModelContainer)
                 }
         }
         .modelContainer(sharedModelContainer)

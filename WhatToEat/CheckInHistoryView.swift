@@ -22,12 +22,11 @@ extension Date {
 // MARK: - 打卡记录视图
 struct CheckInHistoryView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
     
     // 可选：如果传入 restaurant，则只显示该餐厅的打卡记录
     var restaurant: Restaurant?
     
-    @Query(sort: \Restaurant.createdAt, order: .reverse) private var allRestaurants: [Restaurant]
+    @Query(sort: \VisitLog.date, order: .reverse) private var logs: [VisitLog]
     
     @State private var showSheet = false
     @State private var logToEdit: VisitLog? = nil
@@ -77,32 +76,14 @@ struct CheckInHistoryView: View {
     
     // MARK: - Header Section
     private var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(titleText)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
-                
-                Text(subtitleText)
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(titleText)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundColor(AppTheme.Colors.darkText)
             
-            Spacer()
-            
-            // 关闭按钮
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
-                    .frame(width: 36, height: 36)
-                    .background(
-                        Circle()
-                            .fill(AppTheme.Colors.surfaceSecondary.opacity(0.72))
-                    )
-            }
+            Text(subtitleText)
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.Colors.mediumGray)
         }
     }
     
@@ -116,7 +97,7 @@ struct CheckInHistoryView: View {
     
     // MARK: - Subtitle Text
     private var subtitleText: String {
-        let count = allLogs.count
+        let count = preparedLogs.count
         if restaurant != nil {
             return "共 \(count) 次打卡"
         }
@@ -125,27 +106,28 @@ struct CheckInHistoryView: View {
     
     // MARK: - Check In List Section
     private var checkInListSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if allLogs.isEmpty {
+        let sections = logSections
+        return LazyVStack(alignment: .leading, spacing: 16) {
+            if sections.isEmpty {
                 emptyStateView
             } else {
                 // 按日期分组显示
-                ForEach(groupedLogs.keys.sorted(by: >), id: \.self) { dateKey in
+                ForEach(sections) { section in
                     VStack(alignment: .leading, spacing: 12) {
                         // 日期标题
-                        Text(dateKey)
+                        Text(section.title)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(AppTheme.Colors.mediumGray)
                             .padding(.horizontal, 4)
                         
                         // 该日期的打卡记录
-                        VStack(spacing: 12) {
-                            ForEach(groupedLogs[dateKey] ?? []) { item in
-                                checkInLogCard(item: item)
+                        LazyVStack(spacing: 12) {
+                            ForEach(section.items) { indexedItem in
+                                checkInLogCard(item: indexedItem.item)
                                     .offset(y: isAnimated ? 0 : 30)
                                     .opacity(isAnimated ? 1 : 0)
                                     .animation(
-                                        AppTheme.Animations.staggeredEntrance(index: logIndex(for: item)),
+                                        AppTheme.Animations.staggeredEntrance(index: indexedItem.animationIndex),
                                         value: isAnimated
                                     )
                             }
@@ -339,14 +321,15 @@ struct CheckInHistoryView: View {
                 .fill(AppTheme.Colors.lightGray)
             
             // 尝试加载餐厅封面
-            if let coverFilename = item.restaurant.coverPhotoFilename {
+            if let coverFilename = item.restaurant?.coverPhotoFilename {
                 AsyncImageView(
                     filename: coverFilename,
                     placeholder: AnyView(
                         Image(systemName: "fork.knife")
                             .font(.system(size: 20))
                             .foregroundColor(AppTheme.Colors.lighterGray)
-                    )
+                    ),
+                    maxPixelSize: 120
                 )
                 .scaledToFill()
                 .frame(width: 48, height: 48)
@@ -397,69 +380,81 @@ struct CheckInHistoryView: View {
     
     // MARK: - Data Processing
     
-    // 获取所有打卡记录
-    private var allLogs: [LogItem] {
-        var logs: [LogItem] = []
-        
-        let restaurantsToProcess: [Restaurant]
-        if let restaurant = restaurant {
-            restaurantsToProcess = [restaurant]
-        } else {
-            restaurantsToProcess = allRestaurants
-        }
-        
-        for restaurant in restaurantsToProcess {
-            for log in restaurant.logs {
-                logs.append(LogItem(
-                    log: log,
-                    restaurant: restaurant,
-                    restaurantName: restaurant.name
-                ))
+    private var preparedLogs: [LogItem] {
+        logs.compactMap { log in
+            guard let associatedRestaurant = log.restaurant else {
+                return nil
             }
+
+            if let restaurant, associatedRestaurant.id != restaurant.id {
+                return nil
+            }
+
+            return LogItem(
+                log: log,
+                restaurant: associatedRestaurant,
+                restaurantName: associatedRestaurant.name
+            )
         }
-        
-        // 按日期倒序排序
-        return logs.sorted(by: { $0.log.date > $1.log.date })
     }
     
-    // 按日期分组
-    private var groupedLogs: [String: [LogItem]] {
+    private var logSections: [LogSection] {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "yyyy年M月"
-        
+
         var groups: [String: [LogItem]] = [:]
-        
-        for item in allLogs {
+
+        for item in preparedLogs {
             let key = formatter.string(from: item.log.date)
             if groups[key] == nil {
                 groups[key] = []
             }
             groups[key]?.append(item)
         }
-        
-        return groups
-    }
-    
-    // 计算日志索引用于动画
-    private func logIndex(for item: LogItem) -> Int {
-        return allLogs.firstIndex(where: { $0.log.id == item.log.id }) ?? 0
+
+        var runningIndex = 0
+
+        return groups.keys
+            .sorted(by: >)
+            .map { key in
+                let indexedItems = (groups[key] ?? []).map { item in
+                    defer { runningIndex += 1 }
+                    return IndexedLogItem(item: item, animationIndex: runningIndex)
+                }
+                return LogSection(title: key, items: indexedItems)
+            }
     }
     
     // MARK: - Delete Log
     private func deleteLog(item: LogItem) {
         modelContext.delete(item.log)
-        item.restaurant.updateAveragePrice()
+        item.restaurant?.updateAveragePrice()
         try? modelContext.save()
     }
 }
 
 // MARK: - Log Item
 struct LogItem: Identifiable {
-    let id = UUID()
     let log: VisitLog
-    let restaurant: Restaurant
+    let restaurant: Restaurant?
     let restaurantName: String
+
+    var id: UUID { log.id }
+}
+
+private struct IndexedLogItem: Identifiable {
+    let item: LogItem
+    let animationIndex: Int
+
+    var id: UUID { item.id }
+}
+
+private struct LogSection: Identifiable {
+    let title: String
+    let items: [IndexedLogItem]
+
+    var id: String { title }
 }
 
 // MARK: - Preview

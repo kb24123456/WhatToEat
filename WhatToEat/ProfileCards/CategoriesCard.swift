@@ -13,53 +13,30 @@ struct CategoriesCardPreview: View {
     let viewModel: ProfileViewModel
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 标题
-            Text("我的品类")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.lightText)
-                .tracking(0.5)
-            
-            // 品类数量
+        let allCategories = getAllCategories()
+
+        VStack(alignment: .leading, spacing: 10) {
+            PreviewCardTitle(title: "我的品类")
+
             HStack(alignment: .lastTextBaseline, spacing: 4) {
-                let allCategories = getAllCategories()
                 Text("\(allCategories.count)")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.darkText)
                 
                 Text("个品类")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppTheme.Colors.mediumGray)
             }
-            
+
             Spacer(minLength: 0)
-            
-            // 品类预览
-            FlowLayout(spacing: 6) {
-                let allCategories = getAllCategories()
-                ForEach(allCategories.prefix(3), id: \.self) { category in
-                    let isPreset = CategoryManager.shared.isPresetCategory(category)
-                    Text(category)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.darkText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(isPreset ? AppTheme.Colors.softBackground : AppTheme.Colors.xhsRed.opacity(0.1))
-                        )
+
+            HStack(spacing: 6) {
+                if let firstCategory = allCategories.first {
+                    PreviewChip(text: firstCategory)
                 }
-                
-                if allCategories.count > 3 {
-                    Text("+\(allCategories.count - 3)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.lightText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(AppTheme.Colors.softBackground)
-                        )
+
+                if allCategories.count > 1 {
+                    PreviewChip(text: "+\(allCategories.count - 1)")
                 }
             }
         }

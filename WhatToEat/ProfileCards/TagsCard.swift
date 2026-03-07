@@ -12,50 +12,28 @@ struct TagsCardPreview: View {
     let viewModel: ProfileViewModel
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 标题
-            Text("我的标签")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundColor(AppTheme.Colors.lightText)
-                .tracking(0.5)
-            
-            // 标签数量
+        VStack(alignment: .leading, spacing: 10) {
+            PreviewCardTitle(title: "我的标签")
+
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text("\(viewModel.userTags.count)")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.Colors.darkText)
                 
                 Text("个标签")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(AppTheme.Colors.mediumGray)
             }
-            
+
             Spacer(minLength: 0)
-            
-            // 标签预览（显示前3个）
-            FlowLayout(spacing: 6) {
-                ForEach(viewModel.userTags.prefix(3), id: \.self) { tag in
-                    Text(tag)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(AppTheme.Colors.darkText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(AppTheme.Colors.coralRed.opacity(0.1))
-                        )
+
+            HStack(spacing: 6) {
+                if let firstTag = viewModel.userTags.first {
+                    PreviewChip(text: firstTag)
                 }
-                
-                if viewModel.userTags.count > 3 {
-                    Text("+\(viewModel.userTags.count - 3)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppTheme.Colors.lightText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(AppTheme.Colors.softBackground)
-                        )
+
+                if viewModel.userTags.count > 1 {
+                    PreviewChip(text: "+\(viewModel.userTags.count - 1)")
                 }
             }
         }

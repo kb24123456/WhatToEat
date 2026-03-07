@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import Combine
+import ImageIO
 
 // MARK: - 1. 异步图片加载器
 /// 管理异步图片加载状态的 ObservableObject
@@ -20,14 +21,16 @@ class AsyncImageLoader: ObservableObject {
     /// - Parameters:
     ///   - filename: 图片文件名
     ///   - placeholder: 占位符图片
-    func loadImage(filename: String, placeholder: UIImage? = nil) {
+    func loadImage(filename: String, placeholder: UIImage? = nil, maxPixelSize: CGFloat? = nil) {
         // 重置状态
         setCancelled(false)
         isLoading = true
         error = nil
+
+        let cacheKey = Self.cacheKey(for: filename, maxPixelSize: maxPixelSize)
         
         // 1. 检查内存缓存
-        if let cachedImage = ImageCacheManager.shared.getFromCache(forKey: filename) {
+        if let cachedImage = ImageCacheManager.shared.getFromCache(forKey: cacheKey) {
             self.image = cachedImage
             self.isLoading = false
             return
@@ -47,8 +50,7 @@ class AsyncImageLoader: ObservableObject {
             }
             
             // 4. 从磁盘加载图片
-            guard let imageData = try? Data(contentsOf: AsyncImageLoader.getImageURL(for: filename)),
-                  let originalImage = UIImage(data: imageData) else {
+            guard let loadedImage = Self.loadUIImage(filename: filename, maxPixelSize: maxPixelSize) else {
                 DispatchQueue.main.async {
                     self.error = NSError(domain: "AsyncImageLoader", code: 1, userInfo: [NSLocalizedDescriptionKey: "图片加载失败"])
                     self.isLoading = false
@@ -57,7 +59,7 @@ class AsyncImageLoader: ObservableObject {
             }
 
             // 4.5 修正图片方向
-            let fixedImage = originalImage.fixOrientation()
+            let fixedImage = loadedImage.fixOrientation()
             
             // 5. 检查是否已取消
             guard !self.isCancelled() else {
@@ -79,7 +81,7 @@ class AsyncImageLoader: ObservableObject {
                 
                 if let decodedImage = decodedImage {
                     // 7. 缓存解码后的图片
-                    ImageCacheManager.shared.saveToCache(image: decodedImage, forKey: filename)
+                    ImageCacheManager.shared.saveToCache(image: decodedImage, forKey: cacheKey)
                     
                     // 8. 更新UI
                     DispatchQueue.main.async {
@@ -90,7 +92,7 @@ class AsyncImageLoader: ObservableObject {
                     }
                 } else {
                     // 解码失败，使用方向修正后的图片
-                    ImageCacheManager.shared.saveToCache(image: fixedImage, forKey: filename)
+                    ImageCacheManager.shared.saveToCache(image: fixedImage, forKey: cacheKey)
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             self.image = fixedImage
@@ -177,6 +179,38 @@ class AsyncImageLoader: ObservableObject {
         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return documentsDirectory.appendingPathComponent(filename)
     }
+
+    private static func cacheKey(for filename: String, maxPixelSize: CGFloat?) -> String {
+        guard let maxPixelSize else { return filename }
+        return "\(filename)#\(Int(maxPixelSize.rounded()))"
+    }
+
+    private static func loadUIImage(filename: String, maxPixelSize: CGFloat?) -> UIImage? {
+        let imageURL = getImageURL(for: filename)
+
+        if let maxPixelSize {
+            let options = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceShouldCacheImmediately: false,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+            ] as CFDictionary
+
+            guard let source = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
+                  let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
+                return nil
+            }
+
+            return UIImage(cgImage: cgImage)
+        }
+
+        guard let imageData = try? Data(contentsOf: imageURL),
+              let originalImage = UIImage(data: imageData) else {
+            return nil
+        }
+
+        return originalImage
+    }
 }
 
 // MARK: - 2. SwiftUI 异步图片视图
@@ -186,6 +220,7 @@ struct AsyncImageView: View {
     private let placeholder: AnyView?
     private let contentMode: ContentMode
     private let imageCacheKey: String?
+    private let maxPixelSize: CGFloat?
     
     // 使用 StateObject 管理图片加载状态
     @StateObject private var loader = AsyncImageLoader()
@@ -201,12 +236,14 @@ struct AsyncImageView: View {
     init(
         filename: String?, 
         placeholder: AnyView? = nil,
-        contentMode: ContentMode = .fill
+        contentMode: ContentMode = .fill,
+        maxPixelSize: CGFloat? = nil
     ) {
         self.filename = filename
         self.placeholder = placeholder
         self.contentMode = contentMode
         self.imageCacheKey = filename
+        self.maxPixelSize = maxPixelSize
     }
     
     /// 初始化异步图片视图，使用系统图片作为占位符
@@ -217,7 +254,8 @@ struct AsyncImageView: View {
     init(
         filename: String?, 
         systemPlaceholder: String,
-        contentMode: ContentMode = .fill
+        contentMode: ContentMode = .fill,
+        maxPixelSize: CGFloat? = nil
     ) {
         self.filename = filename
         self.placeholder = AnyView(
@@ -228,6 +266,7 @@ struct AsyncImageView: View {
         )
         self.contentMode = contentMode
         self.imageCacheKey = filename
+        self.maxPixelSize = maxPixelSize
     }
     
     var body: some View {
@@ -258,7 +297,7 @@ struct AsyncImageView: View {
                 // 如果文件名变化或图片尚未加载，重新加载
                 if filename != loadedFilename || loader.image == nil {
                     loadedFilename = filename
-                    loader.loadImage(filename: filename)
+                    loader.loadImage(filename: filename, maxPixelSize: maxPixelSize)
                 }
             }
         }
@@ -273,7 +312,7 @@ struct AsyncImageView: View {
                 loader.cancel()
                 loader.reset()  // 重置加载器状态
                 if let newFilename = newFilename {
-                    loader.loadImage(filename: newFilename)
+                    loader.loadImage(filename: newFilename, maxPixelSize: maxPixelSize)
                 }
             }
         }
