@@ -7,6 +7,17 @@
 
 import SwiftUI
 
+private struct DisableDashboardDetailAnimationsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var disableDashboardDetailAnimations: Bool {
+        get { self[DisableDashboardDetailAnimationsKey.self] }
+        set { self[DisableDashboardDetailAnimationsKey.self] = newValue }
+    }
+}
+
 // MARK: - 动画阶段状态
 enum CardAnimationPhase: Equatable {
     case idle           // 初始状态
@@ -104,13 +115,19 @@ struct AnimationState {
 
 // MARK: - 内容级联动画修饰符
 struct StaggeredAnimationModifier: ViewModifier {
+    @Environment(\.disableDashboardDetailAnimations) private var disableDashboardDetailAnimations
     let index: Int
     let controller: CardAnimationController
     
     func body(content: Content) -> some View {
+        guard !disableDashboardDetailAnimations else {
+            return AnyView(content)
+        }
+
         let state = controller.animationState(for: index)
         
-        content
+        return AnyView(
+            content
             .opacity(state.opacity)
             .offset(y: state.offset)
             .scaleEffect(state.scale, anchor: .top)
@@ -121,6 +138,7 @@ struct StaggeredAnimationModifier: ViewModifier {
                 ),
                 value: controller.staggerIndex
             )
+        )
     }
 }
 

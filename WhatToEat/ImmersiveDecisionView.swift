@@ -115,7 +115,11 @@ struct ImmersiveDecisionView: View {
             .padding(.horizontal, 32)
         }
         .onAppear {
+            NotificationCenter.default.post(name: .hideTabBar, object: nil)
             animateIn()
+        }
+        .onDisappear {
+            NotificationCenter.default.post(name: .restoreTabBar, object: nil)
         }
     }
     

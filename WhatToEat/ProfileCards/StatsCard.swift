@@ -55,7 +55,6 @@ struct StatsCardDetail: View {
     let viewModel: ProfileViewModel
     
     @State private var localController = CardAnimationController()
-    @State private var showChart = false
     
     var body: some View {
         VStack(spacing: 24) {

@@ -309,7 +309,7 @@ struct CheckInView: View {
                 .font(.system(size: 12))
                 .foregroundColor(checkInSecondaryText)
             
-            HStack(spacing: 12) {
+            HStack(alignment: .lastTextBaseline, spacing: 12) {
                 Button {
                     if peopleCount > 1 {
                         peopleCount -= 1
@@ -317,23 +317,30 @@ struct CheckInView: View {
                     }
                 } label: {
                     Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 18))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(peopleCount > 1 ? checkInPrimaryText : checkInHintText)
+                }
+                .alignmentGuide(.lastTextBaseline) { dimensions in
+                    dimensions[VerticalAlignment.center]
                 }
                 .disabled(peopleCount <= 1)
 
                 Text("\(peopleCount)")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(checkInPrimaryText)
-                    .frame(minWidth: 16)
+                    .contentTransition(.numericText())
+                    .frame(minWidth: 24)
 
                 Button {
                     peopleCount += 1
                     triggerHaptic()
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 18))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(checkInPrimaryText)
+                }
+                .alignmentGuide(.lastTextBaseline) { dimensions in
+                    dimensions[VerticalAlignment.center]
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

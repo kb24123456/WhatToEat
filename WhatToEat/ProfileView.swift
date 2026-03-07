@@ -2,7 +2,7 @@
 //  ProfileView.swift
 //  WhatToEat
 //
-//  完全重构的 ProfileView，采用 Masonry 瀑布流布局 + Hero 展开动画
+//  完全重构的 ProfileView，采用 Masonry 瀑布流布局 + 原生导航转场
 //
 
 import SwiftUI
@@ -29,7 +29,6 @@ struct ProfileView: View {
     @StateObject private var locationManager = LocationManager.shared
     @StateObject private var authManager = AuthManager.shared
     @StateObject private var appLockManager = AppLockManager.shared
-    @AppStorage(AppSettingsKeys.preferredMapApp) private var preferredMapApp: String = ""
     @AppStorage(AppSettingsKeys.userSelectedCity) private var defaultCity: String = "重庆"
     @AppStorage(AppSettingsKeys.appAppearanceMode) private var appAppearanceMode: String = AppAppearanceMode.system.rawValue
     @AppStorage(AppSettingsKeys.hapticFeedbackEnabled) private var hapticFeedbackEnabled: Bool = true
@@ -85,48 +84,64 @@ struct ProfileView: View {
             : .interactiveSpring(response: 0.58, dampingFraction: 0.87, blendDuration: 0.18)
     }
 
+    private var dashboardSurfaceColor: Color {
+        AppTheme.Colors.surfacePrimary
+    }
+    private var dashboardSecondarySurfaceColor: Color {
+        AppTheme.Colors.surfacePrimary
+    }
+    private var dashboardHighlightStrokeColor: Color {
+        AppTheme.Colors.rimLight.opacity(colorScheme == .dark ? 0.16 : 0.2)
+    }
+    private var dashboardStrokeColor: Color {
+        Color.black.opacity(colorScheme == .dark ? 0.04 : 0.05)
+    }
+    private var dashboardShadowColor: Color {
+        Color.black.opacity(colorScheme == .dark ? 0.05 : 0.1)
+    }
+
     private var settingsCardGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color.adaptiveHex(light: "#FBFBFD", dark: "#1B2636"),
-                Color.adaptiveHex(light: "#F2F4F8", dark: "#141E2D")
+                colorScheme == .dark ? dashboardSurfaceColor : Color.adaptiveHex(light: "#FBFBFD", dark: "#1B2636"),
+                colorScheme == .dark ? dashboardSurfaceColor : Color.adaptiveHex(light: "#F2F4F8", dark: "#141E2D")
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
-    private var settingsCardStroke: Color {
-        Color.adaptiveHex(light: "#FFFFFF", dark: "#304056").opacity(colorScheme == .dark ? 0.9 : 0.92)
-    }
+    private var settingsCardStroke: Color { dashboardStrokeColor }
 
     private var settingsCardInnerStroke: Color {
-        Color.adaptiveHex(light: "#FFFFFF", dark: "#223247").opacity(colorScheme == .dark ? 0.42 : 0.72)
+        dashboardHighlightStrokeColor
     }
 
-    private var settingsCardShadow: Color {
-        Color.black.opacity(colorScheme == .dark ? 0.24 : 0.05)
-    }
+    private var settingsCardShadow: Color { dashboardShadowColor }
 
     private var settingsPrimaryTextColor: Color { AppTheme.Colors.darkText }
     private var settingsSecondaryTextColor: Color { Color.adaptiveHex(light: "#95A0A7", dark: "#8F9CB0") }
     private var settingsTertiaryTextColor: Color { Color.adaptiveHex(light: "#636E72", dark: "#ABB6C8") }
     private var settingsChevronColor: Color { Color.adaptiveHex(light: "#AAB2B9", dark: "#6F7E93") }
-    private var settingsSeparatorColor: Color { Color.adaptiveHex(light: "#E9EDF2", dark: "#29384B") }
-    private var settingsPillBackground: Color { Color.adaptiveHex(light: "#FFFFFF", dark: "#223149") }
-    private var settingsPillBorder: Color { Color.adaptiveHex(light: "#EDF1F5", dark: "#334760") }
-    private var settingsSegmentTrack: Color { Color.adaptiveHex(light: "#E9EDF2", dark: "#202C3E") }
-    private var settingsToggleTint: Color { Color.adaptiveHex(light: "#61C6FF", dark: "#6DB8FF") }
+    private var settingsSeparatorColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
+    }
+    private var settingsPillBackground: Color { AppTheme.Colors.surfacePrimary }
+    private var settingsPillBorder: Color { dashboardStrokeColor }
+    private var settingsSegmentTrack: Color { AppTheme.Colors.surfacePrimary }
+    private var settingsToggleTint: Color {
+        Color.adaptiveHex(light: "#1A1A1A", dark: "#2A3140")
+    }
 
-    private var profileSurfaceColor: Color { Color.adaptiveHex(light: "#FFFFFF", dark: "#141E2C") }
-    private var profileSecondarySurfaceColor: Color { Color.adaptiveHex(light: "#F3F5F6", dark: "#223149") }
-    private var profileStrokeColor: Color { Color.adaptiveHex(light: "#FFFFFF", dark: "#2C3A50").opacity(colorScheme == .dark ? 0.88 : 0.9) }
+    private var profileSurfaceColor: Color { dashboardSurfaceColor }
+    private var profileSecondarySurfaceColor: Color { dashboardSecondarySurfaceColor }
+    private var profileStrokeColor: Color { dashboardStrokeColor }
     private var profileSecondaryTextColor: Color { Color.adaptiveHex(light: "#B2BEC3", dark: "#8F9CAF") }
     private var profileMutedTextColor: Color { Color.adaptiveHex(light: "#5E646B", dark: "#AAB6C7") }
-    private var profileProgressTrackColor: Color { Color.adaptiveHex(light: "#E6E8EA", dark: "#28384C") }
+    private var profileProgressTrackColor: Color { Color.adaptiveHex(light: "#E6E8EA", dark: "#232833") }
     private var profileProgressFillColor: Color { Color.adaptiveHex(light: "#1E2430", dark: "#E9EFF9") }
-    private var profileAvatarRingColor: Color { Color.adaptiveHex(light: "#FFFFFF", dark: "#2F3C50") }
-    private var profileHeaderShadowColor: Color { Color.black.opacity(colorScheme == .dark ? 0.24 : 0.06) }
+    private var profileAvatarRingColor: Color { dashboardHighlightStrokeColor }
+    private var profileHeaderShadowColor: Color { dashboardShadowColor }
     private var profileEditIconColor: Color { Color.adaptiveHex(light: "#636E72", dark: "#B3BED0") }
     
     private let edgeBackTriggerDistance: CGFloat = 88
@@ -141,195 +156,209 @@ struct ProfileView: View {
     }
     
     var body: some View {
-        ZStack {
-            // 背景层：弥散渐变
-            DiffuseGradientBackground()
-            
-            // 主内容
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 8) {
-                    // 个人资料卡片（不参与展开）
-                    profileHeader(isCompact: showDashboardCards)
-                        .padding(.horizontal, showDashboardCards ? 24 : 20)
-                    
-                    if showDashboardCards {
-                        collapseButton
-                            .padding(.horizontal, 24)
-                            .transition(
-                                .asymmetric(
-                                    insertion: .move(edge: .top).combined(with: .opacity),
-                                    removal: .opacity
-                                )
-                            )
-                    }
-                    
-                    if showDashboardCards {
-                        if selectedGateway == .data {
-                            dashboardCardsGrid
-                                .padding(.horizontal, 24)
-                                .padding(.top, 6)
-                                .transition(
-                                    .asymmetric(
-                                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                                        removal: .opacity
-                                    )
-                                )
-                        } else {
-                            settingsDashboard
-                                .padding(.horizontal, 24)
-                                .padding(.top, 6)
-                                .transition(settingsPanelTransition)
-                        }
-                    } else {
-                        gatewayCards
-                            .padding(.horizontal, 24)
-                            .padding(.top, 6)
-                            .transition(
-                                .asymmetric(
-                                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                                    removal: .scale(scale: 0.92, anchor: .top).combined(with: .opacity)
-                                )
-                            )
-                    }
-                    
-                    // 底部空间
-                    Color.clear.frame(height: showDashboardCards ? 40 : 20)
-                }
-                .animation(dashboardTransition, value: showDashboardCards)
+        profileSceneWithPresentations
+    }
+
+    private var profileSceneWithPresentations: some View {
+        profileSceneWithStateObservers
+            .sheet(isPresented: $authManager.showSignInSheet) {
+                appleSignInSheet
             }
-            .coordinateSpace(name: "ProfileScrollArea")
-            .offset(x: showDashboardCards ? edgeBackGestureOffset * 0.16 : 0)
-            .background(AppTheme.Colors.pageBackground)
-            .onPreferenceChange(SettingsPanelOffsetPreferenceKey.self) { minY in
-                guard showDashboardCards, selectedGateway == .settings else {
+            .confirmationDialog("是否需要示例文档？", isPresented: $showRestaurantImportAssistDialog, titleVisibility: .visible) {
+                Button("需要示例文档") {
+                    exportRestaurantTemplate()
+                }
+                Button("直接导入 .csv") {
+                    showRestaurantImportPicker = true
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("示例文档包含导入版本 \(DataCSVSupport.restaurantImportVersion) 与标准列格式。")
+            }
+            .fileImporter(
+                isPresented: $showRestaurantImportPicker,
+                allowedContentTypes: [.commaSeparatedText, .plainText],
+                allowsMultipleSelection: false
+            ) { result in
+                handleRestaurantImport(result)
+            }
+            .fileExporter(
+                isPresented: $showExportSheet,
+                document: exportDocument,
+                contentType: .commaSeparatedText,
+                defaultFilename: exportFilename
+            ) { result in
+                handleDataExportResult(result)
+            }
+            .alert("清理所有缓存", isPresented: $showClearCacheAlert) {
+                Button("取消", role: .cancel) {}
+                Button("确认清理", role: .destructive) {
+                    clearAllCaches()
+                }
+            } message: {
+                Text("将清理图片、搜索、定位、食签与智能纠错等本地缓存。")
+            }
+            .alert("iCloud 同步设置已更新", isPresented: $showICloudRestartAlert) {
+                Button("我知道了", role: .cancel) {}
+            } message: {
+                Text("重启 App 后生效。建议开启 iCloud 同步，避免数据丢失并保持多设备一致。")
+            }
+            .alert("退出账户", isPresented: $showSignOutAlert) {
+                Button("取消", role: .cancel) {}
+                Button("退出", role: .destructive) {
+                    authManager.signOut(keepLocalData: true)
+                    appLockManager.setFaceIDEnabled(false)
+                    showSettingsToast("已退出账户，本机数据已保留")
+                }
+            } message: {
+                Text("仅退出 Apple ID 会话，本机餐厅与消费数据将保留。")
+            }
+            .alert("切换账户", isPresented: $showSwitchAccountAlert) {
+                Button("取消", role: .cancel) {}
+                Button("继续") {
+                    authManager.switchAccount()
+                }
+            } message: {
+                Text("将先退出当前账户，再重新登录 Apple ID。")
+            }
+    }
+
+    private var profileSceneWithStateObservers: some View {
+        NavigationStack {
+            profileRootScene
+        }
+            .onAppear {
+                viewModel.modelContext = modelContext
+                viewModel.restaurants = restaurants
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    viewModel.loadUserCategories()
+                    viewModel.loadCardOrder()
+                }
+
+                if defaultCity.isEmpty {
+                    defaultCity = "重庆"
+                }
+            }
+            .onChange(of: restaurants) { _, newRestaurants in
+                viewModel.restaurants = newRestaurants
+            }
+            .onChange(of: showDashboardCards) { _, shown in
+                if !shown {
+                    edgeBackGestureOffset = 0
                     settingsTopBlurProgress = 0
-                    return
-                }
-                let progress = min(max((-minY - 4) / 36, 0), 1)
-                if abs(progress - settingsTopBlurProgress) > 0.015 {
-                    settingsTopBlurProgress = progress
                 }
             }
-            
-            if showDashboardCards && selectedGateway == .settings {
-                settingsTopBlurOverlay
-                    .zIndex(50)
-                    .transition(.opacity)
+            .onChange(of: selectedGateway) { _, gateway in
+                if gateway != .settings {
+                    settingsTopBlurProgress = 0
+                }
             }
-            
-            // 展开的卡片覆盖层
-            if showDashboardCards, let expandedId = viewModel.expandedCardId {
-                expandedCardOverlay(id: expandedId)
-                    .zIndex(100)
-                    .transition(.opacity)
+            .onChange(of: hapticFeedbackEnabled) { _, enabled in
+                HapticManager.shared.setEnabled(enabled)
+                showSettingsToast(enabled ? "震动反馈已开启" : "震动反馈已关闭")
             }
-            
-            if showDashboardCards {
-                edgeBackGestureHotZone
-                    .zIndex(160)
+            .onChange(of: iCloudSyncEnabled) { oldValue, newValue in
+                guard oldValue != newValue else { return }
+                handleICloudToggleChanged(to: newValue)
             }
+    }
 
-            if let settingsToastMessage {
-                settingsToastView(message: settingsToastMessage)
-                    .zIndex(200)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
+    private var profileRootScene: some View {
+        ZStack {
+            DiffuseGradientBackground()
+            profileScrollLayer
+            profileOverlayLayers
         }
-        .onAppear {
-            viewModel.modelContext = modelContext
-            viewModel.restaurants = restaurants
-            
-            // 延迟加载数据，避免首次进入卡顿
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                viewModel.loadUserCategories()
-                viewModel.loadCardOrder()
-            }
+    }
 
-            if defaultCity.isEmpty {
-                defaultCity = "重庆"
+    private var profileScrollLayer: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 8) {
+                profileHeader(isCompact: showDashboardCards)
+                    .padding(.horizontal, showDashboardCards ? 24 : 20)
+
+                if showDashboardCards {
+                    collapseButton
+                        .padding(.horizontal, 24)
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .opacity
+                            )
+                        )
+                }
+
+                profileGatewayContent
+
+                Color.clear.frame(height: showDashboardCards ? 40 : 20)
             }
+            .animation(dashboardTransition, value: showDashboardCards)
         }
-        .onChange(of: restaurants) { _, newRestaurants in
-            viewModel.restaurants = newRestaurants
-        }
-        .onChange(of: showDashboardCards) { _, shown in
-            if !shown {
-                edgeBackGestureOffset = 0
+        .coordinateSpace(name: "ProfileScrollArea")
+        .offset(x: showDashboardCards ? edgeBackGestureOffset * 0.16 : 0)
+        .background(AppTheme.Colors.pageBackground)
+        .onPreferenceChange(SettingsPanelOffsetPreferenceKey.self) { minY in
+            guard showDashboardCards, selectedGateway == .settings else {
                 settingsTopBlurProgress = 0
+                return
+            }
+            let progress = min(max((-minY - 4) / 36, 0), 1)
+            if abs(progress - settingsTopBlurProgress) > 0.015 {
+                settingsTopBlurProgress = progress
             }
         }
-        .onChange(of: selectedGateway) { _, gateway in
-            if gateway != .settings {
-                settingsTopBlurProgress = 0
+    }
+
+    @ViewBuilder
+    private var profileGatewayContent: some View {
+        if showDashboardCards {
+            if selectedGateway == .data {
+                dashboardCardsGrid
+                    .padding(.horizontal, 24)
+                    .padding(.top, 6)
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .opacity
+                        )
+                    )
+            } else {
+                settingsDashboard
+                    .padding(.horizontal, 24)
+                    .padding(.top, 6)
+                    .transition(settingsPanelTransition)
             }
+        } else {
+            gatewayCards
+                .padding(.horizontal, 24)
+                .padding(.top, 6)
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .scale(scale: 0.92, anchor: .top).combined(with: .opacity)
+                    )
+                )
         }
-        .onChange(of: hapticFeedbackEnabled) { _, enabled in
-            HapticManager.shared.setEnabled(enabled)
-            showSettingsToast(enabled ? "震动反馈已开启" : "震动反馈已关闭")
+    }
+
+    @ViewBuilder
+    private var profileOverlayLayers: some View {
+        if showDashboardCards && selectedGateway == .settings {
+            settingsTopBlurOverlay
+                .zIndex(50)
+                .transition(.opacity)
         }
-        .onChange(of: iCloudSyncEnabled) { oldValue, newValue in
-            guard oldValue != newValue else { return }
-            handleICloudToggleChanged(to: newValue)
+
+        if showDashboardCards {
+            edgeBackGestureHotZone
+                .zIndex(160)
         }
-        .sheet(isPresented: $authManager.showSignInSheet) {
-            appleSignInSheet
-        }
-        .confirmationDialog("是否需要示例文档？", isPresented: $showRestaurantImportAssistDialog, titleVisibility: .visible) {
-            Button("需要示例文档") {
-                exportRestaurantTemplate()
-            }
-            Button("直接导入 .csv") {
-                showRestaurantImportPicker = true
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("示例文档包含导入版本 \(DataCSVSupport.restaurantImportVersion) 与标准列格式。")
-        }
-        .fileImporter(
-            isPresented: $showRestaurantImportPicker,
-            allowedContentTypes: [.commaSeparatedText, .plainText],
-            allowsMultipleSelection: false
-        ) { result in
-            handleRestaurantImport(result)
-        }
-        .fileExporter(
-            isPresented: $showExportSheet,
-            document: exportDocument,
-            contentType: .commaSeparatedText,
-            defaultFilename: exportFilename
-        ) { result in
-            handleDataExportResult(result)
-        }
-        .alert("清理所有缓存", isPresented: $showClearCacheAlert) {
-            Button("取消", role: .cancel) {}
-            Button("确认清理", role: .destructive) {
-                clearAllCaches()
-            }
-        } message: {
-            Text("将清理图片、搜索、定位、食签与智能纠错等本地缓存。")
-        }
-        .alert("iCloud 同步设置已更新", isPresented: $showICloudRestartAlert) {
-            Button("我知道了", role: .cancel) {}
-        } message: {
-            Text("重启 App 后生效。建议开启 iCloud 同步，避免数据丢失并保持多设备一致。")
-        }
-        .alert("退出账户", isPresented: $showSignOutAlert) {
-            Button("取消", role: .cancel) {}
-            Button("退出", role: .destructive) {
-                authManager.signOut(keepLocalData: true)
-                appLockManager.setFaceIDEnabled(false)
-                showSettingsToast("已退出账户，本机数据已保留")
-            }
-        } message: {
-            Text("仅退出 Apple ID 会话，本机餐厅与消费数据将保留。")
-        }
-        .alert("切换账户", isPresented: $showSwitchAccountAlert) {
-            Button("取消", role: .cancel) {}
-            Button("继续") {
-                authManager.switchAccount()
-            }
-        } message: {
-            Text("将先退出当前账户，再重新登录 Apple ID。")
+
+        if let settingsToastMessage {
+            settingsToastView(message: settingsToastMessage)
+                .zIndex(200)
+                .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
     
@@ -341,6 +370,30 @@ struct ProfileView: View {
             
             Spacer()
             
+            Button {
+                switchExpandedGateway()
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "rectangle.2.swap")
+                        .font(.system(size: 11, weight: .bold))
+                    Text(selectedGateway == .settings ? "切到我的数据" : "切到功能设置")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(settingsPrimaryTextColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(settingsPillBackground)
+                        .overlay(
+                            Capsule()
+                                .stroke(settingsPillBorder.opacity(0.92), lineWidth: 0.8)
+                        )
+                        .shadow(color: settingsCardShadow.opacity(0.7), radius: 10, x: 0, y: 4)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+
             Button {
                 collapseDashboard()
             } label: {
@@ -369,17 +422,11 @@ struct ProfileView: View {
     
     private var settingsPanelTransition: AnyTransition {
         .asymmetric(
-            insertion: .modifier(
-                active: BlurSlideTransitionModifier(yOffset: 26, blurRadius: 6, opacity: 0, scale: 0.965),
-                identity: BlurSlideTransitionModifier(yOffset: 0, blurRadius: 0, opacity: 1, scale: 1)
-            ),
-            removal: .modifier(
-                active: BlurSlideTransitionModifier(yOffset: -14, blurRadius: 4, opacity: 0, scale: 0.985),
-                identity: BlurSlideTransitionModifier(yOffset: 0, blurRadius: 0, opacity: 1, scale: 1)
-            )
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .opacity
         )
     }
-    
+
     private var settingsTopBlurOverlay: some View {
         let progress = Double(settingsTopBlurProgress)
         let topHeight = 54 + settingsTopBlurProgress * 24
@@ -452,9 +499,20 @@ struct ProfileView: View {
     
     private func collapseDashboard() {
         withAnimation(dashboardTransition) {
-            viewModel.closeExpandedCard()
             edgeBackGestureOffset = 0
             showDashboardCards = false
+        }
+    }
+
+    private func switchExpandedGateway() {
+        let targetGateway: GatewayType = selectedGateway == .settings ? .data : .settings
+        let generator = UIImpactFeedbackGenerator(style: .soft)
+        generator.impactOccurred()
+
+        withAnimation(dashboardTransition) {
+            edgeBackGestureOffset = 0
+            settingsTopBlurProgress = 0
+            selectedGateway = targetGateway
         }
     }
     
@@ -510,21 +568,21 @@ struct ProfileView: View {
                     
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(hex: "#95A0A7"))
+                        .foregroundColor(settingsSecondaryTextColor)
                         .frame(width: 28, height: 28)
                         .background(
                             Circle()
-                                .fill(Color(hex: "#F5F7F8"))
+                                .fill(dashboardSecondarySurfaceColor)
                         )
                 }
                 
                 Text(title)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.Colors.darkText)
+                    .foregroundColor(settingsPrimaryTextColor)
                 
                 Text(subtitle)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(AppTheme.Colors.mediumGray)
+                    .foregroundColor(settingsSecondaryTextColor)
                     .lineLimit(1)
                 
                 Spacer(minLength: 0)
@@ -534,8 +592,16 @@ struct ProfileView: View {
             .frame(height: 122)
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color(hex: "#FFFFFF"))
-                    .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 4)
+                    .fill(dashboardSurfaceColor)
+                    .overlay(
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(dashboardHighlightStrokeColor, lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(dashboardStrokeColor, lineWidth: 0.5)
+                        }
+                    )
+                    .shadow(color: dashboardShadowColor, radius: colorScheme == .dark ? 10 : 12, x: 0, y: colorScheme == .dark ? 4 : 4)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -569,25 +635,9 @@ struct ProfileView: View {
     private var settingsDashboard: some View {
         VStack(spacing: 10) {
             settingsSectionCard(
-                title: "全局偏好",
-                subtitle: "这些配置会影响整个 App 的默认行为"
+                title: "全局偏好"
             ) {
                 VStack(spacing: 0) {
-                    Menu {
-                        Button("每次询问") { preferredMapApp = "" }
-                        Button("苹果地图") { preferredMapApp = "apple" }
-                        Button("高德地图") { preferredMapApp = "gaode" }
-                        Button("百度地图") { preferredMapApp = "baidu" }
-                    } label: {
-                        settingsValueRow(
-                            icon: "location.circle",
-                            title: "默认导航应用",
-                            value: preferredMapAppName,
-                            accent: Color(hex: "#FF7A9B")
-                        )
-                    }
-
-                    settingsRowDivider()
                     appearanceModeSegmentedRow
                     settingsRowDivider()
 
@@ -607,8 +657,7 @@ struct ProfileView: View {
             }
 
             settingsSectionCard(
-                title: "数据与缓存",
-                subtitle: "导入导出与统一缓存清理"
+                title: "数据与缓存"
             ) {
                 VStack(alignment: .leading, spacing: 0) {
                     settingsActionButton(
@@ -638,15 +687,6 @@ struct ProfileView: View {
                     }
 
                     settingsRowDivider()
-                    settingsActionButton(
-                        icon: "chart.bar.doc.horizontal",
-                        title: "导出消费数据",
-                        tint: Color(hex: "#9B59B6")
-                    ) {
-                        exportConsumptionData()
-                    }
-
-                    settingsRowDivider()
                     Toggle(isOn: $iCloudSyncEnabled) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("iCloud 同步")
@@ -663,8 +703,7 @@ struct ProfileView: View {
             }
 
             settingsSectionCard(
-                title: "账户与安全",
-                subtitle: "Apple ID 登录与面容 ID 保护"
+                title: "账户与安全"
             ) {
                 VStack(alignment: .leading, spacing: 0) {
                     accountStatusRow
@@ -719,8 +758,7 @@ struct ProfileView: View {
             }
 
             settingsSectionCard(
-                title: "权限与支持",
-                subtitle: "定位权限与系统入口"
+                title: "权限与支持"
             ) {
                 HStack(alignment: .center, spacing: 8) {
                     Image(systemName: "location.fill")
@@ -771,18 +809,12 @@ struct ProfileView: View {
 
     private func settingsSectionCard<Content: View>(
         title: String,
-        subtitle: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(settingsPrimaryTextColor)
-                Text(subtitle)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(settingsSecondaryTextColor)
-            }
+            Text(title)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(settingsPrimaryTextColor)
 
             content()
         }
@@ -792,18 +824,16 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(settingsCardGradient)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(settingsCardStroke, lineWidth: 1)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(settingsCardInnerStroke, lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(settingsCardStroke, lineWidth: 0.5)
+                    }
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(settingsCardInnerStroke, lineWidth: 0.5)
-                        .padding(1.1)
-                )
-                .shadow(color: settingsCardShadow, radius: colorScheme == .dark ? 22 : 14, x: 0, y: colorScheme == .dark ? 10 : 6)
+                .shadow(color: settingsCardShadow, radius: colorScheme == .dark ? 10 : 14, x: 0, y: colorScheme == .dark ? 4 : 6)
         )
-        .transition(settingsPanelTransition)
-        .animation(settingsSectionAnimation, value: showDashboardCards)
+        .animation(settingsSectionAnimation, value: selectedGateway)
     }
 
     private func settingsRowDivider() -> some View {
@@ -879,41 +909,6 @@ struct ProfileView: View {
                 )
         }
         .buttonStyle(PlainButtonStyle())
-    }
-
-    private func settingsValueRow(
-        icon: String,
-        title: String,
-        value: String,
-        accent: Color
-    ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(accent)
-                .frame(width: 28, height: 28)
-                .background(
-                    Circle()
-                        .fill(accent.opacity(0.14))
-                )
-
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(settingsPrimaryTextColor)
-
-            Spacer()
-
-            Text(value)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(settingsTertiaryTextColor)
-                .lineLimit(1)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(settingsChevronColor)
-        }
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
     }
 
     private func settingsActionButton(
@@ -1037,19 +1032,6 @@ struct ProfileView: View {
         }
         .padding(.vertical, 22)
         .presentationDetents([.height(260)])
-    }
-
-    private var preferredMapAppName: String {
-        switch preferredMapApp {
-        case "apple":
-            return "苹果地图"
-        case "gaode":
-            return "高德地图"
-        case "baidu":
-            return "百度地图"
-        default:
-            return "每次询问"
-        }
     }
 
     private var appearanceModeName: String {
@@ -1176,18 +1158,6 @@ struct ProfileView: View {
         let csv = DataCSVSupport.makeRestaurantCSV(restaurants: restaurants)
         exportDocument = CSVTextDocument(text: csv)
         exportFilename = DataCSVSupport.makeExportFilename(prefix: "whattoeat_restaurants")
-        showExportSheet = true
-    }
-
-    private func exportConsumptionData() {
-        guard !visitLogs.isEmpty else {
-            showSettingsToast("暂无消费数据可导出")
-            return
-        }
-
-        let csv = DataCSVSupport.makeConsumptionCSV(logs: visitLogs)
-        exportDocument = CSVTextDocument(text: csv)
-        exportFilename = DataCSVSupport.makeExportFilename(prefix: "whattoeat_consumption")
         showExportSheet = true
     }
 
@@ -1343,10 +1313,14 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(profileSurfaceColor)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(profileStrokeColor.opacity(0.9), lineWidth: 0.9)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(dashboardHighlightStrokeColor, lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(profileStrokeColor, lineWidth: 0.5)
+                    }
                 )
-                .shadow(color: profileHeaderShadowColor, radius: 12, x: 0, y: 5)
+                .shadow(color: profileHeaderShadowColor, radius: 10, x: 0, y: 4)
         )
         .matchedGeometryEffect(id: "profile-summary-card", in: animationNamespace)
     }
@@ -1387,12 +1361,16 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
                 .fill(profileSurfaceColor)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .stroke(profileStrokeColor.opacity(0.82), lineWidth: 1)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .stroke(dashboardHighlightStrokeColor, lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .stroke(profileStrokeColor, lineWidth: 0.5)
+                    }
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .shadow(color: profileHeaderShadowColor.opacity(0.9), radius: 16, x: 0, y: 8)
+        .shadow(color: profileHeaderShadowColor.opacity(0.9), radius: 10, x: 0, y: 4)
     }
     
     // MARK: - 头像层
@@ -1571,9 +1549,9 @@ struct ProfileView: View {
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(profileStrokeColor.opacity(0.8), lineWidth: 0.9)
+                .stroke(profileStrokeColor, lineWidth: 0.5)
         )
-        .shadow(color: profileHeaderShadowColor.opacity(0.92), radius: 20, x: 0, y: 10)
+        .shadow(color: profileHeaderShadowColor.opacity(0.92), radius: 10, x: 0, y: 4)
         .matchedGeometryEffect(id: "profile-summary-card", in: animationNamespace)
         // 注意：不在卡片外部添加 padding，由 profileHeader 的调用方控制
     }
@@ -1671,10 +1649,6 @@ struct ProfileView: View {
                 cardSize: size,
                 preview: { StatsCardPreview(viewModel: viewModel) },
                 detail: { StatsCardDetail(viewModel: viewModel) },
-                isExpanded: .init(
-                    get: { viewModel.expandedCardId == id },
-                    set: { if $0 { viewModel.expandCard(id: id) } else { viewModel.closeExpandedCard() } }
-                ),
                 namespace: animationNamespace
             )
             
@@ -1684,10 +1658,6 @@ struct ProfileView: View {
                 cardSize: size,
                 preview: { ConsumptionCardPreview(viewModel: viewModel) },
                 detail: { ConsumptionCardDetail(viewModel: viewModel) },
-                isExpanded: .init(
-                    get: { viewModel.expandedCardId == id },
-                    set: { if $0 { viewModel.expandCard(id: id) } else { viewModel.closeExpandedCard() } }
-                ),
                 namespace: animationNamespace
             )
             
@@ -1697,10 +1667,6 @@ struct ProfileView: View {
                 cardSize: size,
                 preview: { TagsCardPreview(viewModel: viewModel) },
                 detail: { TagsCardDetail(viewModel: viewModel) },
-                isExpanded: .init(
-                    get: { viewModel.expandedCardId == id },
-                    set: { if $0 { viewModel.expandCard(id: id) } else { viewModel.closeExpandedCard() } }
-                ),
                 namespace: animationNamespace
             )
             
@@ -1710,10 +1676,6 @@ struct ProfileView: View {
                 cardSize: size,
                 preview: { CategoriesCardPreview(viewModel: viewModel) },
                 detail: { CategoriesCardDetail(viewModel: viewModel) },
-                isExpanded: .init(
-                    get: { viewModel.expandedCardId == id },
-                    set: { if $0 { viewModel.expandCard(id: id) } else { viewModel.closeExpandedCard() } }
-                ),
                 namespace: animationNamespace
             )
             
@@ -1723,10 +1685,6 @@ struct ProfileView: View {
                 cardSize: size,
                 preview: { CuisinePreferenceCardPreview(viewModel: viewModel) },
                 detail: { CuisinePreferenceCardDetail(viewModel: viewModel) },
-                isExpanded: .init(
-                    get: { viewModel.expandedCardId == id },
-                    set: { if $0 { viewModel.expandCard(id: id) } else { viewModel.closeExpandedCard() } }
-                ),
                 namespace: animationNamespace
             )
             
@@ -1736,32 +1694,17 @@ struct ProfileView: View {
                 cardSize: size,
                 preview: { RestaurantsCardPreview(viewModel: viewModel) },
                 detail: { RestaurantsCardDetail(viewModel: viewModel) },
-                isExpanded: .init(
-                    get: { viewModel.expandedCardId == id },
-                    set: { if $0 { viewModel.expandCard(id: id) } else { viewModel.closeExpandedCard() } }
-                ),
                 namespace: animationNamespace
             )
             
         case "timeline":
-            // 美食足迹卡片 - 点击直接打开打卡记录sheet，不使用hero动画
-            TimelineCardPreview(viewModel: viewModel)
-                .frame(height: size.fixedHeight) // 应用固定高度
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(hex: "#FFFFFF"))
-                        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
-                )
-                .onTapGesture {
-                    // 触觉反馈
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
-                    viewModel.showCheckInHistory = true
-                }
-                .sheet(isPresented: $viewModel.showCheckInHistory) {
-                    CheckInHistoryView()
-                }
+            ExpandableCard(
+                id: id,
+                cardSize: size,
+                preview: { TimelineCardPreview(viewModel: viewModel) },
+                detail: { TimelineCardDetail(viewModel: viewModel) },
+                namespace: animationNamespace
+            )
             
         case "zodiac":
             ExpandableCard(
@@ -1769,10 +1712,6 @@ struct ProfileView: View {
                 cardSize: size,
                 preview: { ZodiacCardPreview(viewModel: viewModel) },
                 detail: { ZodiacCardDetail(viewModel: viewModel) },
-                isExpanded: .init(
-                    get: { viewModel.expandedCardId == id },
-                    set: { if $0 { viewModel.expandCard(id: id) } else { viewModel.closeExpandedCard() } }
-                ),
                 namespace: animationNamespace
             )
             
@@ -1781,61 +1720,6 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - Expanded Card Overlay
-    private func expandedCardOverlay(id: String) -> some View {
-        let title = cardTitle(for: id)
-        
-        return ExpandedCardOverlay(
-            id: id,
-            title: title,
-            content: {
-                expandedContentForId(id)
-            },
-            isExpanded: .init(
-                get: { viewModel.expandedCardId == id },
-                set: { if !$0 { viewModel.closeExpandedCard() } }
-            ),
-            namespace: animationNamespace
-        )
-    }
-    
-    private func cardTitle(for id: String) -> String {
-        switch id {
-        case "stats": return "数据概览"
-        case "consumption": return "消费洞察"
-        case "tags": return "我的标签"
-        case "categories": return "品类管理"
-        case "cuisine": return "餐饮偏好"
-        case "restaurants": return "常去餐厅"
-        case "timeline": return "美食足迹"
-        case "zodiac": return "味蕾星盘"
-        default: return ""
-        }
-    }
-    
-    @ViewBuilder
-    private func expandedContentForId(_ id: String) -> some View {
-        switch id {
-        case "stats":
-            StatsCardDetail(viewModel: viewModel)
-        case "consumption":
-            ConsumptionCardDetail(viewModel: viewModel)
-        case "tags":
-            TagsCardDetail(viewModel: viewModel)
-        case "categories":
-            CategoriesCardDetail(viewModel: viewModel)
-        case "cuisine":
-            CuisinePreferenceCardDetail(viewModel: viewModel)
-        case "restaurants":
-            RestaurantsCardDetail(viewModel: viewModel)
-        case "timeline":
-            TimelineCardDetail(viewModel: viewModel)
-        case "zodiac":
-            ZodiacCardDetail(viewModel: viewModel)
-        default:
-            EmptyView()
-        }
-    }
 }
 
 // MARK: - Level Badge View
@@ -2022,16 +1906,19 @@ struct EditProfileView: View {
     
     @State private var nickname: String = ""
     @State private var bio: String = ""
-    @State private var selectedItem: PhotosPickerItem?
     @State private var avatarData: Data?
+    @State private var showPhotoLibraryPicker = false
+    @State private var pendingAvatarSelection: PendingAvatarSelection?
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("头像") {
                     HStack {
                         Spacer()
-                        PhotosPicker(selection: $selectedItem, matching: .images) {
+                        Button {
+                            showPhotoLibraryPicker = true
+                        } label: {
                             ZStack {
                                 Circle()
                                     .fill(AppTheme.Colors.babyBlue.opacity(0.2))
@@ -2051,6 +1938,7 @@ struct EditProfileView: View {
                                 }
                             }
                         }
+                        .buttonStyle(PlainButtonStyle())
                         Spacer()
                     }
                     .padding(.vertical, 8)
@@ -2082,13 +1970,291 @@ struct EditProfileView: View {
                 bio = userProfile.bio
                 avatarData = userProfile.avatarData
             }
-            .onChange(of: selectedItem) { _, newItem in
-                Task {
-                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
-                        avatarData = data
+            .sheet(isPresented: $showPhotoLibraryPicker) {
+                AvatarPhotoLibraryPicker { image in
+                    pendingAvatarSelection = PendingAvatarSelection(image: image.normalized())
+                }
+            }
+            .fullScreenCover(item: $pendingAvatarSelection) { selection in
+                AvatarCropView(
+                    sourceImage: selection.image,
+                    onCancel: {
+                        pendingAvatarSelection = nil
+                    },
+                    onConfirm: { croppedImage in
+                        avatarData = croppedImage.jpegData(compressionQuality: 0.92)
+                        pendingAvatarSelection = nil
+                    }
+                )
+            }
+        }
+    }
+}
+
+private struct PendingAvatarSelection: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+private struct AvatarPhotoLibraryPicker: UIViewControllerRepresentable {
+    let onImagePicked: (UIImage) -> Void
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+        configuration.preferredAssetRepresentationMode = .current
+
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImagePicked: onImagePicked)
+    }
+
+    final class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let onImagePicked: (UIImage) -> Void
+
+        init(onImagePicked: @escaping (UIImage) -> Void) {
+            self.onImagePicked = onImagePicked
+        }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            guard let provider = results.first?.itemProvider,
+                  provider.canLoadObject(ofClass: UIImage.self) else {
+                picker.dismiss(animated: true)
+                return
+            }
+
+            provider.loadObject(ofClass: UIImage.self) { object, _ in
+                DispatchQueue.main.async {
+                    picker.dismiss(animated: true) {
+                        if let image = object as? UIImage {
+                            self.onImagePicked(image)
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+private struct AvatarCropView: View {
+    let sourceImage: UIImage
+    let onCancel: () -> Void
+    let onConfirm: (UIImage) -> Void
+
+    @State private var currentScale: CGFloat = 1
+    @State private var committedScale: CGFloat = 1
+    @State private var currentOffset: CGSize = .zero
+    @State private var committedOffset: CGSize = .zero
+
+    private let minimumScale: CGFloat = 1
+    private let maximumScale: CGFloat = 4
+
+    var body: some View {
+        GeometryReader { geometry in
+            let cropSize = min(geometry.size.width - 72, geometry.size.height * 0.42)
+            let imageState = cropImageState(for: cropSize, scale: currentScale)
+
+            ZStack {
+                Color.black.opacity(0.96)
+                    .ignoresSafeArea()
+
+                Image(uiImage: sourceImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .blur(radius: 44)
+                    .opacity(0.18)
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    cropHeader(cropSize: cropSize, topInset: max(geometry.safeAreaInsets.top, 18))
+
+                    Spacer(minLength: 0)
+
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.08))
+                            .frame(width: cropSize, height: cropSize)
+
+                        Image(uiImage: sourceImage)
+                            .resizable()
+                            .frame(width: imageState.width, height: imageState.height)
+                            .offset(currentOffset)
+                            .gesture(
+                                SimultaneousGesture(
+                                    dragGesture(cropSize: cropSize),
+                                    magnificationGesture(cropSize: cropSize)
+                                )
+                            )
+                    }
+                    .frame(width: cropSize, height: cropSize)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.94), lineWidth: 2)
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.16), lineWidth: 12)
+                            .blur(radius: 18)
+                    )
+                    .shadow(color: Color.black.opacity(0.34), radius: 28, x: 0, y: 16)
+
+                    VStack(spacing: 10) {
+                        Text("拖动与缩放，调整圆形头像取景范围")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.88))
+
+                        Text("保存后将按圆形头像框显示")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.56))
+                    }
+                    .padding(.top, 34)
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private func cropHeader(cropSize: CGFloat, topInset: CGFloat) -> some View {
+        HStack {
+            cropHeaderButton(title: "取消", action: onCancel)
+
+            Spacer()
+
+            Text("裁剪头像")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Color.white)
+
+            Spacer()
+
+            cropHeaderButton(title: "确认") {
+                guard let croppedImage = renderCroppedAvatar(cropSize: cropSize) else { return }
+                onConfirm(croppedImage)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, topInset)
+    }
+
+    private func cropHeaderButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 18)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func dragGesture(cropSize: CGFloat) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                let proposed = CGSize(
+                    width: committedOffset.width + value.translation.width,
+                    height: committedOffset.height + value.translation.height
+                )
+                currentOffset = clampedOffset(for: proposed, cropSize: cropSize, scale: currentScale)
+            }
+            .onEnded { value in
+                let proposed = CGSize(
+                    width: committedOffset.width + value.translation.width,
+                    height: committedOffset.height + value.translation.height
+                )
+                let clamped = clampedOffset(for: proposed, cropSize: cropSize, scale: currentScale)
+                committedOffset = clamped
+                currentOffset = clamped
+            }
+    }
+
+    private func magnificationGesture(cropSize: CGFloat) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let nextScale = min(max(committedScale * value, minimumScale), maximumScale)
+                currentScale = nextScale
+                let clamped = clampedOffset(for: currentOffset, cropSize: cropSize, scale: nextScale)
+                currentOffset = clamped
+            }
+            .onEnded { value in
+                let nextScale = min(max(committedScale * value, minimumScale), maximumScale)
+                currentScale = nextScale
+                committedScale = nextScale
+                let clamped = clampedOffset(for: currentOffset, cropSize: cropSize, scale: nextScale)
+                committedOffset = clamped
+                currentOffset = clamped
+            }
+    }
+
+    private func cropImageState(for cropSize: CGFloat, scale: CGFloat) -> CGSize {
+        let baseScale = max(cropSize / sourceImage.size.width, cropSize / sourceImage.size.height)
+        return CGSize(
+            width: sourceImage.size.width * baseScale * scale,
+            height: sourceImage.size.height * baseScale * scale
+        )
+    }
+
+    private func clampedOffset(for proposedOffset: CGSize, cropSize: CGFloat, scale: CGFloat) -> CGSize {
+        let imageState = cropImageState(for: cropSize, scale: scale)
+        let maxX = max((imageState.width - cropSize) * 0.5, 0)
+        let maxY = max((imageState.height - cropSize) * 0.5, 0)
+
+        return CGSize(
+            width: min(max(proposedOffset.width, -maxX), maxX),
+            height: min(max(proposedOffset.height, -maxY), maxY)
+        )
+    }
+
+    private func renderCroppedAvatar(cropSize: CGFloat) -> UIImage? {
+        guard let cgImage = sourceImage.cgImage else { return nil }
+
+        let imageState = cropImageState(for: cropSize, scale: currentScale)
+        let originX = ((imageState.width - cropSize) * 0.5 - currentOffset.width) / imageState.width * sourceImage.size.width
+        let originY = ((imageState.height - cropSize) * 0.5 - currentOffset.height) / imageState.height * sourceImage.size.height
+        let sideLength = cropSize / imageState.width * sourceImage.size.width
+
+        let pixelScaleX = CGFloat(cgImage.width) / sourceImage.size.width
+        let pixelScaleY = CGFloat(cgImage.height) / sourceImage.size.height
+        let cropRect = CGRect(
+            x: max(0, originX) * pixelScaleX,
+            y: max(0, originY) * pixelScaleY,
+            width: min(sideLength, sourceImage.size.width - max(0, originX)) * pixelScaleX,
+            height: min(sideLength, sourceImage.size.height - max(0, originY)) * pixelScaleY
+        ).integral
+
+        guard let croppedCGImage = cgImage.cropping(to: cropRect) else { return nil }
+
+        let outputSide = min(CGFloat(croppedCGImage.width), 1024)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: outputSide, height: outputSide))
+        return renderer.image { _ in
+            UIImage(cgImage: croppedCGImage, scale: sourceImage.scale, orientation: .up)
+                .draw(in: CGRect(origin: .zero, size: CGSize(width: outputSide, height: outputSide)))
+        }
+    }
+}
+
+private extension UIImage {
+    func normalized() -> UIImage {
+        guard imageOrientation != .up else { return self }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
         }
     }
 }

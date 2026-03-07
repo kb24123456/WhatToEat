@@ -49,7 +49,6 @@ struct ConsumptionCardDetail: View {
     let viewModel: ProfileViewModel
     
     @State private var localController = CardAnimationController()
-    @State private var showChart = false
     
     var body: some View {
         VStack(spacing: 24) {
@@ -76,8 +75,6 @@ struct ConsumptionCardDetail: View {
                 
                 ConsumptionTrendChart(viewModel: viewModel)
                     .frame(height: 150)
-                    .opacity(showChart ? 1 : 0)
-                    .scaleEffect(showChart ? 1 : 0.9, anchor: .center)
             }
             .padding(.horizontal, 20)
             .staggeredAnimation(index: 1, controller: localController)
@@ -111,13 +108,6 @@ struct ConsumptionCardDetail: View {
         }
         .onAppear {
             localController.beginExpansion()
-            
-            // 延迟显示图表动画
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                    showChart = true
-                }
-            }
         }
     }
 }

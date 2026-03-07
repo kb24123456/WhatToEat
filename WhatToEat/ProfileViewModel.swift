@@ -22,8 +22,6 @@ class ProfileViewModel {
     var userProfile = UserProfile.load()
     var showingEditProfile = false
     
-    // MARK: - Card Expansion State
-    var expandedCardId: String? = nil
     var cardOrder: [String] = [
         "stats",        // 统计概览
         "consumption",  // 消费洞察
@@ -74,17 +72,6 @@ class ProfileViewModel {
     var joinDays: Int {
         guard let firstRestaurant = restaurants.min(by: { $0.createdAt < $1.createdAt }) else { return 0 }
         return Calendar.current.dateComponents([.day], from: firstRestaurant.createdAt, to: Date()).day ?? 0
-    }
-    
-    // MARK: - Card Expansion
-    func expandCard(id: String) {
-        // 不在此处添加动画，动画由 ExpandableCard 组件自己控制
-        expandedCardId = id
-    }
-    
-    func closeExpandedCard() {
-        // 不在此处添加动画，动画由 ExpandableCard 组件自己控制
-        expandedCardId = nil
     }
     
     // MARK: - Card Reordering
