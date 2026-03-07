@@ -45,6 +45,8 @@ struct ProfileView: View {
     @State private var showSwitchAccountAlert = false
     @State private var edgeBackGestureOffset: CGFloat = 0
     @State private var settingsTopBlurProgress: CGFloat = 0
+    @State private var gatewayIndicatorScale: CGFloat = 1
+    @State private var lastGatewayAnimationDirection: GatewayAnimationDirection = .next
     
     // 卡片尺寸定义（精调后）
     // 左列总高度: 156 + 212 + 184 + 158 = 710pt
@@ -149,8 +151,28 @@ struct ProfileView: View {
     private enum GatewayType {
         case data
         case settings
+        case achievement
+        case membership
+
+        var title: String {
+            switch self {
+            case .data:
+                return "我的数据"
+            case .settings:
+                return "功能设置"
+            case .achievement:
+                return "成就等级"
+            case .membership:
+                return "成为会员"
+            }
+        }
     }
-    
+
+    private enum GatewayAnimationDirection {
+        case previous
+        case next
+    }
+
     init() {
         _viewModel = State(initialValue: ProfileViewModel())
     }
@@ -313,22 +335,9 @@ struct ProfileView: View {
     @ViewBuilder
     private var profileGatewayContent: some View {
         if showDashboardCards {
-            if selectedGateway == .data {
-                dashboardCardsGrid
-                    .padding(.horizontal, 24)
-                    .padding(.top, 6)
-                    .transition(
-                        .asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .opacity
-                        )
-                    )
-            } else {
-                settingsDashboard
-                    .padding(.horizontal, 24)
-                    .padding(.top, 6)
-                    .transition(settingsPanelTransition)
-            }
+            expandedGatewayContent
+                .padding(.horizontal, 24)
+                .padding(.top, 6)
         } else {
             gatewayCards
                 .padding(.horizontal, 24)
@@ -363,63 +372,142 @@ struct ProfileView: View {
     }
     
     private var collapseButton: some View {
-        HStack {
-            Text(selectedGateway == .settings ? "功能设置" : "我的数据")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(settingsSecondaryTextColor)
-            
-            Spacer()
-            
-            Button {
-                switchExpandedGateway()
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "rectangle.2.swap")
-                        .font(.system(size: 11, weight: .bold))
-                    Text(selectedGateway == .settings ? "切到我的数据" : "切到功能设置")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundStyle(settingsPrimaryTextColor)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(settingsPillBackground)
-                        .overlay(
-                            Capsule()
-                                .stroke(settingsPillBorder.opacity(0.92), lineWidth: 0.8)
-                        )
-                        .shadow(color: settingsCardShadow.opacity(0.7), radius: 10, x: 0, y: 4)
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(selectedGateway.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(settingsSecondaryTextColor)
 
-            Button {
-                collapseDashboard()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 11, weight: .bold))
-                    Text("收起")
-                        .font(.system(size: 12, weight: .semibold))
+                Spacer()
+
+                Button {
+                    collapseDashboard()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("收起")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(settingsTertiaryTextColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(settingsPillBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(settingsPillBorder.opacity(0.92), lineWidth: 0.8)
+                            )
+                            .shadow(color: settingsCardShadow.opacity(0.7), radius: 10, x: 0, y: 4)
+                    )
                 }
-                .foregroundStyle(settingsTertiaryTextColor)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(settingsPillBackground)
-                        .overlay(
-                            Capsule()
-                                .stroke(settingsPillBorder.opacity(0.92), lineWidth: 0.8)
-                        )
-                        .shadow(color: settingsCardShadow.opacity(0.7), radius: 10, x: 0, y: 4)
-                )
+                .buttonStyle(PlainButtonStyle())
             }
-            .buttonStyle(PlainButtonStyle())
+
+            gatewaySwitchBar
         }
     }
-    
+
+    private var gatewaySwitchBar: some View {
+        HStack(spacing: 4) {
+            ForEach(profileGatewayOptions, id: \.title) { gateway in
+                gatewaySwitchButton(for: gateway)
+            }
+        }
+        .padding(4)
+        .background(
+            Capsule(style: .continuous)
+                .fill(settingsSegmentTrack)
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(settingsPillBorder.opacity(0.42), lineWidth: 0.8)
+                )
+                .shadow(color: settingsCardShadow.opacity(0.36), radius: 8, x: 0, y: 3)
+        )
+    }
+
+    private var profileGatewayOptions: [GatewayType] {
+        [.data, .settings, .achievement, .membership]
+    }
+
+    private func gatewaySwitchButton(for gateway: GatewayType) -> some View {
+        let isActive = selectedGateway == gateway
+
+        return Button {
+            switchExpandedGateway(to: gateway)
+        } label: {
+            Text(gateway.title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isActive ? settingsPrimaryTextColor : settingsSecondaryTextColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .background(
+                    ZStack {
+                        if isActive {
+                            Capsule()
+                                .fill(settingsPillBackground)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(settingsPillBorder.opacity(0.92), lineWidth: 0.8)
+                                )
+                                .shadow(
+                                    color: settingsCardShadow.opacity(0.7),
+                                    radius: 10,
+                                    x: 0,
+                                    y: 4
+                                )
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .scaleEffect(gatewayIndicatorScale)
+                                .matchedGeometryEffect(id: "profile-gateway-indicator", in: animationNamespace)
+                        }
+                    }
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    @ViewBuilder
+    private var expandedGatewayContent: some View {
+        switch selectedGateway {
+        case .data:
+            dashboardCardsGrid
+                .id(selectedGateway.title)
+                .transition(gatewayContentTransition)
+        case .settings:
+            settingsDashboard
+                .id(selectedGateway.title)
+                .transition(gatewayContentTransition)
+        case .achievement:
+            achievementDashboard
+                .id(selectedGateway.title)
+                .transition(gatewayContentTransition)
+        case .membership:
+            membershipDashboard
+                .id(selectedGateway.title)
+                .transition(gatewayContentTransition)
+        }
+    }
+
+    private var gatewayContentTransition: AnyTransition {
+        switch lastGatewayAnimationDirection {
+        case .next:
+            return .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            )
+        case .previous:
+            return .asymmetric(
+                insertion: .move(edge: .leading).combined(with: .opacity),
+                removal: .move(edge: .trailing).combined(with: .opacity)
+            )
+        }
+    }
+
     private var settingsPanelTransition: AnyTransition {
         .asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),
@@ -504,36 +592,73 @@ struct ProfileView: View {
         }
     }
 
-    private func switchExpandedGateway() {
-        let targetGateway: GatewayType = selectedGateway == .settings ? .data : .settings
+    private func switchExpandedGateway(to gateway: GatewayType) {
+        guard selectedGateway != gateway else { return }
+        if let currentIndex = profileGatewayOptions.firstIndex(of: selectedGateway),
+           let targetIndex = profileGatewayOptions.firstIndex(of: gateway) {
+            lastGatewayAnimationDirection = targetIndex > currentIndex ? .next : .previous
+        }
         let generator = UIImpactFeedbackGenerator(style: .soft)
         generator.impactOccurred()
+        animateGatewayIndicatorBounce()
 
         withAnimation(dashboardTransition) {
             edgeBackGestureOffset = 0
             settingsTopBlurProgress = 0
-            selectedGateway = targetGateway
+            selectedGateway = gateway
+        }
+    }
+
+    private func animateGatewayIndicatorBounce() {
+        withAnimation(.interactiveSpring(response: 0.18, dampingFraction: 0.82, blendDuration: 0.08)) {
+            gatewayIndicatorScale = 0.94
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.78, blendDuration: 0.1)) {
+                gatewayIndicatorScale = 1
+            }
         }
     }
     
     // MARK: - 入口卡片
     private var gatewayCards: some View {
-        HStack(spacing: 10) {
-            gatewayCard(
-                title: "我的数据",
-                subtitle: "查看统计与趋势",
-                iconName: "chart.bar.fill",
-                accent: Color(hex: "#61C6FF"),
-                type: .data
-            )
-            
-            gatewayCard(
-                title: "功能设置",
-                subtitle: "系统偏好与权限",
-                iconName: "slider.horizontal.3",
-                accent: Color(hex: "#FF7A9B"),
-                type: .settings
-            )
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                gatewayCard(
+                    title: "我的数据",
+                    subtitle: "查看统计与趋势",
+                    iconName: "chart.bar.fill",
+                    accent: Color(hex: "#61C6FF"),
+                    type: .data
+                )
+
+                gatewayCard(
+                    title: "功能设置",
+                    subtitle: "系统偏好与权限",
+                    iconName: "slider.horizontal.3",
+                    accent: Color(hex: "#FF7A9B"),
+                    type: .settings
+                )
+            }
+
+            HStack(spacing: 10) {
+                gatewayCard(
+                    title: "成就等级",
+                    subtitle: "查看成长进度",
+                    iconName: "medal.star.fill",
+                    accent: Color(hex: "#F6B93B"),
+                    type: .achievement
+                )
+
+                gatewayCard(
+                    title: "成为会员",
+                    subtitle: "解锁专属权益",
+                    iconName: "sparkles.rectangle.stack.fill",
+                    accent: Color(hex: "#8C7AE6"),
+                    type: .membership
+                )
+            }
         }
     }
     
@@ -545,68 +670,84 @@ struct ProfileView: View {
         type: GatewayType
     ) -> some View {
         Button {
-            selectedGateway = type
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
             
             withAnimation(dashboardTransition) {
+                selectedGateway = type
+                settingsTopBlurProgress = 0
                 showDashboardCards = true
             }
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: iconName)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(accent)
-                        .frame(width: 34, height: 34)
-                        .background(
-                            Circle()
-                                .fill(accent.opacity(0.15))
-                        )
-                    
-                    Spacer()
-                    
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(settingsSecondaryTextColor)
-                        .frame(width: 28, height: 28)
-                        .background(
-                            Circle()
-                                .fill(dashboardSecondarySurfaceColor)
-                        )
-                }
-                
-                Text(title)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundColor(settingsPrimaryTextColor)
-                
-                Text(subtitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(settingsSecondaryTextColor)
-                    .lineLimit(1)
-                
-                Spacer(minLength: 0)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .frame(height: 122)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(dashboardSurfaceColor)
-                    .overlay(
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .stroke(dashboardHighlightStrokeColor, lineWidth: 0.5)
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .stroke(dashboardStrokeColor, lineWidth: 0.5)
-                        }
-                    )
-                    .shadow(color: dashboardShadowColor, radius: colorScheme == .dark ? 10 : 12, x: 0, y: colorScheme == .dark ? 4 : 4)
+            gatewayCardLabel(
+                title: title,
+                subtitle: subtitle,
+                iconName: iconName,
+                accent: accent
             )
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
+    private func gatewayCardLabel(
+        title: String,
+        subtitle: String,
+        iconName: String,
+        accent: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: iconName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(accent.opacity(0.15))
+                    )
+
+                Spacer()
+
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(settingsSecondaryTextColor)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(dashboardSecondarySurfaceColor)
+                    )
+            }
+
+            Text(title)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(settingsPrimaryTextColor)
+
+            Text(subtitle)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(settingsSecondaryTextColor)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .frame(height: 122)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(dashboardSurfaceColor)
+                .overlay(
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(dashboardHighlightStrokeColor, lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(dashboardStrokeColor, lineWidth: 0.5)
+                    }
+                )
+                .shadow(color: dashboardShadowColor, radius: colorScheme == .dark ? 10 : 12, x: 0, y: colorScheme == .dark ? 4 : 4)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
     private var dashboardCardsGrid: some View {
         // 两列卡片布局 - 8个卡片，左右各4个
         // 美食足迹(timeline)放在右侧最下方
@@ -807,6 +948,84 @@ struct ProfileView: View {
         )
     }
 
+    private var achievementDashboard: some View {
+        let currentLevel = viewModel.calculateLevel()
+        let progress = CGFloat(viewModel.getLevelProgress())
+        let scoreBreakdown = viewModel.growthScoreBreakdown
+
+        return VStack(spacing: 10) {
+            achievementHeroCard(
+                currentLevel: currentLevel,
+                progress: progress,
+                scoreBreakdown: scoreBreakdown
+            )
+
+            settingsSectionCard(title: "成长轨迹") {
+                achievementMainPage(currentLevel: currentLevel, scoreBreakdown: scoreBreakdown)
+            }
+
+            settingsSectionCard(title: "成长说明") {
+                VStack(alignment: .leading, spacing: 10) {
+                    profileNoteRow(
+                        icon: "sparkles",
+                        tint: Color(hex: "#F6B93B"),
+                        title: "成长依据",
+                        body: "总等级以打卡次数为主，同时吸收餐厅沉淀与消费记录作为成长加成，统一汇总成综合成长指数。"
+                    )
+                    profileNoteRow(
+                        icon: "trophy.fill",
+                        tint: Color(hex: "#61C6FF"),
+                        title: "成就节奏",
+                        body: "主线等级会先快速建立反馈，后续再逐渐放缓，让成长更接近长期记录而不是短期冲刺。"
+                    )
+                }
+            }
+        }
+    }
+
+    private var membershipDashboard: some View {
+        VStack(spacing: 10) {
+            membershipHeroCard
+
+            settingsSectionCard(title: "核心权益") {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(membershipBenefits.indices, id: \.self) { index in
+                        let benefit = membershipBenefits[index]
+                        profileNoteRow(
+                            icon: benefit.icon,
+                            tint: benefit.tint,
+                            title: benefit.title,
+                            body: benefit.body
+                        )
+
+                        if index != membershipBenefits.indices.last {
+                            settingsRowDivider()
+                        }
+                    }
+                }
+            }
+
+            settingsSectionCard(title: "开放计划") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("首版先把身份感、权益结构和产品价值讲清楚，不接支付，也不改变当前基础功能。")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(settingsSecondaryTextColor)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(membershipRoadmap.indices, id: \.self) { index in
+                            let item = membershipRoadmap[index]
+                            membershipRoadmapRow(item: item)
+
+                            if index != membershipRoadmap.indices.last {
+                                settingsRowDivider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private func settingsSectionCard<Content: View>(
         title: String,
         @ViewBuilder content: () -> Content
@@ -834,6 +1053,343 @@ struct ProfileView: View {
                 .shadow(color: settingsCardShadow, radius: colorScheme == .dark ? 10 : 14, x: 0, y: colorScheme == .dark ? 4 : 6)
         )
         .animation(settingsSectionAnimation, value: selectedGateway)
+    }
+
+    private func achievementHeroCard(
+        currentLevel: Int,
+        progress: CGFloat,
+        scoreBreakdown: ProfileViewModel.GrowthScoreBreakdown
+    ) -> some View {
+        let compositeScore = scoreBreakdown.totalScore
+        let levelGap = viewModel.growthGapToNextLevel()
+
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("综合成长")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color(hex: "#B9770E"))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.72))
+                        )
+
+                    Text("Lv.\(currentLevel) · \(viewModel.getLevelTitle())")
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundStyle(settingsPrimaryTextColor)
+
+                    Text(viewModel.getLevelSummary())
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("成长指数")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                    Text("\(compositeScore)")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(settingsPrimaryTextColor)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("主线升级进度")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(settingsPrimaryTextColor)
+                    Spacer()
+                    Text("\(Int((progress * 100).rounded()))%")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(settingsPrimaryTextColor)
+                }
+
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.42))
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "#F6B93B"), Color(hex: "#F8C471"), Color(hex: "#61C6FF")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: geometry.size.width * progress)
+                    }
+                }
+                .frame(height: 10)
+
+                Text(currentLevel >= 7 ? "你已经到达当前成长体系的最高等级，接下来更适合继续打磨餐厅与消费分支。"
+                     : "距下一等级还差 \(levelGap) 成长值，再沉淀一些记录与消费轨迹，即将进入下一阶段。")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(settingsSecondaryTextColor)
+            }
+
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.adaptiveHex(light: "#FFF8E8", dark: "#2B2414"),
+                            Color.adaptiveHex(light: "#FFF2D9", dark: "#201C13"),
+                            Color.adaptiveHex(light: "#F7F8FC", dark: "#161B26")
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.5), lineWidth: 0.8)
+                )
+                .shadow(color: dashboardShadowColor.opacity(0.9), radius: 16, x: 0, y: 8)
+        )
+    }
+
+    private var membershipBenefits: [(icon: String, tint: Color, title: String, body: String)] {
+        [
+            ("wand.and.stars", Color(hex: "#8C7AE6"), "更强的吃什么建议", "在随机推荐之外，提供更懂你历史偏好的高级推荐视图，让选择更像有人在替你做功课。"),
+            ("bookmark.circle.fill", Color(hex: "#61C6FF"), "更细的个人记录", "支持更完整的标签、备注、偏好沉淀，让你的个人食谱越来越准。"),
+            ("chart.xyaxis.line", Color(hex: "#2ECC71"), "更深入的数据分析", "解锁进阶趋势、阶段报告与城市/品类维度的饮食洞察。"),
+            ("person.2.crop.square.stack.fill", Color(hex: "#F6B93B"), "更懂你的陪伴感", "把探索、记录、推荐串成一条持续陪伴你的外食主线，而不只是工具入口。")
+        ]
+    }
+
+    private var membershipRoadmap: [(phase: String, title: String, body: String)] {
+        [
+            ("Phase 1", "建立身份感与权益结构", "先把会员页面的视觉语言、核心权益和适用人群讲清楚。"),
+            ("Phase 2", "接入试用与权益开关", "逐步补齐会员专属模块、试用提示和轻量权益控制。"),
+            ("Phase 3", "视需要再接入开通闭环", "只有在页面价值与使用意愿被验证后，再考虑支付与正式产品化。")
+        ]
+    }
+
+    private var membershipHeroCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("会员预览")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color(hex: "#8C7AE6"))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.72))
+                        )
+
+                    Text("WhatToEat Prime")
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundStyle(settingsPrimaryTextColor)
+
+                    Text("不是更复杂，而是让吃什么、记什么、为什么喜欢它这三件事连成一条更高级的个人体验。")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("当前状态")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                    Text("Preview")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(settingsPrimaryTextColor)
+                }
+            }
+
+            HStack(spacing: 8) {
+                membershipHighlightPill(title: "身份感优先", tint: Color(hex: "#8C7AE6"))
+                membershipHighlightPill(title: "权益分层", tint: Color(hex: "#61C6FF"))
+                membershipHighlightPill(title: "后续可产品化", tint: Color(hex: "#F6B93B"))
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.adaptiveHex(light: "#F6F1FF", dark: "#221B35"),
+                            Color.adaptiveHex(light: "#EEF3FF", dark: "#172032"),
+                            Color.adaptiveHex(light: "#FCFCFF", dark: "#131A28")
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.55), lineWidth: 0.8)
+                )
+                .shadow(color: dashboardShadowColor.opacity(0.9), radius: 16, x: 0, y: 8)
+        )
+    }
+
+    private func membershipHighlightPill(title: String, tint: Color) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.7))
+            )
+    }
+
+    private func achievementMainPage(
+        currentLevel: Int,
+        scoreBreakdown: ProfileViewModel.GrowthScoreBreakdown
+    ) -> some View {
+        let nextRequirement = viewModel.getNextLevelRequirement()
+        let currentFloor = viewModel.getCurrentLevelFloor()
+        let growthGap = viewModel.growthGapToNextLevel()
+
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(spacing: 10) {
+                    achievementFormulaMetric(
+                        title: "打卡主贡献",
+                        stat: "\(viewModel.totalCheckIns) 次",
+                        score: scoreBreakdown.checkInScore,
+                        tint: Color(hex: "#F6B93B"),
+                        detail: "每次打卡稳定累计成长值，是主线升级的核心来源。"
+                    )
+                    achievementFormulaMetric(
+                        title: "餐厅加成",
+                        stat: "\(viewModel.totalRestaurants) 家",
+                        score: scoreBreakdown.restaurantScore,
+                        tint: Color(hex: "#7BC8A4"),
+                        detail: "收藏与维护的餐厅越丰富，越能体现你的长期沉淀。"
+                    )
+                    achievementFormulaMetric(
+                        title: "消费加成",
+                        stat: viewModel.formatCurrency(viewModel.totalExpense),
+                        score: scoreBreakdown.expenseScore,
+                        tint: Color(hex: "#E7A8B8"),
+                        detail: "消费采用递减增长，强调持续投入而不是单次高消费。"
+                    )
+                }
+
+                settingsRowDivider()
+                    .padding(.leading, 0)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\(scoreBreakdown.totalScore) / \(max(nextRequirement, scoreBreakdown.totalScore))")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(settingsPrimaryTextColor)
+
+                    Text(currentLevel >= 7
+                         ? "你已位于当前成长体系顶点，主线等级封顶后会更多体现为稳定记录与分支沉淀。"
+                         : "当前等级区间从 \(currentFloor) 到 \(nextRequirement) 成长值；距下一等级还差 \(growthGap) 点。")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func achievementFormulaMetric(
+        title: String,
+        stat: String,
+        score: Int,
+        tint: Color,
+        detail: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(settingsPrimaryTextColor)
+
+                Spacer(minLength: 8)
+
+                Text(stat)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(settingsSecondaryTextColor)
+
+                Text("+\(score)")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(tint)
+            }
+
+            Text(detail)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(settingsSecondaryTextColor)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+    }
+
+    private func membershipRoadmapRow(item: (phase: String, title: String, body: String)) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.phase)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color(hex: "#8C7AE6"))
+                Text(item.title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(settingsPrimaryTextColor)
+                Text(item.body)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(settingsSecondaryTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 12)
+    }
+
+    private var expenseMetricText: String {
+        if viewModel.totalExpense >= 10000 {
+            return String(format: "%.1fw", viewModel.totalExpense / 10000)
+        }
+        return String(format: "%.0f", viewModel.totalExpense)
+    }
+
+    private func profileNoteRow(
+        icon: String,
+        tint: Color,
+        title: String,
+        body: String
+    ) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(tint.opacity(0.14)))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(settingsPrimaryTextColor)
+
+                Text(body)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(settingsSecondaryTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 2)
     }
 
     private func settingsRowDivider() -> some View {
@@ -1245,10 +1801,7 @@ struct ProfileView: View {
 
     // MARK: - 紧凑头部（给展开面板腾空间）
     private var compactProfileHeader: some View {
-        let levelProgress = min(
-            CGFloat(viewModel.totalCheckIns) / CGFloat(max(viewModel.getNextLevelRequirement(), 1)),
-            1.0
-        )
+        let levelProgress = CGFloat(viewModel.getLevelProgress())
         let progressPercent = Int((levelProgress * 100).rounded())
         let levelTitle = "Lv.\(viewModel.calculateLevel()) · \(viewModel.getLevelTitle())"
 
@@ -1477,10 +2030,7 @@ struct ProfileView: View {
         let progressBottomInset: CGFloat = topInset
         let contentHorizontalInset: CGFloat = isCompact ? 18 : 20
         let overlapBlurHeight: CGFloat = max(cardOverlap - (isCompact ? 4 : 6), isCompact ? 22 : 26)
-        let levelProgress = min(
-            CGFloat(viewModel.totalCheckIns) / CGFloat(max(viewModel.getNextLevelRequirement(), 1)),
-            1.0
-        )
+        let levelProgress = CGFloat(viewModel.getLevelProgress())
         let progressPercent = Int((levelProgress * 100).rounded())
         let levelTitle = "Lv.\(viewModel.calculateLevel()) · \(viewModel.getLevelTitle())"
         

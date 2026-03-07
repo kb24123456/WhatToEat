@@ -8,7 +8,7 @@
 import Foundation
 
 // MARK: - 聚合数据老黄历API响应
-struct JuheLaohuangliResponse: Codable {
+nonisolated struct JuheLaohuangliResponse: Codable, Sendable {
     let reason: String
     let result: LaohuangliResult?
     let errorCode: Int
@@ -19,13 +19,13 @@ struct JuheLaohuangliResponse: Codable {
         case errorCode = "error_code"
     }
     
-    var isSuccess: Bool {
+    nonisolated var isSuccess: Bool {
         return errorCode == 0 && result != nil
     }
 }
 
 // MARK: - 老黄历结果
-struct LaohuangliResult: Codable {
+nonisolated struct LaohuangliResult: Codable, Sendable {
     /// 阳历日期 yyyy-MM-dd
     let yangli: String
     
@@ -54,7 +54,7 @@ struct LaohuangliResult: Codable {
     let xiongshen: String?
     
     /// 从农历日期提取干支年（如：丙午年）
-    var ganzhiYear: String {
+    nonisolated var ganzhiYear: String {
         // 从yinli中提取，如：丙午(马)年正月十六 → 丙午年
         if let match = yinli.range(of: "^[^（(]+", options: .regularExpression) {
             return String(yinli[match]).trimmingCharacters(in: .whitespaces) + "年"
@@ -63,31 +63,31 @@ struct LaohuangliResult: Codable {
     }
     
     /// 从农历日期提取干支月日（简化处理）
-    var ganzhiMonth: String {
+    nonisolated var ganzhiMonth: String {
         return "正月" // 简化处理
     }
     
-    var ganzhiDay: String {
+    nonisolated var ganzhiDay: String {
         return "十六" // 从yinli提取日期
     }
     
     /// 建除十二神（从吉神中提取或返回默认值）
-    var jianchu: String {
+    nonisolated var jianchu: String {
         return jishen?.components(separatedBy: " ").first ?? "未知"
     }
     
     /// 彭祖百忌（使用百忌字段）
-    var pengzu: String {
+    nonisolated var pengzu: String {
         return baiji ?? "未知"
     }
     
     /// 节气（API可能不返回，使用默认值）
-    var jieqi: String? {
+    nonisolated var jieqi: String? {
         return nil
     }
     
     /// 节日（API可能不返回，使用默认值）
-    var festival: String? {
+    nonisolated var festival: String? {
         return nil
     }
     
@@ -105,7 +105,7 @@ struct LaohuangliResult: Codable {
 }
 
 // MARK: - 应用层黄历数据模型
-struct LunarCalendarData: Codable {
+nonisolated struct LunarCalendarData: Codable, Sendable {
     /// 阳历日期
     let solarDate: String
     
@@ -148,7 +148,7 @@ struct LunarCalendarData: Codable {
 
 // MARK: - 扩展：从聚合数据转换
 extension LunarCalendarData {
-    init(from juheResult: LaohuangliResult) {
+    nonisolated init(from juheResult: LaohuangliResult) {
         self.solarDate = juheResult.yangli
         self.lunarDate = juheResult.yinli
         self.ganzhiYear = juheResult.ganzhiYear
@@ -166,9 +166,9 @@ extension LunarCalendarData {
             .map { String($0) }
             .filter { !$0.isEmpty }
         
-        self.jianchu = juheResult.jianchu ?? "未知"
+        self.jianchu = juheResult.jianchu
         self.chongsha = juheResult.chongsha ?? "未知"
-        self.pengzu = juheResult.pengzu ?? "未知"
+        self.pengzu = juheResult.pengzu
         self.solarTerm = juheResult.jieqi ?? "无"
         self.festival = juheResult.festival ?? "无"
         self.fetchedAt = Date()
@@ -178,12 +178,12 @@ extension LunarCalendarData {
 // MARK: - 便捷属性
 extension LunarCalendarData {
     /// 完整干支日期（如：甲辰年丙寅月甲子日）
-    var fullGanzhi: String {
+    nonisolated var fullGanzhi: String {
         return "\(ganzhiYear)\(ganzhiMonth)\(ganzhiDay)"
     }
     
     /// 宜忌摘要（用于展示）
-    var yiJiSummary: String {
+    nonisolated var yiJiSummary: String {
         let yiStr = suitable.prefix(3).joined(separator: "、")
         let jiStr = unsuitable.prefix(3).joined(separator: "、")
         return "宜:\(yiStr) 忌:\(jiStr)"
@@ -193,7 +193,7 @@ extension LunarCalendarData {
     
     /// 缓存有效期 - 黄历数据按自然日判断
     /// 💡 规则：每个自然日只请求一次API，当天数据永不过期
-    var isExpired: Bool {
+    nonisolated var isExpired: Bool {
         let calendar = Calendar.current
         let now = Date()
         

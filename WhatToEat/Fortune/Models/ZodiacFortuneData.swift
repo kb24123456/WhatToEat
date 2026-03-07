@@ -8,7 +8,7 @@
 import Foundation
 
 // MARK: - 星座枚举
-enum ZodiacSign: String, CaseIterable, Codable {
+nonisolated enum ZodiacSign: String, CaseIterable, Codable, Sendable {
     case aries = "白羊座"
     case taurus = "金牛座"
     case gemini = "双子座"
@@ -23,7 +23,7 @@ enum ZodiacSign: String, CaseIterable, Codable {
     case pisces = "双鱼座"
     
     /// 星座英文标识（用于API请求）
-    var apiKey: String {
+    nonisolated var apiKey: String {
         switch self {
         case .aries: return "aries"
         case .taurus: return "taurus"
@@ -42,7 +42,7 @@ enum ZodiacSign: String, CaseIterable, Codable {
     
     /// 星座日期范围（用于根据生日判断星座）
     /// 返回: (startMonth, startDay, endMonth, endDay)
-    var dateRange: (startMonth: Int, startDay: Int, endMonth: Int, endDay: Int) {
+    nonisolated var dateRange: (startMonth: Int, startDay: Int, endMonth: Int, endDay: Int) {
         switch self {
         case .aries: return (3, 21, 4, 19)
         case .taurus: return (4, 20, 5, 20)
@@ -60,7 +60,7 @@ enum ZodiacSign: String, CaseIterable, Codable {
     }
     
     /// 根据生日获取星座
-    static func from(birthDate: Date) -> ZodiacSign? {
+    nonisolated static func from(birthDate: Date) -> ZodiacSign? {
         let calendar = Calendar.current
         let month = calendar.component(.month, from: birthDate)
         let day = calendar.component(.day, from: birthDate)
@@ -98,14 +98,14 @@ enum ZodiacSign: String, CaseIterable, Codable {
     }
     
     /// 根据中文名称获取星座
-    static func from(chineseName: String) -> ZodiacSign? {
+    nonisolated static func from(chineseName: String) -> ZodiacSign? {
         return ZodiacSign.allCases.first { $0.rawValue == chineseName }
     }
 }
 
 // MARK: - 聚合数据星座运势API响应
 // 注意：星座API返回扁平化结构，不是嵌套的result对象
-struct JuheConstellationResponse: Codable {
+nonisolated struct JuheConstellationResponse: Codable, Sendable {
     // API状态字段
     let errorCode: Int
     let reason: String?
@@ -141,13 +141,13 @@ struct JuheConstellationResponse: Codable {
         case QFriend
     }
     
-    var isSuccess: Bool {
+    nonisolated var isSuccess: Bool {
         // 星座API返回error_code=0表示成功，且必须有name字段
         return errorCode == 0 && name != nil
     }
     
     /// 将扁平化的响应转换为ConstellationResult对象
-    func toConstellationResult() -> ConstellationResult? {
+    nonisolated func toConstellationResult() -> ConstellationResult? {
         guard let name = name,
               let all = all,
               let datetime = datetime else {
@@ -171,7 +171,7 @@ struct JuheConstellationResponse: Codable {
 }
 
 // MARK: - 星座运势结果
-struct ConstellationResult: Codable {
+nonisolated struct ConstellationResult: Codable, Sendable {
     /// 星座名称
     let name: String
     
@@ -200,7 +200,7 @@ struct ConstellationResult: Codable {
     let number: Int
     
     /// 幸运数字（字符串形式）
-    var numberString: String {
+    nonisolated var numberString: String {
         return String(number)
     }
     
@@ -212,7 +212,7 @@ struct ConstellationResult: Codable {
 }
 
 // MARK: - 应用层星座运势数据模型
-struct ZodiacFortuneData: Codable {
+nonisolated struct ZodiacFortuneData: Codable, Sendable {
     /// 星座
     let zodiac: ZodiacSign
     
@@ -252,7 +252,7 @@ struct ZodiacFortuneData: Codable {
 
 // MARK: - 扩展：从聚合数据转换
 extension ZodiacFortuneData {
-    init(from juheResult: ConstellationResult, zodiac: ZodiacSign) {
+    nonisolated init(from juheResult: ConstellationResult, zodiac: ZodiacSign) {
         self.zodiac = zodiac
         self.date = juheResult.datetime
         
@@ -277,14 +277,14 @@ extension ZodiacFortuneData {
 // MARK: - 便捷属性
 extension ZodiacFortuneData {
     /// 运势星级 (1-5)
-    var fortuneStars: Int {
+    nonisolated var fortuneStars: Int {
         // 将0-100分映射到1-5星
         let score = max(0, min(100, fortuneScore))
         return max(1, Int(ceil(Double(score) / 20.0)))
     }
     
     /// 运势等级描述
-    var fortuneLevel: String {
+    nonisolated var fortuneLevel: String {
         switch fortuneStars {
         case 5: return "大吉"
         case 4: return "吉"
@@ -296,7 +296,7 @@ extension ZodiacFortuneData {
     }
     
     /// 幸运色英文（用于食物匹配）
-    var luckyColorEnglish: String {
+    nonisolated var luckyColorEnglish: String {
         let colorMap: [String: String] = [
             "红色": "red", "绿色": "green", "蓝色": "blue",
             "黄色": "yellow", "白色": "white", "黑色": "black",
@@ -315,7 +315,7 @@ extension ZodiacFortuneData {
     
     /// 缓存有效期 - 星座数据按自然日判断
     /// 💡 规则：每个自然日只请求一次API（同一星座），当天数据永不过期
-    var isExpired: Bool {
+    nonisolated var isExpired: Bool {
         let calendar = Calendar.current
         let now = Date()
         

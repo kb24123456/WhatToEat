@@ -39,8 +39,10 @@ actor JuheAPIService {
         config.timeoutIntervalForResource = 60
         self.session = URLSession(configuration: config)
         
-        // 从UserDefaults恢复缓存
-        restoreCacheFromDisk()
+        // 初始化阶段先从磁盘恢复缓存，避免在 actor init 中调用隔离方法
+        let restoredCache = Self.loadCacheFromDisk()
+        self.lunarCache = restoredCache.lunar
+        self.zodiacCache = restoredCache.zodiac
     }
     
     // MARK: - 公共方法：获取黄历数据
@@ -316,8 +318,13 @@ actor JuheAPIService {
         }
     }
     
-    private func restoreCacheFromDisk() {
+    private nonisolated static func loadCacheFromDisk() -> (
+        lunar: [String: LunarCalendarData],
+        zodiac: [String: ZodiacFortuneData]
+    ) {
         let userDefaults = UserDefaults.standard
+        var lunarCache: [String: LunarCalendarData] = [:]
+        var zodiacCache: [String: ZodiacFortuneData] = [:]
         
         // 恢复黄历缓存
         if let lunarData = userDefaults.data(forKey: "fortune_lunar_cache"),
@@ -330,6 +337,8 @@ actor JuheAPIService {
            let cache = try? JSONDecoder().decode([String: ZodiacFortuneData].self, from: zodiacData) {
             zodiacCache = cache
         }
+
+        return (lunarCache, zodiacCache)
     }
     
     // MARK: - 工具方法

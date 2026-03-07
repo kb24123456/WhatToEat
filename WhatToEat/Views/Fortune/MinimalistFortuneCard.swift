@@ -50,100 +50,104 @@ struct MinimalistFortuneCard: View {
     
     // MARK: - 背景 - 中性彩虹色弥散渐变
     private var minimalistBackground: some View {
-        ZStack {
-            // 基础中性背景 - 暖灰白色
-            Color(hex: "#F8F7F4")
-                .ignoresSafeArea()
-            
-            // 弥散光斑1 - 左上：柔和蓝
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(hex: "#A8D5E5").opacity(0.4),
-                            Color(hex: "#A8D5E5").opacity(0.15),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 50,
-                        endRadius: 300
+        GeometryReader { proxy in
+            let size = proxy.size
+
+            ZStack {
+                // 基础中性背景 - 暖灰白色
+                Color(hex: "#F8F7F4")
+                    .ignoresSafeArea()
+                
+                // 弥散光斑1 - 左上：柔和蓝
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(hex: "#A8D5E5").opacity(0.4),
+                                Color(hex: "#A8D5E5").opacity(0.15),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 50,
+                            endRadius: 300
+                        )
                     )
-                )
-                .frame(width: 600, height: 600)
-                .position(x: UIScreen.main.bounds.width * 0.15, y: UIScreen.main.bounds.height * 0.2)
-                .blur(radius: 80)
-            
-            // 弥散光斑2 - 右下：柔和橙
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(hex: "#F4B393").opacity(0.38),
-                            Color(hex: "#F4B393").opacity(0.12),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 60,
-                        endRadius: 350
+                    .frame(width: 600, height: 600)
+                    .position(x: size.width * 0.15, y: size.height * 0.2)
+                    .blur(radius: 80)
+                
+                // 弥散光斑2 - 右下：柔和橙
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(hex: "#F4B393").opacity(0.38),
+                                Color(hex: "#F4B393").opacity(0.12),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 60,
+                            endRadius: 350
+                        )
                     )
-                )
-                .frame(width: 700, height: 700)
-                .position(x: UIScreen.main.bounds.width * 0.85, y: UIScreen.main.bounds.height * 0.8)
-                .blur(radius: 90)
-            
-            // 弥散光斑3 - 中间偏左：柔和紫
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(hex: "#C5B9E8").opacity(0.35),
-                            Color(hex: "#C5B9E8").opacity(0.1),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 40,
-                        endRadius: 280
+                    .frame(width: 700, height: 700)
+                    .position(x: size.width * 0.85, y: size.height * 0.8)
+                    .blur(radius: 90)
+                
+                // 弥散光斑3 - 中间偏左：柔和紫
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(hex: "#C5B9E8").opacity(0.35),
+                                Color(hex: "#C5B9E8").opacity(0.1),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 40,
+                            endRadius: 280
+                        )
                     )
-                )
-                .frame(width: 560, height: 560)
-                .position(x: UIScreen.main.bounds.width * 0.2, y: UIScreen.main.bounds.height * 0.6)
-                .blur(radius: 70)
-            
-            // 弥散光斑4 - 右上：柔和青绿
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(hex: "#9ED2C6").opacity(0.35),
-                            Color(hex: "#9ED2C6").opacity(0.1),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 45,
-                        endRadius: 320
+                    .frame(width: 560, height: 560)
+                    .position(x: size.width * 0.2, y: size.height * 0.6)
+                    .blur(radius: 70)
+                
+                // 弥散光斑4 - 右上：柔和青绿
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(hex: "#9ED2C6").opacity(0.35),
+                                Color(hex: "#9ED2C6").opacity(0.1),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 45,
+                            endRadius: 320
+                        )
                     )
-                )
-                .frame(width: 640, height: 640)
-                .position(x: UIScreen.main.bounds.width * 0.8, y: UIScreen.main.bounds.height * 0.15)
-                .blur(radius: 75)
-            
-            // 弥散光斑5 - 底部中央：柔和黄
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(hex: "#F4E4A6").opacity(0.32),
-                            Color(hex: "#F4E4A6").opacity(0.08),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 50,
-                        endRadius: 300
+                    .frame(width: 640, height: 640)
+                    .position(x: size.width * 0.8, y: size.height * 0.15)
+                    .blur(radius: 75)
+                
+                // 弥散光斑5 - 底部中央：柔和黄
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(hex: "#F4E4A6").opacity(0.32),
+                                Color(hex: "#F4E4A6").opacity(0.08),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 50,
+                            endRadius: 300
+                        )
                     )
-                )
-                .frame(width: 600, height: 600)
-                .position(x: UIScreen.main.bounds.width * 0.5, y: UIScreen.main.bounds.height * 0.85)
-                .blur(radius: 80)
+                    .frame(width: 600, height: 600)
+                    .position(x: size.width * 0.5, y: size.height * 0.85)
+                    .blur(radius: 80)
+            }
         }
         .ignoresSafeArea()
     }

@@ -236,19 +236,46 @@ struct ContentView: View {
             // 触感反馈
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
-                    .frame(height: 22)
-                
-                Text(title)
-                    .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .rounded))
-                    .frame(height: 10)
+            ZStack {
+                if isSelected {
+                    tabSelectionIndicator
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 3)
+                        .matchedGeometryEffect(id: "bottom-tab-selection-indicator", in: animationNamespace)
+                }
+
+                VStack(spacing: 4) {
+                    Image(systemName: icon)
+                        .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
+                        .frame(height: 22)
+                    
+                    Text(title)
+                        .font(.system(size: 9, weight: isSelected ? .bold : .medium, design: .rounded))
+                        .frame(height: 10)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 7)
             }
-            .foregroundColor(isSelected ? AppTheme.Colors.tabActive : AppTheme.Colors.tabInactive)
-            .frame(maxWidth: .infinity, maxHeight: 60)
+            .foregroundStyle(isSelected ? AppTheme.Colors.tabActive : AppTheme.Colors.tabInactive)
+            .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 58)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TabBarItemButtonStyle(isSelected: isSelected))
+    }
+
+    @ViewBuilder
+    private var tabSelectionIndicator: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            Capsule()
+                .fill(Color.white.opacity(0.88))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.55), lineWidth: 0.8)
+                )
+                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
+        }
     }
 
     private var appLockOverlay: some View {
@@ -302,6 +329,19 @@ struct ContentView: View {
             )
             .padding(.horizontal, 24)
         }
+    }
+}
+
+private struct TabBarItemButtonStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? (isSelected ? 1.045 : 0.97) : 1)
+            .animation(
+                .interactiveSpring(response: 0.24, dampingFraction: 0.78, blendDuration: 0.1),
+                value: configuration.isPressed
+            )
     }
 }
 

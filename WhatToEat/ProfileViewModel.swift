@@ -14,6 +14,23 @@ import SwiftData
 @MainActor
 @Observable
 class ProfileViewModel {
+    struct GrowthScoreBreakdown {
+        let checkInScore: Int
+        let restaurantScore: Int
+        let expenseScore: Int
+
+        var totalScore: Int {
+            checkInScore + restaurantScore + expenseScore
+        }
+    }
+
+    private struct LevelDefinition {
+        let level: Int
+        let title: String
+        let threshold: Int
+        let summary: String
+    }
+
     // MARK: - Dependencies
     var modelContext: ModelContext?
     var restaurants: [Restaurant] = []
@@ -68,6 +85,14 @@ class ProfileViewModel {
     var totalCheckIns: Int { restaurants.reduce(0) { $0 + $1.logs.count } }
     var totalExpense: Double { restaurants.reduce(0) { $0 + $1.logs.reduce(0) { $0 + $1.expense } } }
     var uniqueCities: Int { Set(restaurants.map { $0.city }).count }
+
+    var growthScoreBreakdown: GrowthScoreBreakdown {
+        GrowthScoreBreakdown(
+            checkInScore: totalCheckIns * 3,
+            restaurantScore: restaurantContributionScore(for: totalRestaurants),
+            expenseScore: expenseContributionScore(for: totalExpense)
+        )
+    }
     
     var joinDays: Int {
         guard let firstRestaurant = restaurants.min(by: { $0.createdAt < $1.createdAt }) else { return 0 }
@@ -270,35 +295,78 @@ class ProfileViewModel {
         return allLogs.sorted { $0.log.date > $1.log.date }.prefix(limit).map { $0 }
     }
     
+    private var levelDefinitions: [LevelDefinition] {
+        [
+            .init(level: 1, title: "干饭学徒", threshold: 0, summary: "开始建立你的第一份个人美食档案。"),
+            .init(level: 2, title: "入门吃货", threshold: 120, summary: "你已经形成稳定的外食探索节奏。"),
+            .init(level: 3, title: "寻味达人", threshold: 240, summary: "开始积累属于自己的店铺与偏好地图。"),
+            .init(level: 4, title: "美食品鉴家", threshold: 380, summary: "不再只是记录，而是在沉淀个人风味轨迹。"),
+            .init(level: 5, title: "资深老饕", threshold: 560, summary: "你对餐厅与消费体验已经形成深度判断。"),
+            .init(level: 6, title: "传奇老吃家", threshold: 790, summary: "开始拥有更成熟的选择标准与长期品味。"),
+            .init(level: 7, title: "食神", threshold: 1080, summary: "你已把探索、记录与审美整合成个人体系。")
+        ]
+    }
+
     func calculateLevel() -> Int {
-        if totalCheckIns >= 500 { return 5 }
-        if totalCheckIns >= 100 { return 4 }
-        if totalCheckIns >= 50 { return 3 }
-        if totalCheckIns >= 10 { return 2 }
-        return 1
+        let score = growthScoreBreakdown.totalScore
+        return levelDefinitions.last(where: { score >= $0.threshold })?.level ?? 1
     }
     
     func getNextLevelRequirement() -> Int {
         let level = calculateLevel()
-        switch level {
-        case 1: return 10
-        case 2: return 50
-        case 3: return 100
-        case 4: return 500
-        default: return 500
-        }
+        return levelDefinitions.first(where: { $0.level == level + 1 })?.threshold ?? currentLevelDefinition.threshold
     }
     
     func getLevelTitle() -> String {
+        currentLevelDefinition.title
+    }
+
+    func getLevelSummary() -> String {
+        currentLevelDefinition.summary
+    }
+
+    func getLevelMilestones() -> [(level: Int, title: String, threshold: Int, summary: String)] {
+        levelDefinitions.map { ($0.level, $0.title, $0.threshold, $0.summary) }
+    }
+
+    func getCurrentLevelFloor() -> Int {
+        currentLevelDefinition.threshold
+    }
+
+    func getLevelProgress() -> Double {
+        let currentScore = growthScoreBreakdown.totalScore
+        let nextRequirement = getNextLevelRequirement()
+        guard nextRequirement > 0 else { return 1 }
+        let progress = Double(currentScore) / Double(nextRequirement)
+        return min(max(progress, 0), 1)
+    }
+
+    func growthGapToNextLevel() -> Int {
+        max(getNextLevelRequirement() - growthScoreBreakdown.totalScore, 0)
+    }
+
+    private var currentLevelDefinition: LevelDefinition {
         let level = calculateLevel()
-        switch level {
-        case 1: return "干饭学徒"
-        case 2: return "探店先锋"
-        case 3: return "美食猎人"
-        case 4: return "饕餮大师"
-        case 5: return "食神"
-        default: return "干饭学徒"
+        return levelDefinitions.first(where: { $0.level == level }) ?? levelDefinitions[0]
+    }
+
+    private func restaurantContributionScore(for count: Int) -> Int {
+        switch count {
+        case ..<10:
+            return count * 3
+        case 10..<30:
+            return 30 + (count - 10) * 2
+        case 30..<80:
+            return 70 + count - 30
+        default:
+            return min(120 + Int(Double(count - 80) * 0.4), 190)
         }
+    }
+
+    private func expenseContributionScore(for expense: Double) -> Int {
+        if expense <= 0 { return 0 }
+        let scaled = log1p(expense / 350.0) * 42.0
+        return min(Int(scaled.rounded()), 180)
     }
     
     func zodiacSymbol(for zodiac: String) -> String {

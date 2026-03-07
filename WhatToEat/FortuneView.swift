@@ -216,7 +216,7 @@ struct FortuneView: View {
     // MARK: - 展开的食签卡片
     private var expandedFortuneCard: some View {
         Group {
-            if let fortune = aiManager.todayFortune {
+            if aiManager.todayFortune != nil {
                 // 使用新的极简INS风毛玻璃卡片
                 MinimalistFortuneCard(onClose: { viewModel.closeFortune() })
             } else {
