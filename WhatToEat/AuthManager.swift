@@ -11,8 +11,15 @@ final class AuthManager: ObservableObject {
     @Published var showSignInSheet = false
 
     private init() {
-        appleUserID = UserDefaults.standard.string(forKey: AppSettingsKeys.appleUserID)
-        displayName = UserDefaults.standard.string(forKey: AppSettingsKeys.appleUserDisplayName) ?? ""
+        do {
+            appleUserID = try KeychainStore.loadString(forKey: AppSettingsKeys.appleUserID)
+            displayName = try KeychainStore.loadString(forKey: AppSettingsKeys.appleUserDisplayName) ?? ""
+            migrateLegacyDefaultsIfNeeded()
+        } catch {
+            appleUserID = nil
+            displayName = ""
+            AppLogger.error("读取登录凭据失败: \(error.localizedDescription)", category: .auth)
+        }
     }
 
     var isSignedIn: Bool {
@@ -40,7 +47,7 @@ final class AuthManager: ObservableObject {
             }
 
             appleUserID = credential.user
-            UserDefaults.standard.set(credential.user, forKey: AppSettingsKeys.appleUserID)
+            try? KeychainStore.saveString(credential.user, forKey: AppSettingsKeys.appleUserID)
 
             let assembledName = [credential.fullName?.familyName, credential.fullName?.givenName]
                 .compactMap { $0 }
@@ -48,9 +55,9 @@ final class AuthManager: ObservableObject {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !assembledName.isEmpty {
                 displayName = assembledName
-                UserDefaults.standard.set(assembledName, forKey: AppSettingsKeys.appleUserDisplayName)
+                try? KeychainStore.saveString(assembledName, forKey: AppSettingsKeys.appleUserDisplayName)
             } else {
-                displayName = UserDefaults.standard.string(forKey: AppSettingsKeys.appleUserDisplayName) ?? ""
+                displayName = (try? KeychainStore.loadString(forKey: AppSettingsKeys.appleUserDisplayName)) ?? ""
             }
 
             showSignInSheet = false
@@ -66,8 +73,8 @@ final class AuthManager: ObservableObject {
         _ = keepLocalData
         appleUserID = nil
         displayName = ""
-        UserDefaults.standard.removeObject(forKey: AppSettingsKeys.appleUserID)
-        UserDefaults.standard.removeObject(forKey: AppSettingsKeys.appleUserDisplayName)
+        try? KeychainStore.deleteValue(forKey: AppSettingsKeys.appleUserID)
+        try? KeychainStore.deleteValue(forKey: AppSettingsKeys.appleUserDisplayName)
     }
 
     func deleteAccountAssociation() {
@@ -77,5 +84,25 @@ final class AuthManager: ObservableObject {
     func switchAccount() {
         signOut(keepLocalData: true)
         startSignIn()
+    }
+
+    private func migrateLegacyDefaultsIfNeeded() {
+        let defaults = UserDefaults.standard
+
+        if appleUserID == nil,
+           let legacyUserID = defaults.string(forKey: AppSettingsKeys.appleUserID),
+           !legacyUserID.isEmpty {
+            appleUserID = legacyUserID
+            try? KeychainStore.saveString(legacyUserID, forKey: AppSettingsKeys.appleUserID)
+            defaults.removeObject(forKey: AppSettingsKeys.appleUserID)
+        }
+
+        if displayName.isEmpty,
+           let legacyDisplayName = defaults.string(forKey: AppSettingsKeys.appleUserDisplayName),
+           !legacyDisplayName.isEmpty {
+            displayName = legacyDisplayName
+            try? KeychainStore.saveString(legacyDisplayName, forKey: AppSettingsKeys.appleUserDisplayName)
+            defaults.removeObject(forKey: AppSettingsKeys.appleUserDisplayName)
+        }
     }
 }

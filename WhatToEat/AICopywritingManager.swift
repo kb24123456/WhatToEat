@@ -155,6 +155,7 @@ class AICopywritingManager: ObservableObject {
     
     // MARK: - API聚合器
     private let dataAggregator = FortuneDataAggregator.shared
+    private let httpClient = AppHTTPClient(timeout: 30)
     
     // MARK: - UserDefaults Keys
     private enum Keys {
@@ -204,11 +205,11 @@ class AICopywritingManager: ObservableObject {
     /// - 如果星座发生变化，清理缓存并重新获取
     /// - 否则调用 API 生成新的食签
     func getTodayFortune(forceRefresh: Bool = false) async -> DailyFoodFortune? {
-        print("🔮 [AICopywritingManager] getTodayFortune 开始调用...")
+        AppLogger.debug("开始获取今日食签", category: .network)
         
         // 检查星座是否发生变化
         if hasZodiacChanged() {
-            print("🔮 [AICopywritingManager] 星座发生变化，清理缓存")
+            AppLogger.info("星座变更，清理食签缓存", category: .storage)
             clearFortuneCache()
             updateCachedZodiac()
         }
@@ -216,37 +217,32 @@ class AICopywritingManager: ObservableObject {
         // 检查是否需要强制刷新
         if !forceRefresh {
             // 检查本地缓存
-            print("🔮 [AICopywritingManager] 检查本地缓存...")
             if let cached = loadTodayFortuneFromLocal(), !isNewDay() {
-                print("✅ [AICopywritingManager] 使用本地缓存")
+                AppLogger.debug("使用本地食签缓存", category: .storage)
                 await MainActor.run {
                     self.todayFortune = cached
                 }
                 return cached
             }
-            print("🔮 [AICopywritingManager] 无本地缓存或已过期")
         }
         
         // 避免重复请求
         guard !isLoading else {
-            print("⚠️ [AICopywritingManager] 正在加载中，返回当前数据")
+            AppLogger.debug("已有食签请求在进行中，返回当前状态", category: .network)
             return todayFortune
         }
         
         // 检查 AI 配置
-        print("🔮 [AICopywritingManager] 检查AI配置...")
         guard AIConfig.isConfigured else {
-            print("⚠️ [AICopywritingManager] AI配置未设置，使用默认食签")
+            AppLogger.info("未配置 AI 后端代理，降级为默认食签", category: .network)
             return getDefaultFortune()
         }
-        print("✅ [AICopywritingManager] AI配置已设置")
         
         await MainActor.run {
             self.isLoading = true
         }
         
         do {
-            print("🔮 [AICopywritingManager] 开始生成食签...")
             // 使用新的API集成方式生成食签
             let fortune = try await generateFortuneWithAPIData()
             
@@ -259,8 +255,7 @@ class AICopywritingManager: ObservableObject {
             return fortune
             
         } catch {
-            print("❌ [AICopywritingManager] 获取食签失败：\(error)")
-            print("❌ [AICopywritingManager] 错误详情：\(error.localizedDescription)")
+            AppLogger.error("获取食签失败: \(error.localizedDescription)", category: .network)
             
             // 错误降级：使用缓存或默认数据
             if let cached = loadTodayFortuneFromLocal() {
@@ -292,7 +287,6 @@ class AICopywritingManager: ObservableObject {
         let city = LocationManager.shared.currentCity ?? "未知城市"
         
         // 1. 使用FortuneDataAggregator获取实时API数据
-        print("🔮 [AICopywritingManager] 开始获取实时API数据...")
         let context = try await dataAggregator.aggregateFortuneData(
             for: zodiac,
             city: city,
@@ -306,19 +300,12 @@ class AICopywritingManager: ObservableObject {
         let userPrompt = buildUserPromptWithAPIData(context)
         
         // 4. 调用AI生成食签
-        print("🤖 [AICopywritingManager] 调用AI生成食签...")
         let fortune = try await fetchFortuneFromAI(systemPrompt: systemPrompt, userPrompt: userPrompt)
         
         // 5. 标记数据来源
         var result = fortune
         result.dataSource = .api
-        
-        print("✅ [AICopywritingManager] 食签生成成功!")
-        print("   ⭐ 星级: \(result.fortuneStars)")
-        print("   📝 解析: \(String(result.analysis.prefix(30)))...")
-        print("   ✅ 宜: \(result.yiHighlight)")
-        print("   ❌ 忌: \(result.jiHighlight)")
-        print("   🍜 开运食物: \(result.luckFood)")
+        AppLogger.info("食签生成成功，数据源: \(result.dataSource.rawValue)", category: .network)
         return result
     }
     
@@ -457,83 +444,20 @@ class AICopywritingManager: ObservableObject {
     
     /// 调用AI API生成食签
     private func fetchFortuneFromAI(systemPrompt: String, userPrompt: String) async throws -> DailyFoodFortune {
-        guard let url = URL(string: AIConfig.baseURL) else {
-            throw FortuneError.invalidURL
+        guard let url = AIConfig.generateFortuneURL else {
+            throw FortuneError.configurationMissing
         }
-        
-        // 构建请求体
-        let requestBody = ChatRequest(
-            model: AIConfig.endpointID,
-            messages: [
-                ChatMessage(role: "system", content: systemPrompt),
-                ChatMessage(role: "user", content: userPrompt)
-            ]
+        let requestBody = FortuneGenerationRequest(
+            systemPrompt: systemPrompt,
+            userPrompt: userPrompt
         )
-        
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        let bodyData = try encoder.encode(requestBody)
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(AIConfig.apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = bodyData
-        request.timeoutInterval = 30
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+
+        do {
+            return try await httpClient.post(url, body: requestBody, decode: DailyFoodFortune.self)
+        } catch {
+            AppLogger.error("AI 代理请求失败: \(error.localizedDescription)", category: .network)
             throw FortuneError.apiError
         }
-        
-        let decoder = JSONDecoder()
-        let chatResponse = try decoder.decode(ChatResponse.self, from: data)
-        
-        let rawContent = chatResponse.choices[0].message.content
-        
-        let cleanedJSON = cleanJSONString(rawContent)
-        
-        guard let jsonData = cleanedJSON.data(using: .utf8) else {
-            throw FortuneError.jsonParsingFailed
-        }
-        
-        do {
-            let fortune = try decoder.decode(DailyFoodFortune.self, from: jsonData)
-            return fortune
-        } catch {
-            print("❌ 食签 JSON 解析失败：\(error)")
-            print("❌ 原始数据前200字符: \(String(cleanedJSON.prefix(200)))")
-            throw FortuneError.jsonParsingFailed
-        }
-    }
-    
-    // MARK: - JSON 清洗
-    
-    private func cleanJSONString(_ rawString: String) -> String {
-        var cleaned = rawString
-        
-        // 去除 markdown 代码块标记
-        if let startRange = cleaned.range(of: "```json") {
-            cleaned = String(cleaned[startRange.upperBound...])
-        } else if let startRange = cleaned.range(of: "```") {
-            cleaned = String(cleaned[startRange.upperBound...])
-        }
-        
-        if let endRange = cleaned.range(of: "```", options: .backwards) {
-            cleaned = String(cleaned[..<endRange.lowerBound])
-        }
-        
-        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // 提取 JSON 对象
-        if let startBrace = cleaned.firstIndex(of: "{"),
-           let endBrace = cleaned.lastIndex(of: "}") {
-            cleaned = String(cleaned[startBrace...endBrace])
-        }
-        
-        return cleaned
     }
     
     // MARK: - 默认食签
@@ -566,9 +490,9 @@ class AICopywritingManager: ObservableObject {
             let encoded = try JSONEncoder().encode(fortune)
             try encoded.write(to: fileURL, options: .atomic)
             UserDefaults.standard.set(getCurrentDateString(), forKey: Keys.fortuneDate)
-            print("✅ [AICopywritingManager] 食签已保存到文件缓存")
+            AppLogger.debug("食签已写入本地缓存", category: .storage)
         } catch {
-            print("❌ [AICopywritingManager] 保存食签失败: \(error)")
+            AppLogger.error("保存食签缓存失败: \(error.localizedDescription)", category: .storage)
         }
     }
     
@@ -595,7 +519,7 @@ class AICopywritingManager: ObservableObject {
         }
         UserDefaults.standard.removeObject(forKey: Keys.fortuneDate)
         todayFortune = nil
-        print("🗑️ [AICopywritingManager] 本地食签缓存已清理")
+        AppLogger.info("已清理本地食签缓存", category: .storage)
     }
     
     /// 清理食签缓存（用于星座变化时）
@@ -606,7 +530,7 @@ class AICopywritingManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Keys.fortuneDate)
         UserDefaults.standard.removeObject(forKey: Keys.cachedZodiacSign)
         todayFortune = nil
-        print("🗑️ [AICopywritingManager] 食签缓存已清理（星座变化）")
+        AppLogger.info("已清理食签缓存和缓存星座", category: .storage)
     }
     
     // MARK: - 工具方法
@@ -627,24 +551,9 @@ class AICopywritingManager: ObservableObject {
     }
     
     // MARK: - 请求数据结构
-    private struct ChatMessage: Codable {
-        let role: String
-        let content: String
-    }
-    
-    private struct ChatRequest: Codable {
-        let model: String
-        let messages: [ChatMessage]
-    }
-    
-    private struct ChatResponse: Codable {
-        struct Choice: Codable {
-            struct Message: Codable {
-                let content: String
-            }
-            let message: Message
-        }
-        let choices: [Choice]
+    private struct FortuneGenerationRequest: Codable {
+        let systemPrompt: String
+        let userPrompt: String
     }
 }
 
@@ -662,9 +571,9 @@ enum FortuneError: Error, LocalizedError {
         case .apiError:
             return "API 请求失败"
         case .jsonParsingFailed:
-            return "JSON 解析失败"
+            return "食签 JSON 解析失败"
         case .configurationMissing:
-            return "配置缺失：请设置 API Key 和星座信息"
+            return "配置缺失：请设置后端代理地址与用户星座信息"
         }
     }
 }

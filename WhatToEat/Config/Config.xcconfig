@@ -2,8 +2,8 @@
 // Config.xcconfig
 // WhatToEat
 //
-// ⚠️ 重要提示：此文件包含真实的API Key，绝对不要提交到Git！
-// 此文件已在 .gitignore 中被忽略。
+// ⚠️ 重要提示：生产环境不要在客户端保存任何第三方密钥。
+// 此文件保留给本地非敏感配置使用，并继续被 .gitignore 忽略。
 //
 // 团队成员使用说明：
 // 1. 复制 Config.example.xcconfig 为 Config.xcconfig
@@ -12,13 +12,13 @@
 //
 
 // ==========================================
-// 豆包API配置（火山引擎）
+// 应用后端代理配置
 // ==========================================
-API_KEY_DOUBAO = 57f57b30-fec5-487e-a160-7c619701e38e
-ENDPOINT_ID_DOUBAO = ep-20260210035323-jgptr
+BACKEND_BASE_URL = https://whattoeat-api.billy357831193.workers.dev
 
 // ==========================================
-// 聚合数据API配置
+// 可选：自定义代理路径
 // ==========================================
-API_KEY_JUHE_LUNAR = 593a1836e9ce546f3fceef18f3d5af94
-API_KEY_JUHE_CONSTELLATION = 1e861daeabe2b998323b2380807b381e
+BACKEND_AI_FORTUNE_PATH = /v1/food-fortune/generate
+BACKEND_FORTUNE_LUNAR_PATH = /v1/fortune/lunar
+BACKEND_FORTUNE_CONSTELLATION_PATH = /v1/fortune/constellation

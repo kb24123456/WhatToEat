@@ -40,9 +40,9 @@ final class NavigationManager: ObservableObject {
         
         switch type {
         case .apple:
-            // 苹果地图路径规划：使用 http://maps.apple.com/?daddr=lat,lon&dirflg=d
+            // 苹果地图路径规划：使用 https://maps.apple.com/?daddr=lat,lon&dirflg=d
             // dirflg=d 表示驾车模式，会显示路线选择界面
-            urlString = "http://maps.apple.com/?daddr=\(lat),\(lon)&dirflg=d"
+            urlString = "https://maps.apple.com/?daddr=\(lat),\(lon)&dirflg=d"
             scheme = "maps"
             
         case .amap:

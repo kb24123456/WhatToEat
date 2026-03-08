@@ -3,8 +3,11 @@ import SwiftData
 
 final class CloudSyncManager {
     static let shared = CloudSyncManager()
+    private let migrationPayloadFileName = "icloud-migration-payload"
 
-    private init() {}
+    private init() {
+        migrateLegacyPayloadIfNeeded()
+    }
 
     static func isICloudSyncEnabled() -> Bool {
         let defaults = UserDefaults.standard
@@ -20,7 +23,7 @@ final class CloudSyncManager {
 
     func prepareMigrationPayloadIfNeeded(restaurants: [Restaurant], logs: [VisitLog]) {
         guard !restaurants.isEmpty || !logs.isEmpty else { return }
-        guard UserDefaults.standard.string(forKey: AppSettingsKeys.iCloudMigrationPayload) == nil else { return }
+        guard (try? ProtectedFileStore.read(fileName: migrationPayloadFileName)) == nil else { return }
 
         let restaurantDTOs = restaurants.map {
             RestaurantMigrationDTO(
@@ -57,15 +60,14 @@ final class CloudSyncManager {
         let payload = MigrationPayload(restaurants: restaurantDTOs, logs: logDTOs)
 
         guard let data = try? JSONEncoder().encode(payload) else { return }
-        UserDefaults.standard.set(data.base64EncodedString(), forKey: AppSettingsKeys.iCloudMigrationPayload)
+        try? ProtectedFileStore.write(data, fileName: migrationPayloadFileName)
     }
 
     @MainActor
     func runPendingMigrationIfNeeded(modelContext: ModelContext) async {
         guard Self.isICloudSyncEnabled() else { return }
         guard !UserDefaults.standard.bool(forKey: AppSettingsKeys.didMigrateToICloud) else { return }
-        guard let rawPayload = UserDefaults.standard.string(forKey: AppSettingsKeys.iCloudMigrationPayload),
-              let payloadData = Data(base64Encoded: rawPayload),
+        guard let payloadData = try? ProtectedFileStore.read(fileName: migrationPayloadFileName),
               let payload = try? JSONDecoder().decode(MigrationPayload.self, from: payloadData)
         else {
             return
@@ -133,9 +135,25 @@ final class CloudSyncManager {
 
             try modelContext.save()
             UserDefaults.standard.set(true, forKey: AppSettingsKeys.didMigrateToICloud)
-            UserDefaults.standard.removeObject(forKey: AppSettingsKeys.iCloudMigrationPayload)
+            try? ProtectedFileStore.delete(fileName: migrationPayloadFileName)
         } catch {
-            print("iCloud migration failed: \(error.localizedDescription)")
+            AppLogger.error("iCloud 迁移失败: \(error.localizedDescription)", category: .storage)
+        }
+    }
+
+    private func migrateLegacyPayloadIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard let rawPayload = defaults.string(forKey: "iCloudMigrationPayload"),
+              let payloadData = Data(base64Encoded: rawPayload)
+        else {
+            return
+        }
+
+        do {
+            try ProtectedFileStore.write(payloadData, fileName: migrationPayloadFileName)
+            defaults.removeObject(forKey: "iCloudMigrationPayload")
+        } catch {
+            AppLogger.error("迁移旧版 iCloud 载荷失败: \(error.localizedDescription)", category: .storage)
         }
     }
 }

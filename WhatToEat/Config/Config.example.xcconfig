@@ -11,18 +11,14 @@
 //
 
 // ==========================================
-// 豆包API配置（火山引擎）
-// 申请地址：https://www.volcengine.com/product/doubao
+// 应用后端代理配置
+// 生产环境必须由自有后端代理第三方 AI / 运势接口
 // ==========================================
-API_KEY_DOUBAO = YOUR_DOUBAO_API_KEY_HERE
-ENDPOINT_ID_DOUBAO = YOUR_DOUBAO_ENDPOINT_ID_HERE
+BACKEND_BASE_URL = https://api.example.com
 
 // ==========================================
-// 聚合数据API配置
-// 申请地址：https://www.juhe.cn/
+// 可选：自定义路径，不填则使用应用内默认值
 // ==========================================
-// 老黄历API Key（50次/天免费）
-API_KEY_JUHE_LUNAR = YOUR_JUHE_LUNAR_KEY_HERE
-
-// 星座运势API Key（50次/天免费）
-API_KEY_JUHE_CONSTELLATION = YOUR_JUHE_CONSTELLATION_KEY_HERE
+BACKEND_AI_FORTUNE_PATH = /v1/food-fortune/generate
+BACKEND_FORTUNE_LUNAR_PATH = /v1/fortune/lunar
+BACKEND_FORTUNE_CONSTELLATION_PATH = /v1/fortune/constellation

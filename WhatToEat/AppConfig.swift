@@ -1,38 +1,47 @@
 import Foundation
 
-// MARK: - AI 配置
-// 用于配置豆包 API 的相关参数
-// API Keys 从 Info.plist 读取（由 Config.xcconfig 在构建时注入）
-struct AIConfig {
-    
-    /// 从 Info.plist 读取配置值
-    private static func getConfigValue(forKey key: String) -> String {
+enum AppEnvironment {
+    private nonisolated static func stringValue(forKey key: String) -> String? {
         guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
-            print("⚠️ [AIConfig] 未找到配置项: \(key)")
-            return ""
+            return nil
         }
-        return value
+
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("$") else {
+            return nil
+        }
+        return trimmed
     }
-    
-    /// API Key - 从 Config.xcconfig 通过 Info.plist 注入
-    static var apiKey: String {
-        return getConfigValue(forKey: "APIKeyDoubao")
+
+    nonisolated static var backendBaseURL: URL? {
+        guard let rawValue = stringValue(forKey: "BackendBaseURL") else {
+            return nil
+        }
+        return URL(string: rawValue)
     }
-    
-    /// 接入点 ID - 从 Config.xcconfig 通过 Info.plist 注入
-    static var endpointID: String {
-        return getConfigValue(forKey: "EndpointIDDoubao")
+
+    nonisolated static func backendURL(
+        pathKey: String,
+        defaultPath: String
+    ) -> URL? {
+        guard let baseURL = backendBaseURL else {
+            return nil
+        }
+        let customPath = stringValue(forKey: pathKey) ?? defaultPath
+        return baseURL.appending(path: customPath.hasPrefix("/") ? String(customPath.dropFirst()) : customPath)
     }
-    
-    /// 基础 URL - 豆包 API 地址
-    static let baseURL: String = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
-    
-    /// 校验配置是否可用
-    static var isConfigured: Bool {
-        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let endpoint = endpointID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty, !endpoint.isEmpty else { return false }
-        return !key.hasPrefix("$") && !endpoint.hasPrefix("$")
+}
+
+struct AIConfig {
+    nonisolated static var generateFortuneURL: URL? {
+        AppEnvironment.backendURL(
+            pathKey: "BackendAIFortunePath",
+            defaultPath: "/v1/food-fortune/generate"
+        )
+    }
+
+    nonisolated static var isConfigured: Bool {
+        generateFortuneURL != nil
     }
 }
 
@@ -42,18 +51,16 @@ struct ConfigValidator {
     static func validateAllConfigurations() -> [String] {
         var missingConfigs: [String] = []
         
-        // 检查豆包API配置
+        // 检查后端代理配置
         if !AIConfig.isConfigured {
-            missingConfigs.append("豆包API配置缺失 (APIKeyDoubao / EndpointIDDoubao)")
+            missingConfigs.append("AI 后端代理配置缺失 (BackendBaseURL / BackendAIFortunePath)")
         }
         
         return missingConfigs
     }
     
-    /// 打印当前配置状态（调试用，不打印实际Key值）
+    /// 打印当前配置状态（调试用，不打印敏感值）
     static func printConfigurationStatus() {
-        print("=== API 配置状态 ===")
-        print("豆包API: \(AIConfig.isConfigured ? "✅ 已配置" : "❌ 未配置")")
-        print("===================")
+        AppLogger.info("AI 后端代理: \(AIConfig.isConfigured ? "已配置" : "未配置")", category: .network)
     }
 }

@@ -61,29 +61,49 @@ struct ZodiacUtil {
         }
     }
     
-    /// 保存用户生日到 UserDefaults
+    /// 保存用户生日到 Keychain
     /// - Parameter date: 出生日期
     static func saveBirthDate(_ date: Date) {
-        UserDefaults.standard.set(date, forKey: "user_birth_date")
         let zodiac = getZodiacSign(from: date)
-        UserDefaults.standard.set(zodiac, forKey: "user_zodiac_sign")
+        try? KeychainStore.saveCodable(date, forKey: AppSettingsKeys.userBirthDate)
+        try? KeychainStore.saveString(zodiac, forKey: AppSettingsKeys.userZodiacSign)
     }
     
-    /// 从 UserDefaults 读取用户生日
+    /// 从 Keychain 读取用户生日
     /// - Returns: 出生日期，未设置则返回 nil
     static func loadBirthDate() -> Date? {
-        return UserDefaults.standard.object(forKey: "user_birth_date") as? Date
+        if let value = try? KeychainStore.loadCodable(Date.self, forKey: AppSettingsKeys.userBirthDate) {
+            return value
+        }
+
+        if let legacyValue = UserDefaults.standard.object(forKey: "user_birth_date") as? Date {
+            try? KeychainStore.saveCodable(legacyValue, forKey: AppSettingsKeys.userBirthDate)
+            UserDefaults.standard.removeObject(forKey: "user_birth_date")
+            return legacyValue
+        }
+
+        return nil
     }
     
-    /// 从 UserDefaults 读取用户星座
+    /// 从 Keychain 读取用户星座
     /// - Returns: 星座字符串，未设置则返回 nil
     static func loadZodiacSign() -> String? {
-        return UserDefaults.standard.string(forKey: "user_zodiac_sign")
+        if let value = try? KeychainStore.loadString(forKey: AppSettingsKeys.userZodiacSign) {
+            return value
+        }
+
+        if let legacyValue = UserDefaults.standard.string(forKey: "user_zodiac_sign") {
+            try? KeychainStore.saveString(legacyValue, forKey: AppSettingsKeys.userZodiacSign)
+            UserDefaults.standard.removeObject(forKey: "user_zodiac_sign")
+            return legacyValue
+        }
+
+        return nil
     }
     
     /// 清除用户生日和星座数据
     static func clearBirthData() {
-        UserDefaults.standard.removeObject(forKey: "user_birth_date")
-        UserDefaults.standard.removeObject(forKey: "user_zodiac_sign")
+        try? KeychainStore.deleteValue(forKey: AppSettingsKeys.userBirthDate)
+        try? KeychainStore.deleteValue(forKey: AppSettingsKeys.userZodiacSign)
     }
 }

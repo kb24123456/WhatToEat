@@ -14,11 +14,7 @@ actor JuheAPIService {
     static let shared = JuheAPIService()
     
     // MARK: - 配置
-    private let lunarCalendarKey: String
-    private let constellationKey: String
-    private let lunarBaseURL: String
-    private let constellationBaseURL: String
-    private let session: URLSession
+    private let httpClient: AppHTTPClient
     
     // MARK: - 缓存
     private var lunarCache: [String: LunarCalendarData] = [:]
@@ -26,18 +22,7 @@ actor JuheAPIService {
     
     // MARK: - 初始化
     private init() {
-        // 使用FortuneAPIConfig中的配置
-        self.lunarCalendarKey = JuheAPIConfig.lunarCalendarKey
-        self.constellationKey = JuheAPIConfig.constellationKey
-        // 注意：黄历和星座使用不同的baseURL
-        self.lunarBaseURL = JuheAPIConfig.lunarBaseURL
-        self.constellationBaseURL = JuheAPIConfig.constellationBaseURL
-        
-        // 配置URLSession
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
-        self.session = URLSession(configuration: config)
+        self.httpClient = AppHTTPClient(timeout: 15)
         
         // 初始化阶段先从磁盘恢复缓存，避免在 actor init 中调用隔离方法
         let restoredCache = Self.loadCacheFromDisk()
@@ -71,13 +56,13 @@ actor JuheAPIService {
         if let cached = lunarCache[dateString], !cached.isExpired {
             // 如果今天已经请求过API，优先使用缓存
             if !shouldRequestAPI {
-                print("🌙 [JuheAPI] 今天已请求过黄历API，使用缓存: \(dateString)")
+                AppLogger.debug("今日黄历已请求过，直接使用缓存", category: .network)
                 return cached
             }
             
             // 如果强制刷新且今天还没请求过，则继续请求API
             if !forceRefresh {
-                print("🌙 [JuheAPI] 使用缓存的黄历数据: \(dateString)")
+                AppLogger.debug("使用黄历缓存", category: .network)
                 return cached
             }
         }
@@ -86,7 +71,7 @@ actor JuheAPIService {
         if !shouldRequestAPI {
             // 尝试从UserDefaults恢复
             if let cached = await getCachedLunarDataFromDisk(for: dateString) {
-                print("🌙 [JuheAPI] 使用磁盘缓存的黄历数据: \(dateString)")
+                AppLogger.debug("从磁盘恢复黄历缓存", category: .storage)
                 // 同时更新内存缓存
                 lunarCache[dateString] = cached
                 return cached
@@ -98,14 +83,13 @@ actor JuheAPIService {
             throw FortuneAPIError.configurationMissing
         }
         
-        // 构建请求（使用黄历专用的baseURL）
-        let urlString = "\(lunarBaseURL)\(JuheAPIConfig.Endpoints.laohuangli)"
-        guard var urlComponents = URLComponents(string: urlString) else {
+        guard let baseURL = JuheAPIConfig.lunarCalendarURL,
+              var urlComponents = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        else {
             throw FortuneAPIError.invalidURL
         }
         
         urlComponents.queryItems = [
-            URLQueryItem(name: "key", value: lunarCalendarKey),
             URLQueryItem(name: "date", value: dateString)
         ]
         
@@ -113,60 +97,34 @@ actor JuheAPIService {
             throw FortuneAPIError.invalidURL
         }
         
-        // 发送请求（带超时处理）
-        print("🌙 [JuheAPI] 请求黄历数据: \(dateString)")
-        let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await withTimeout(seconds: 15) {
-                try await self.session.data(from: url)
+            AppLogger.debug("请求黄历代理接口", category: .network)
+            let apiResponse = try await withTimeout(seconds: 15) {
+                try await self.httpClient.get(url, decode: JuheLaohuangliResponse.self)
             }
+
+            guard apiResponse.isSuccess, let result = apiResponse.result else {
+                AppLogger.error("黄历代理返回业务错误 code=\(apiResponse.errorCode)", category: .network)
+                throw FortuneAPIError.dataParsingFailed
+            }
+
+            let lunarData = LunarCalendarData(from: result)
+            lunarCache[dateString] = lunarData
+            saveCacheToDisk()
+            await DailyRefreshManager.shared.markLunarCalendarRefreshed()
+
+            AppLogger.info("成功获取黄历数据", category: .network)
+            return lunarData
         } catch is TimeoutError {
-            print("⏰ [JuheAPI] 黄历请求超时")
+            AppLogger.error("黄历代理请求超时", category: .network)
             throw FortuneAPIError.networkError(TimeoutError())
-        }
-        
-        // 检查响应
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw FortuneAPIError.serverError
-        }
-        
-        // 解析数据
-        let decoder = JSONDecoder()
-        
-        // 打印原始响应用于调试
-        if let jsonString = String(data: data, encoding: .utf8) {
-            print("🌙 [JuheAPI] 黄历API原始响应前200字符: \(String(jsonString.prefix(200)))")
-        }
-        
-        let apiResponse: JuheLaohuangliResponse
-        do {
-            apiResponse = try decoder.decode(JuheLaohuangliResponse.self, from: data)
+        } catch let error as AppHTTPError {
+            AppLogger.error("黄历代理请求失败: \(error.localizedDescription)", category: .network)
+            throw FortuneAPIError.networkError(error)
         } catch {
-            print("❌ [JuheAPI] 黄历JSON解析失败: \(error)")
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print("❌ [JuheAPI] 原始响应内容: \(jsonString)")
-            }
-            throw FortuneAPIError.dataParsingFailed
+            AppLogger.error("黄历请求失败: \(error.localizedDescription)", category: .network)
+            throw FortuneAPIError.networkError(error)
         }
-        
-        guard apiResponse.isSuccess, let result = apiResponse.result else {
-            print("❌ [JuheAPI] 黄历API返回错误: errorCode=\(apiResponse.errorCode), reason=\(apiResponse.reason)")
-            throw FortuneAPIError.dataParsingFailed
-        }
-        
-        // 转换为应用层模型
-        let lunarData = LunarCalendarData(from: result)
-        
-        // 更新缓存
-        lunarCache[dateString] = lunarData
-        saveCacheToDisk()
-        
-        // 🌟 记录今天已经请求过黄历API
-        await DailyRefreshManager.shared.markLunarCalendarRefreshed()
-        
-        print("🌙 [JuheAPI] 成功获取黄历数据: \(lunarData.fullGanzhi)")
-        return lunarData
     }
     
     // MARK: - 公共方法：获取星座运势
@@ -197,13 +155,13 @@ actor JuheAPIService {
         if let cached = zodiacCache[cacheKey], !cached.isExpired {
             // 如果今天已经请求过该星座，优先使用缓存
             if !shouldRequestAPI {
-                print("⭐ [JuheAPI] 今天已请求过该星座API，使用缓存: \(zodiac.rawValue)")
+                AppLogger.debug("今日星座已请求过，直接使用缓存", category: .network)
                 return cached
             }
             
             // 如果强制刷新且今天还没请求过，则继续请求API
             if !forceRefresh {
-                print("⭐ [JuheAPI] 使用缓存的星座数据: \(zodiac.rawValue)")
+                AppLogger.debug("使用星座缓存", category: .network)
                 return cached
             }
         }
@@ -212,7 +170,7 @@ actor JuheAPIService {
         if !shouldRequestAPI {
             // 尝试从磁盘缓存获取（可能是昨天的数据，但今天已经标记为请求过）
             if let cached = zodiacCache.values.first(where: { $0.zodiac == zodiac }) {
-                print("⭐ [JuheAPI] 使用备用缓存的星座数据: \(zodiac.rawValue)")
+                AppLogger.debug("使用备用星座缓存", category: .storage)
                 // 更新内存缓存
                 zodiacCache[cacheKey] = cached
                 return cached
@@ -224,14 +182,13 @@ actor JuheAPIService {
             throw FortuneAPIError.configurationMissing
         }
         
-        // 构建请求（使用星座专用的baseURL）
-        let urlString = "\(constellationBaseURL)\(JuheAPIConfig.Endpoints.constellation)"
-        guard var urlComponents = URLComponents(string: urlString) else {
+        guard let baseURL = JuheAPIConfig.constellationURL,
+              var urlComponents = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        else {
             throw FortuneAPIError.invalidURL
         }
         
         urlComponents.queryItems = [
-            URLQueryItem(name: "key", value: constellationKey),
             URLQueryItem(name: "consName", value: zodiac.rawValue),
             URLQueryItem(name: "type", value: "today")
         ]
@@ -240,66 +197,38 @@ actor JuheAPIService {
             throw FortuneAPIError.invalidURL
         }
         
-        // 发送请求（带超时处理）
-        print("⭐ [JuheAPI] 请求星座数据: \(zodiac.rawValue)")
-        let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await withTimeout(seconds: 15) {
-                try await self.session.data(from: url)
+            AppLogger.debug("请求星座代理接口", category: .network)
+            let apiResponse = try await withTimeout(seconds: 15) {
+                try await self.httpClient.get(url, decode: JuheConstellationResponse.self)
             }
+
+            guard apiResponse.isSuccess else {
+                AppLogger.error("星座代理返回业务错误 code=\(apiResponse.errorCode)", category: .network)
+                throw FortuneAPIError.dataParsingFailed
+            }
+
+            guard let result = apiResponse.toConstellationResult() else {
+                throw FortuneAPIError.dataParsingFailed
+            }
+
+            let zodiacData = ZodiacFortuneData(from: result, zodiac: zodiac)
+            zodiacCache[cacheKey] = zodiacData
+            saveCacheToDisk()
+            await DailyRefreshManager.shared.markZodiacRefreshed(zodiac)
+
+            AppLogger.info("成功获取星座运势", category: .network)
+            return zodiacData
         } catch is TimeoutError {
-            print("⏰ [JuheAPI] 星座请求超时")
+            AppLogger.error("星座代理请求超时", category: .network)
             throw FortuneAPIError.networkError(TimeoutError())
-        }
-        
-        // 检查响应
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw FortuneAPIError.serverError
-        }
-        
-        // 解析数据
-        let decoder = JSONDecoder()
-        
-        // 打印原始响应用于调试
-        if let jsonString = String(data: data, encoding: .utf8) {
-            print("⭐ [JuheAPI] 星座API原始响应前200字符: \(String(jsonString.prefix(200)))")
-        }
-        
-        let apiResponse: JuheConstellationResponse
-        do {
-            apiResponse = try decoder.decode(JuheConstellationResponse.self, from: data)
+        } catch let error as AppHTTPError {
+            AppLogger.error("星座代理请求失败: \(error.localizedDescription)", category: .network)
+            throw FortuneAPIError.networkError(error)
         } catch {
-            print("❌ [JuheAPI] 星座JSON解析失败: \(error)")
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print("❌ [JuheAPI] 原始响应内容: \(jsonString)")
-            }
-            throw FortuneAPIError.dataParsingFailed
+            AppLogger.error("星座请求失败: \(error.localizedDescription)", category: .network)
+            throw FortuneAPIError.networkError(error)
         }
-        
-        guard apiResponse.isSuccess else {
-            print("❌ [JuheAPI] 星座API返回错误: errorCode=\(apiResponse.errorCode), reason=\(apiResponse.reason ?? "nil")")
-            throw FortuneAPIError.dataParsingFailed
-        }
-        
-        // 转换为ConstellationResult
-        guard let result = apiResponse.toConstellationResult() else {
-            print("❌ [JuheAPI] 星座API数据转换失败")
-            throw FortuneAPIError.dataParsingFailed
-        }
-        
-        // 转换为应用层模型
-        let zodiacData = ZodiacFortuneData(from: result, zodiac: zodiac)
-        
-        // 更新缓存
-        zodiacCache[cacheKey] = zodiacData
-        saveCacheToDisk()
-        
-        // 🌟 记录今天已经请求过该星座API
-        await DailyRefreshManager.shared.markZodiacRefreshed(zodiac)
-        
-        print("⭐ [JuheAPI] 成功获取星座数据: \(zodiac.rawValue) 运势\(zodiacData.fortuneScore)分")
-        return zodiacData
     }
     
     // MARK: - 缓存持久化
@@ -361,7 +290,7 @@ actor JuheAPIService {
             let cache = try JSONDecoder().decode([String: LunarCalendarData].self, from: data)
             return cache[dateString]
         } catch {
-            print("⚠️ [JuheAPI] 解析黄历缓存失败: \(error)")
+            AppLogger.error("解析黄历缓存失败: \(error.localizedDescription)", category: .storage)
             return nil
         }
     }
@@ -388,7 +317,7 @@ enum FortuneAPIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .configurationMissing:
-            return "API配置缺失，请检查FortuneAPIConfig.swift中的API Key"
+            return "运势后端代理未配置"
         case .invalidURL:
             return "无效的API地址"
         case .serverError:

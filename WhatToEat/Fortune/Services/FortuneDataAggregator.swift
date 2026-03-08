@@ -89,11 +89,11 @@ actor FortuneDataAggregator {
             // 保存上下文
             lastContext = context
             
-            print("✅ [FortuneAggregator] 数据聚合成功: \(zodiac.rawValue) + \(lunarData.fullGanzhi)")
+            AppLogger.info("运势数据聚合成功", category: .network)
             return context
             
         } catch {
-            print("❌ [FortuneAggregator] 数据聚合失败: \(error.localizedDescription)")
+            AppLogger.error("运势数据聚合失败: \(error.localizedDescription)", category: .network)
             throw FortuneAggregatorError.aggregationFailed(error)
         }
     }
@@ -106,7 +106,7 @@ actor FortuneDataAggregator {
         } catch {
             // 如果JuheAPI失败，尝试从缓存获取
             if let cached = await getCachedLunarData() {
-                print("⚠️ [FortuneAggregator] JuheAPI失败，使用缓存的黄历数据")
+                AppLogger.info("黄历远端失败，使用缓存", category: .network)
                 return cached
             }
             throw error
@@ -121,7 +121,7 @@ actor FortuneDataAggregator {
         } catch {
             // 如果JuheAPI失败，尝试从缓存获取
             if let cached = await getCachedZodiacData(for: zodiac) {
-                print("⚠️ [FortuneAggregator] JuheAPI失败，使用缓存的星座数据")
+                AppLogger.info("星座远端失败，使用缓存", category: .network)
                 return cached
             }
             throw error

@@ -2,49 +2,38 @@
 
 ## 概述
 
-本模块负责接入聚合数据（Juhe）的老黄历API和星座运势API，为AI生成食签提供真实数据支持。
+本模块负责通过应用后端代理接入黄历与星座运势接口，为 AI 生成食签提供真实数据支持。
 
 ## API配置
 
-### 1. 申请API Key
+### 1. 安全原则
 
-需要申请两个独立的API：
+- 客户端不持有任何第三方生产密钥。
+- 客户端只知道自有后端代理地址。
+- 第三方 API Key 仅存在于服务端环境变量或密钥管理系统中。
 
-#### 老黄历API
-- 申请地址：https://www.juhe.cn/docs/api/id/65
-- 免费额度：100次/天
-- 提供数据：干支、宜忌、节气、建除十二神等
-
-#### 星座运势API
-- 申请地址：https://www.juhe.cn/docs/api/id/58
-- 免费额度：100次/天
-- 提供数据：运势分值、幸运色、幸运数字等
-
-### 2. 配置文件
-
-**⚠️ 重要安全提示：永远不要将真实API Key提交到Git！**
+### 2. 客户端配置文件
 
 #### 步骤：
 
 1. 复制模板文件：
 ```bash
-cd /Users/papertiger/Desktop/WhatToEat/WhatToEat/Fortune
-cp FortuneAPIConfig.example.swift FortuneAPIConfig.swift
+cp /Users/papertiger/Desktop/WhatToEat/WhatToEat/Config/Config.example.xcconfig \
+   /Users/papertiger/Desktop/WhatToEat/WhatToEat/Config/Config.xcconfig
 ```
 
-2. 编辑 `FortuneAPIConfig.swift`，填入你的API Keys：
+2. 配置后端代理地址：
 
-```swift
-// 老黄历API Key
-static let lunarCalendarKey: String = "你的真实Key"
-
-// 星座运势API Key
-static let constellationKey: String = "你的真实Key"
+```xcconfig
+BACKEND_BASE_URL = https://api.example.com
+BACKEND_AI_FORTUNE_PATH = /v1/food-fortune/generate
+BACKEND_FORTUNE_LUNAR_PATH = /v1/fortune/lunar
+BACKEND_FORTUNE_CONSTELLATION_PATH = /v1/fortune/constellation
 ```
 
 3. 确认 `.gitignore` 包含：
 ```
-WhatToEat/Fortune/FortuneAPIConfig.swift
+WhatToEat/Config/Config.xcconfig
 ```
 
 ## 架构说明
@@ -52,9 +41,9 @@ WhatToEat/Fortune/FortuneAPIConfig.swift
 ### 数据流
 
 ```
-[FortuneAPIConfig] 配置管理
+[AppEnvironment / JuheAPIConfig] 代理配置管理
        ↓
-[JuheAPIService] API封装
+[JuheAPIService] 后端代理封装
   ├─ fetchLunarCalendar() - 获取黄历数据
   └─ fetchZodiacFortune() - 获取星座数据
        ↓
@@ -77,29 +66,27 @@ WhatToEat/Fortune/FortuneAPIConfig.swift
 
 当API调用失败时：
 1. 优先使用缓存数据（即使已过期）
-2. 无缓存时显示服务不可用提示
-3. 不会使用模拟数据，确保真实性
+2. 无缓存时由上层降级到默认食签
+3. 不会把第三方原始响应明文打到生产日志
 
 ## 安全建议
 
-1. **API Key保护**
-   - 永远不要提交到Git
-   - 定期更换Key
-   - 在聚合数据后台设置IP白名单
+1. **密钥保护**
+   - 第三方 API Key 只放服务端
+   - 本仓库只保留后端代理地址
+   - 历史已暴露的第三方密钥必须立即轮换
 
 2. **访问频率控制**
-   - 使用缓存减少API调用
-   - 监控每日调用次数（免费额度内）
+   - 客户端使用缓存减少请求
+   - 服务端负责限流、熔断、告警与审计
 
 3. **错误处理**
-   - API失败时优雅降级
-   - 记录错误日志便于排查
+   - 代理失败时优雅降级
+   - 生产日志不记录原始响应体
 
 ## 更新日志
 
-### 2024-03-03
-- 初始版本
-- 支持聚合数据老黄历和星座运势API
-- 实现双API Key配置
-- 添加数据聚合层和缓存机制
-- 集成熵值机制增加多样性
+### 2026-03-08
+- 客户端改为后端代理接入模型
+- 删除第三方密钥客户端入口
+- 新增缓存优先与安全降级说明
