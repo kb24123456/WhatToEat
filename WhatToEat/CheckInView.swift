@@ -650,7 +650,7 @@ struct CheckInView: View {
         do {
             try modelContext.save()
         } catch {
-            print("保存打卡失败: \(error)")
+            AppLogger.error("保存打卡失败: \(error.localizedDescription)", category: .storage)
             isSaving = false
             return
         }

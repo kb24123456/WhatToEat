@@ -41,18 +41,18 @@ actor DailyRefreshManager {
         
         // 如果没有记录，或者不是今天，则需要刷新
         guard let lastDate = lastRequestDate else {
-            print("🌙 [DailyRefresh] 黄历：无历史记录，需要请求API")
+            AppLogger.debug("黄历无历史记录，需要刷新", category: .network)
             return true
         }
         
         let lastDay = Calendar.current.startOfDay(for: lastDate)
         
         if lastDay < today {
-            print("🌙 [DailyRefresh] 黄历：上次请求是昨天，需要刷新")
+            AppLogger.debug("黄历上次请求非今日，需要刷新", category: .network)
             return true
         }
         
-        print("🌙 [DailyRefresh] 黄历：今天已经请求过，使用缓存")
+        AppLogger.debug("黄历今日已请求，使用缓存", category: .network)
         return false
     }
     
@@ -67,7 +67,7 @@ actor DailyRefreshManager {
         // 如果没有记录，需要刷新
         guard let lastDate = lastRequestDate,
               let lastZod = lastZodiac else {
-            print("⭐ [DailyRefresh] 星座：无历史记录，需要请求API")
+            AppLogger.debug("星座无历史记录，需要刷新", category: .network)
             return true
         }
         
@@ -75,16 +75,16 @@ actor DailyRefreshManager {
         
         // 如果不是今天，或者星座不同，都需要刷新
         if lastDay < today {
-            print("⭐ [DailyRefresh] 星座：上次请求是昨天，需要刷新")
+            AppLogger.debug("星座上次请求非今日，需要刷新", category: .network)
             return true
         }
         
         if lastZod != zodiac.rawValue {
-            print("⭐ [DailyRefresh] 星座：切换星座从 \(lastZod) 到 \(zodiac.rawValue)，需要刷新")
+            AppLogger.debug("星座切换为 \(zodiac.rawValue)，需要刷新", category: .network)
             return true
         }
         
-        print("⭐ [DailyRefresh] 星座：今天已经请求过该星座，使用缓存")
+        AppLogger.debug("星座今日已请求，使用缓存", category: .network)
         return false
     }
     
@@ -95,7 +95,7 @@ actor DailyRefreshManager {
         let now = Date()
         userDefaults.set(now, forKey: Keys.lastLunarRequestDate)
         userDefaults.synchronize()
-        print("🌙 [DailyRefresh] 已记录黄历请求时间: \(formatDate(now))")
+        AppLogger.debug("已记录黄历请求时间: \(formatDate(now))", category: .storage)
     }
     
     /// 记录星座数据已请求
@@ -104,7 +104,7 @@ actor DailyRefreshManager {
         userDefaults.set(now, forKey: Keys.lastZodiacRequestDate)
         userDefaults.set(zodiac.rawValue, forKey: Keys.lastZodiacRequestKey)
         userDefaults.synchronize()
-        print("⭐ [DailyRefresh] 已记录星座请求时间: \(formatDate(now)) 星座: \(zodiac.rawValue)")
+        AppLogger.debug("已记录星座请求时间: \(formatDate(now)) 星座: \(zodiac.rawValue)", category: .storage)
     }
     
     // MARK: - 公共方法：重置
@@ -116,14 +116,14 @@ actor DailyRefreshManager {
         userDefaults.removeObject(forKey: Keys.lastLunarRequestKey)
         userDefaults.removeObject(forKey: Keys.lastZodiacRequestKey)
         userDefaults.synchronize()
-        print("🔄 [DailyRefresh] 已重置所有请求记录")
+        AppLogger.info("已重置每日刷新记录", category: .storage)
     }
     
     /// 重置黄历请求记录
     func resetLunarCalendar() {
         userDefaults.removeObject(forKey: Keys.lastLunarRequestDate)
         userDefaults.synchronize()
-        print("🔄 [DailyRefresh] 已重置黄历请求记录")
+        AppLogger.info("已重置黄历请求记录", category: .storage)
     }
     
     /// 重置星座请求记录
@@ -131,7 +131,7 @@ actor DailyRefreshManager {
         userDefaults.removeObject(forKey: Keys.lastZodiacRequestDate)
         userDefaults.removeObject(forKey: Keys.lastZodiacRequestKey)
         userDefaults.synchronize()
-        print("🔄 [DailyRefresh] 已重置星座请求记录")
+        AppLogger.info("已重置星座请求记录", category: .storage)
     }
     
     // MARK: - 工具方法

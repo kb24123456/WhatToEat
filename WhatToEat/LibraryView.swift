@@ -261,7 +261,7 @@ struct LibraryView: View {
         do {
             try modelContext.save()
         } catch {
-            print("修复城市归属失败: \(error.localizedDescription)")
+            AppLogger.error("修复城市归属失败: \(error.localizedDescription)", category: .storage)
         }
     }
 

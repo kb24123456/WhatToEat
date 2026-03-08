@@ -91,7 +91,7 @@ class CategoryManager {
                 String(category.name.dropFirst("__DELETED_PRESET_".count))
             }
         } catch {
-            print("获取已删除预设品类失败: \(error)")
+            AppLogger.error("获取已删除预设品类失败: \(error.localizedDescription)", category: .storage)
             return []
         }
     }
@@ -172,7 +172,7 @@ class CategoryManager {
         do {
             return try context.fetch(descriptor)
         } catch {
-            print("获取用户品类失败: \(error)")
+            AppLogger.error("获取用户品类失败: \(error.localizedDescription)", category: .storage)
             return []
         }
     }

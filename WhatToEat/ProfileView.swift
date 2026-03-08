@@ -3039,17 +3039,11 @@ struct UserProfile: Codable {
     static let `default` = UserProfile(nickname: "美食探险家", bio: "今天吃什么？", avatarData: nil)
     
     static func load() -> UserProfile {
-        if let data = UserDefaults.standard.data(forKey: "userProfile"),
-           let profile = try? JSONDecoder().decode(UserProfile.self, from: data) {
-            return profile
-        }
-        return .default
+        UserProfileStore.load(defaultProfile: .default)
     }
     
     func save() {
-        if let data = try? JSONEncoder().encode(self) {
-            UserDefaults.standard.set(data, forKey: "userProfile")
-        }
+        UserProfileStore.save(self)
     }
 }
 

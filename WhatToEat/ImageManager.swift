@@ -42,7 +42,7 @@ class ImageManager {
             try imageData.write(to: fileURL)
             return filename
         } catch {
-            print("保存图片失败: \(error.localizedDescription)")
+            AppLogger.error("保存图片失败: \(error.localizedDescription)", category: .storage)
             return nil
         }
     }
@@ -72,7 +72,7 @@ class ImageManager {
             }
             return nil
         } catch {
-            print("读取图片失败: \(error.localizedDescription)")
+            AppLogger.error("读取图片失败: \(error.localizedDescription)", category: .storage)
             return nil
         }
     }
@@ -102,7 +102,7 @@ class ImageManager {
             }
             return nil
         } catch {
-            print("读取图片失败: \(error.localizedDescription)")
+            AppLogger.error("读取图片失败: \(error.localizedDescription)", category: .storage)
             return nil
         }
     }
@@ -119,7 +119,7 @@ class ImageManager {
         do {
             try FileManager.default.removeItem(at: fileURL)
         } catch {
-            print("删除图片失败: \(error.localizedDescription)")
+            AppLogger.error("删除图片失败: \(error.localizedDescription)", category: .storage)
         }
     }
 }

@@ -7,9 +7,8 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		3A2A0F9F5BAF4D4D8A2BBE01 /* Config.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = WhatToEat/Config/Config.example.xcconfig; sourceTree = "<group>"; };
-		7D1E5831C2744E7E909F9D01 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = WhatToEat/Config/Config.xcconfig; sourceTree = "<group>"; };
 		12B7D1AD2F1A98940021A936 /* WhatToEat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhatToEat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7D1E5831C2744E7E909F9D01 /* WhatToEat/Config/Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = WhatToEat/Config/Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -46,11 +45,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1265293E2F5D263300EEE506 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				7D1E5831C2744E7E909F9D01 /* WhatToEat/Config/Config.xcconfig */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		12B7D1A42F1A98940021A936 = {
 			isa = PBXGroup;
 			children = (
 				12B7D1AF2F1A98940021A936 /* WhatToEat */,
 				12B7D1AE2F1A98940021A936 /* Products */,
+				1265293E2F5D263300EEE506 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -266,7 +274,7 @@
 		};
 		12B7D1BB2F1A98960021A936 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7D1E5831C2744E7E909F9D01 /* Config.xcconfig */;
+			baseConfigurationReference = 7D1E5831C2744E7E909F9D01 /* WhatToEat/Config/Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -314,7 +322,7 @@
 		};
 		12B7D1BC2F1A98960021A936 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7D1E5831C2744E7E909F9D01 /* Config.xcconfig */;
+			baseConfigurationReference = 7D1E5831C2744E7E909F9D01 /* WhatToEat/Config/Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

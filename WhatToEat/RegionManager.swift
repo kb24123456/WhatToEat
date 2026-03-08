@@ -70,7 +70,7 @@ class RegionManager {
         }
         
         if !loadSuccess {
-            print("RegionManager: Failed to load regions.json - \(lastError)")
+            AppLogger.error("加载 regions.json 失败: \(lastError)", category: .storage)
         }
         
         cityDistricts = loadedData

@@ -201,7 +201,7 @@ extension LunarCalendarData {
         guard calendar.isDate(fetchedAt, inSameDayAs: now) else {
             // 不是同一天，理论上应该由DailyRefreshManager控制不走到这里
             // 但如果走到了，说明是昨天的数据，标记为过期
-            print("🌙 [LunarCalendarData] 数据是昨天的，标记为过期")
+            AppLogger.debug("黄历缓存跨天，标记为过期", category: .storage)
             return true
         }
         

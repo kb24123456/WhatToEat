@@ -81,7 +81,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         case .notDetermined:
             locationManager.requestWhenInUseAuthorization()
         case .restricted, .denied:
-            print("位置权限被拒绝或限制")
+            AppLogger.info("位置权限被拒绝或限制", category: .general)
         case .authorizedWhenInUse, .authorizedAlways:
             // 获得权限后，静默获取一次位置（不强制）
             refreshLocationIfNeeded()
@@ -311,7 +311,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             // 获得权限后，静默获取一次位置
             refreshLocationIfNeeded()
         case .restricted, .denied:
-            print("位置权限被拒绝或限制")
+            AppLogger.info("位置权限被拒绝或限制", category: .general)
         default:
             break
         }
@@ -343,7 +343,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("位置更新失败: \(error.localizedDescription)")
+        AppLogger.error("位置更新失败: \(error.localizedDescription)", category: .general)
         finishSingleLocationUpdate()
     }
     
@@ -416,7 +416,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             
             return (distance: distanceText, time: timeText)
         } catch {
-            print("获取路线失败: \(error.localizedDescription)")
+            AppLogger.error("获取路线失败: \(error.localizedDescription)", category: .general)
             return nil
         }
     }

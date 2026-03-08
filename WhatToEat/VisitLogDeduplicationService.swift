@@ -24,7 +24,7 @@ enum VisitLogDeduplicationService {
             try context.save()
             defaults.set(true, forKey: cleanupKey)
         } catch {
-            print("Visit log deduplication failed: \(error)")
+            AppLogger.error("打卡去重失败: \(error.localizedDescription)", category: .storage)
         }
     }
 

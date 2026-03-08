@@ -156,7 +156,7 @@ class ProfileViewModel {
         do {
             userCategories = try context.fetch(descriptor)
         } catch {
-            print("加载用户品类失败: \(error)")
+            AppLogger.error("加载用户品类失败: \(error.localizedDescription)", category: .storage)
         }
     }
     
@@ -171,7 +171,7 @@ class ProfileViewModel {
             loadUserCategories()
             newCategoryInput = ""
         } catch {
-            print("保存新品类失败: \(error)")
+            AppLogger.error("保存新品类失败: \(error.localizedDescription)", category: .storage)
             newCategoryInput = ""
         }
     }
@@ -197,7 +197,7 @@ class ProfileViewModel {
             loadUserCategories()
             buildCategoryRestaurantMap { }
         } catch {
-            print("删除品类失败: \(error)")
+            AppLogger.error("删除品类失败: \(error.localizedDescription)", category: .storage)
         }
     }
     

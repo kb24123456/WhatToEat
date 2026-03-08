@@ -915,7 +915,7 @@ struct RestaurantMapView: View {
                 }
             }
         } catch {
-            print("计算路线失败: \(error.localizedDescription)")
+            AppLogger.error("计算路线失败: \(error.localizedDescription)", category: .general)
         }
     }
     

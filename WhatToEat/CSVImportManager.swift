@@ -212,7 +212,7 @@ class GeocodingManager: ObservableObject {
             self.activeRequest = nil
 
             if let error {
-                print("Geocoding error for '\(restaurant.name)': \(error.localizedDescription)")
+                AppLogger.error("导入地理编码失败[\(restaurant.name)]: \(error.localizedDescription)", category: .general)
                 completion(false)
                 return
             }

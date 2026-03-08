@@ -956,7 +956,7 @@ struct SmartSearchSheet: View {
                     self.isSearching = false
                 }
             } catch {
-                print("搜索失败: \(error)")
+                AppLogger.error("搜索失败: \(error.localizedDescription)", category: .general)
                 await MainActor.run {
                     self.searchResults = []
                     self.isSearching = false
@@ -987,7 +987,7 @@ struct SmartSearchSheet: View {
                     self.nearbyPlaces = response.mapItems.prefix(5).map { IdentifiableMapItem(item: $0) }
                 }
             } catch {
-                print("加载附近地点失败: \(error)")
+                AppLogger.error("加载附近地点失败: \(error.localizedDescription)", category: .general)
             }
         }
     }

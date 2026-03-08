@@ -630,14 +630,14 @@ struct AddRestaurantView: View {
                 // 其他错误，触感反馈
                 let generator = UINotificationFeedbackGenerator()
                 generator.notificationOccurred(.error)
-                print("创建品类失败: \(error)")
+                AppLogger.error("创建品类失败: \(error.localizedDescription)", category: .storage)
             }
             
         } catch {
             // 未知错误
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.error)
-            print("创建品类失败: \(error)")
+            AppLogger.error("创建品类失败: \(error.localizedDescription)", category: .storage)
         }
     }
     
@@ -1380,7 +1380,7 @@ struct AddRestaurantView: View {
         do {
             try modelContext.save()
         } catch {
-            print("保存餐厅失败: \(error)")
+            AppLogger.error("保存餐厅失败: \(error.localizedDescription)", category: .storage)
         }
 
         // Oreo: 1.2s 后关闭弹窗并退出

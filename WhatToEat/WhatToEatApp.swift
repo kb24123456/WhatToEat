@@ -30,6 +30,7 @@ struct WhatToEatApp: App {
             UserCategory.self,
         ])
         let localConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let emergencyConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
 
         if CloudSyncManager.isICloudSyncEnabled() {
             do {
@@ -40,14 +41,19 @@ struct WhatToEatApp: App {
                 )
                 return try ModelContainer(for: schema, configurations: [cloudConfiguration])
             } catch {
-                print("CloudKit model container unavailable, fallback to local: \(error.localizedDescription)")
+                AppLogger.error("CloudKit 容器不可用，降级到本地存储: \(error.localizedDescription)", category: .storage)
             }
         }
 
         do {
             return try ModelContainer(for: schema, configurations: [localConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            AppLogger.error("本地数据容器初始化失败，降级到内存容器: \(error.localizedDescription)", category: .storage)
+            if let emergencyContainer = try? ModelContainer(for: schema, configurations: [emergencyConfiguration]) {
+                return emergencyContainer
+            }
+            assertionFailure("无法创建任何可用的 ModelContainer")
+            return try! ModelContainer(for: schema, configurations: [emergencyConfiguration])
         }
     }()
 
@@ -93,7 +99,7 @@ struct WhatToEatApp: App {
 
     private static func setupRegionsFile() {
         guard let executablePath = Bundle.main.executablePath else {
-            print("Could not find executable path")
+            AppLogger.error("无法定位应用可执行文件路径", category: .storage)
             return
         }
         let executableDirectory = (executablePath as NSString).deletingLastPathComponent
@@ -103,7 +109,7 @@ struct WhatToEatApp: App {
             for: .applicationSupportDirectory,
             in: .userDomainMask
         ).first else {
-            print("Could not find Application Support directory")
+            AppLogger.error("无法定位 Application Support 目录", category: .storage)
             return
         }
         let appDirectory = appSupportDir.appendingPathComponent("WhatToEat", isDirectory: true)
@@ -114,11 +120,11 @@ struct WhatToEatApp: App {
             if !FileManager.default.fileExists(atPath: destinationPath.path) {
                 if FileManager.default.fileExists(atPath: sourcePath) {
                     try FileManager.default.copyItem(at: URL(fileURLWithPath: sourcePath), to: destinationPath)
-                    print("regions.json copied to \(destinationPath.path)")
+                    AppLogger.info("regions.json 已复制到应用支持目录", category: .storage)
                 }
             }
         } catch {
-            print("Failed to copy regions.json: \(error)")
+            AppLogger.error("复制 regions.json 失败: \(error.localizedDescription)", category: .storage)
         }
     }
 
