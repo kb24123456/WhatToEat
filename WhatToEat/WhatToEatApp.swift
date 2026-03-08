@@ -22,6 +22,8 @@ struct WhatToEatApp: App {
     // 注册 AppDelegate
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @AppStorage(AppSettingsKeys.appAppearanceMode) private var appAppearanceMode: String = AppAppearanceMode.system.rawValue
+    @State private var showsSplashScreen = true
+    @State private var hasScheduledSplashDismissal = false
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -135,13 +137,38 @@ struct WhatToEatApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ZStack {
+                ContentView()
+                    .zIndex(0)
+
+                if showsSplashScreen {
+                    SplashScreenView()
+                        .transition(.opacity)
+                        .zIndex(1)
+                }
+            }
                 .preferredColorScheme(resolvedAppearance)
                 .onAppear {
                     KeyboardWarmupService.shared.warmUpIfNeeded()
+                    VisitLogMoodMigrationService.runIfNeeded(in: sharedModelContainer)
                     VisitLogDeduplicationService.runIfNeeded(in: sharedModelContainer)
+                }
+                .task {
+                    await dismissSplashScreenIfNeeded()
                 }
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    @MainActor
+    private func dismissSplashScreenIfNeeded() async {
+        guard !hasScheduledSplashDismissal else { return }
+        hasScheduledSplashDismissal = true
+
+        try? await Task.sleep(nanoseconds: 850_000_000)
+
+        withAnimation(.easeOut(duration: 0.28)) {
+            showsSplashScreen = false
+        }
     }
 }

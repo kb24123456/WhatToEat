@@ -10,7 +10,7 @@ final class VisitLog {
     var goodDishes: String
     var badDishes: String
     var review: String
-    var mood: String?  // 心情：😋 😐 💣 🤩
+    var mood: String?  // 用餐感受：拉完了 / NPC / 人上人 / 顶级 / 夯！
     var photoFilenames: [String] = [] // 支持多图存储
     
     // 关系：添加与Restaurant的反向关系，显式指定根类型

@@ -65,7 +65,7 @@ enum VisitLogDeduplicationService {
             log.goodDishes,
             log.badDishes,
             log.review,
-            log.mood ?? "",
+            MoodType.normalizedStoredValue(from: log.mood) ?? "",
             photoSignature
         ].joined(separator: "|")
     }

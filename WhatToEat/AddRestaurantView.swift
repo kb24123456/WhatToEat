@@ -162,7 +162,12 @@ struct AddRestaurantView: View {
             Button("取消", role: .cancel) {}
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPickerView(selectedImages: $coverImages)
+            ZStack {
+                Color.black.ignoresSafeArea()
+                CameraPickerView(selectedImages: $coverImages)
+                    .ignoresSafeArea()
+            }
+            .background(Color.black)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
         .onChange(of: photoPickerItem) { _, newItem in

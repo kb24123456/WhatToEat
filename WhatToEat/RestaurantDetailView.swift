@@ -260,7 +260,12 @@ struct RestaurantDetailView: View {
             })
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPickerView(selectedImages: $newCoverImages)
+            ZStack {
+                Color.black.ignoresSafeArea()
+                CameraPickerView(selectedImages: $newCoverImages)
+                    .ignoresSafeArea()
+            }
+            .background(Color.black)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
         .onChange(of: photoPickerItem) { _, newItem in
@@ -1044,8 +1049,8 @@ struct RestaurantDetailView: View {
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.Colors.mediumGray)
                 
-                if let mood = log.mood, let moodType = MoodType.allCases.first(where: { $0.rawValue == mood }) {
-                    Text(moodType.rawValue)
+                if let mood = log.mood, let moodType = MoodType(storedValue: mood) {
+                    Text(moodType.emoji)
                         .font(.system(size: 14))
                     Text(moodType.title)
                         .font(.system(size: 12, weight: .medium))
@@ -1978,8 +1983,8 @@ struct AllCheckInsSheet: View {
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.Colors.mediumGray)
                 
-                if let mood = log.mood, let moodType = MoodType.allCases.first(where: { $0.rawValue == mood }) {
-                    Text(moodType.rawValue)
+                if let mood = log.mood, let moodType = MoodType(storedValue: mood) {
+                    Text(moodType.emoji)
                         .font(.system(size: 14))
                     Text(moodType.title)
                         .font(.system(size: 12, weight: .medium))

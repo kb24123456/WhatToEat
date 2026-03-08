@@ -179,7 +179,7 @@ struct SupportAndContactCard: View {
 
 struct DeleteAccountExplanationPage: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var authManager = AuthManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
     @State private var showDeleteAlert = false
 
     let onDeleteAssociation: () -> Void

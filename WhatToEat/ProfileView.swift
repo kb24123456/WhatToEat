@@ -26,10 +26,10 @@ struct ProfileView: View {
     @Namespace private var animationNamespace
     @State private var showDashboardCards = false
     @State private var selectedGateway: GatewayType = .settings
-    @StateObject private var locationManager = LocationManager.shared
-    @StateObject private var authManager = AuthManager.shared
-    @StateObject private var appLockManager = AppLockManager.shared
-    @StateObject private var primeAccessManager = PrimeAccessManager.shared
+    @ObservedObject private var locationManager = LocationManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
+    @ObservedObject private var appLockManager = AppLockManager.shared
+    @ObservedObject private var primeAccessManager = PrimeAccessManager.shared
     @AppStorage(AppSettingsKeys.userSelectedCity) private var defaultCity: String = "重庆"
     @AppStorage(AppSettingsKeys.appAppearanceMode) private var appAppearanceMode: String = AppAppearanceMode.system.rawValue
     @AppStorage(AppSettingsKeys.hapticFeedbackEnabled) private var hapticFeedbackEnabled: Bool = true
@@ -388,16 +388,6 @@ struct ProfileView: View {
         .scrollBounceBehavior(.basedOnSize)
         .coordinateSpace(name: "ProfileScrollArea")
         .background(AppTheme.Colors.pageBackground)
-        .onPreferenceChange(SettingsPanelOffsetPreferenceKey.self) { minY in
-            guard showDashboardCards, selectedGateway == .settings else {
-                settingsTopBlurProgress = 0
-                return
-            }
-            let progress = min(max((-minY - 4) / 36, 0), 1)
-            if abs(progress - settingsTopBlurProgress) > 0.015 {
-                settingsTopBlurProgress = progress
-            }
-        }
     }
 
     @ViewBuilder
@@ -421,12 +411,6 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var profileOverlayLayers: some View {
-        if showDashboardCards && selectedGateway == .settings {
-            settingsTopBlurOverlay
-                .zIndex(50)
-                .transition(.opacity)
-        }
-
         if showDashboardCards {
             edgeBackGestureHotZone
                 .zIndex(160)
@@ -891,42 +875,11 @@ struct ProfileView: View {
                 title: "账户与安全"
             ) {
                 VStack(alignment: .leading, spacing: 0) {
-                    accountStatusRow
-
-                    settingsRowDivider()
-                    faceIDSettingsRow
-
-                    if !authManager.isSignedIn {
-                        settingsRowDivider()
-                        settingsActionButton(
-                            icon: "apple.logo",
-                            title: "使用 Apple ID 登录",
-                            tint: Color(hex: "#2D3436")
-                        ) {
-                            authManager.startSignIn()
-                        }
-                    }
-
-                    if authManager.isSignedIn {
-                        settingsRowDivider()
-                        settingsActionButton(
-                            icon: "arrow.triangle.2.circlepath",
-                            title: "切换账户",
-                            tint: Color(hex: "#5C8DFF")
-                        ) {
-                            showSwitchAccountAlert = true
-                        }
-
-                        settingsRowDivider()
-                        settingsActionButton(
-                            icon: "rectangle.portrait.and.arrow.right",
-                            title: "退出账户",
-                            tint: Color(hex: "#E17055"),
-                            isDestructive: true
-                        ) {
-                            showSignOutAlert = true
-                        }
-                    }
+                    Text("账户与安全模块正在排查异常，下一步将逐项恢复。")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 12)
                 }
             }
 
@@ -974,14 +927,6 @@ struct ProfileView: View {
                 }
             }
         }
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: SettingsPanelOffsetPreferenceKey.self,
-                    value: proxy.frame(in: .named("ProfileScrollArea")).minY
-                )
-            }
-        )
     }
 
     private var settingsComplianceLinksFooter: some View {
@@ -1191,6 +1136,7 @@ struct ProfileView: View {
 
             content()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 15)
         .background(
@@ -1206,7 +1152,6 @@ struct ProfileView: View {
                 )
                 .shadow(color: settingsCardShadow, radius: colorScheme == .dark ? 10 : 14, x: 0, y: colorScheme == .dark ? 4 : 6)
         )
-        .animation(settingsSectionAnimation, value: selectedGateway)
     }
 
     private func achievementHeroCard(
@@ -1964,32 +1909,6 @@ struct ProfileView: View {
         ]
     }
 
-    private var faceIDEnabledBinding: Binding<Bool> {
-        Binding(
-            get: { appLockManager.isFaceIDEnabled },
-            set: { enabled in
-                if enabled && !primeAccessManager.isPrimeActive {
-                    showSettingsToast("面容 ID 为 Prime 专属功能")
-                    withAnimation(settingsSectionAnimation) {
-                        selectedGateway = .membership
-                    }
-                    return
-                }
-                if enabled && !authManager.isSignedIn {
-                    showSettingsToast("请先登录 Apple ID 再启用面容 ID")
-                    authManager.startSignIn()
-                    return
-                }
-                if enabled && !appLockManager.isFaceIDAvailable {
-                    showSettingsToast("当前设备不支持面容 ID")
-                    return
-                }
-                appLockManager.setFaceIDEnabled(enabled)
-                showSettingsToast(enabled ? "面容 ID 已开启（冷启动验证）" : "面容 ID 已关闭")
-            }
-        )
-    }
-
     private var faceIDHintText: String {
         if !primeAccessManager.isPrimeActive {
             return "Prime 专属功能，开通后可为 App 冷启动增加面容 ID 验证"
@@ -1997,74 +1916,94 @@ struct ProfileView: View {
         if !authManager.isSignedIn {
             return "Prime 已开通，请先登录 Apple ID 后再启用"
         }
-        if !appLockManager.isFaceIDAvailable {
-            return "当前设备不可用，仅支持带 Face ID 的机型"
-        }
         return "开启后 App 冷启动需要面容 ID 验证"
     }
 
     private var faceIDSettingsRow: some View {
-        Group {
-            if primeAccessManager.isPrimeActive {
-                Toggle(isOn: faceIDEnabledBinding) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("开启面容 ID")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(settingsPrimaryTextColor)
-                        Text(faceIDHintText)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(settingsSecondaryTextColor)
-                    }
+        Button {
+            handleFaceIDRowTap()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "faceid")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color(hex: "#5C8DFF"))
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(Color(hex: "#5C8DFF").opacity(0.14)))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("开启面容 ID")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(settingsPrimaryTextColor)
+                    Text(faceIDHintText)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .toggleStyle(SwitchToggleStyle(tint: settingsToggleTint))
-                .padding(.vertical, 12)
-                .disabled(!authManager.isSignedIn || !appLockManager.isFaceIDAvailable)
-            } else {
-                Button {
-                    showSettingsToast("面容 ID 为 Prime 专属功能")
-                    withAnimation(settingsSectionAnimation) {
-                        selectedGateway = .membership
-                    }
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "faceid")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color(hex: "#5C8DFF"))
-                            .frame(width: 26, height: 26)
-                            .background(Circle().fill(Color(hex: "#5C8DFF").opacity(0.14)))
 
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("开启面容 ID")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(settingsPrimaryTextColor)
-                            Text(faceIDHintText)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(settingsSecondaryTextColor)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                Spacer(minLength: 8)
 
-                        Spacer(minLength: 8)
+                Text(faceIDStatusBadgeText)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(faceIDStatusBadgeTextColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(faceIDStatusBadgeBackground)
+                    )
 
-                        Text("Prime 专属")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color(hex: "#B9770E"))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(Color(hex: "#FFF1C9"))
-                            )
-
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(settingsChevronColor)
-                    }
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(settingsChevronColor)
             }
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+    }
+
+    private var faceIDStatusBadgeText: String {
+        if !primeAccessManager.isPrimeActive {
+            return "Prime 专属"
+        }
+        return appLockManager.isFaceIDEnabled ? "已开启" : "未开启"
+    }
+
+    private var faceIDStatusBadgeTextColor: Color {
+        if !primeAccessManager.isPrimeActive {
+            return Color(hex: "#B9770E")
+        }
+        return appLockManager.isFaceIDEnabled ? Color(hex: "#2ECC71") : Color(hex: "#E17055")
+    }
+
+    private var faceIDStatusBadgeBackground: Color {
+        if !primeAccessManager.isPrimeActive {
+            return Color(hex: "#FFF1C9")
+        }
+        return settingsPillBackground
+    }
+
+    private func handleFaceIDRowTap() {
+        if !primeAccessManager.isPrimeActive {
+            showSettingsToast("面容 ID 为 Prime 专属功能")
+            withAnimation(settingsSectionAnimation) {
+                selectedGateway = .membership
+            }
+            return
+        }
+        if !authManager.isSignedIn {
+            showSettingsToast("请先登录 Apple ID 再启用面容 ID")
+            authManager.startSignIn()
+            return
+        }
+        if !appLockManager.isFaceIDAvailable {
+            showSettingsToast("当前设备不支持面容 ID")
+            return
+        }
+
+        let nextValue = !appLockManager.isFaceIDEnabled
+        appLockManager.setFaceIDEnabled(nextValue)
+        showSettingsToast(nextValue ? "面容 ID 已开启（冷启动验证）" : "面容 ID 已关闭")
     }
 
     private var appleSignInSheet: some View {
@@ -2846,14 +2785,6 @@ private struct BlurSlideTransitionModifier: ViewModifier {
             .scaleEffect(scale, anchor: .top)
             .blur(radius: blurRadius)
             .opacity(opacity)
-    }
-}
-
-private struct SettingsPanelOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 

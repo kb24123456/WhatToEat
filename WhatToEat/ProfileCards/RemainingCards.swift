@@ -263,8 +263,8 @@ private struct TimelineDetailItem: View {
                     .foregroundColor(AppTheme.Colors.mediumGray)
                 
                 if let mood = item.log.mood,
-                   let moodType = MoodType.allCases.first(where: { $0.rawValue == mood }) {
-                    Text(moodType.rawValue)
+                   let moodType = MoodType(storedValue: mood) {
+                    Text(moodType.emoji)
                         .font(.system(size: 14))
                 }
                 

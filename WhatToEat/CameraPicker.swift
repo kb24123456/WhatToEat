@@ -10,8 +10,8 @@ struct CameraPicker: UIViewControllerRepresentable {
         picker.delegate = context.coordinator
         picker.sourceType = .camera
         picker.allowsEditing = false
-        // 修复：设置全屏模式，去除上下白条
         picker.modalPresentationStyle = .fullScreen
+        picker.view.backgroundColor = .black
         return picker
     }
 
@@ -50,8 +50,8 @@ struct CameraPickerView: UIViewControllerRepresentable {
         picker.delegate = context.coordinator
         picker.sourceType = .camera
         picker.allowsEditing = false
-        // 修复：设置全屏模式，去除上下白条
         picker.modalPresentationStyle = .fullScreen
+        picker.view.backgroundColor = .black
         return picker
     }
 

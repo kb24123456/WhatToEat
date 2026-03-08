@@ -163,9 +163,10 @@ struct AppTheme {
         static let tabInactive = Color.adaptiveHex(light: "#7F8C8D", dark: "#96A6BC")
         
         // MARK: - 情绪颜色
-        static let moodSatisfied = Color(hex: "#FFB3BA")
-        static let moodNeutral = Color(hex: "#E8E8E8")
         static let moodTerrible = Color(hex: "#666666")
+        static let moodNPC = Color(hex: "#B8C0CC")
+        static let moodSuperior = Color(hex: "#FFB3BA")
+        static let moodTopTier = Color(hex: "#FF6B81")
         static let moodAmazing = Color(hex: "#FFE566")
         
         // MARK: - 图标颜色

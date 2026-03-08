@@ -20,4 +20,5 @@ enum AppSettingsKeys {
     static let primeOfferStartTimestamp = "primeOfferStartTimestamp"
     static let primeMembershipPlan = "primeMembershipPlan"
     static let didDeduplicateVisitLogsV1 = "didDeduplicateVisitLogsV1"
+    static let didMigrateVisitLogMoodV2 = "didMigrateVisitLogMoodV2"
 }

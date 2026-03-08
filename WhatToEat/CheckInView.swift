@@ -11,27 +11,57 @@ import UIKit
 import PhotosUI
 
 enum MoodType: String, CaseIterable {
-    case satisfied = "😋"
-    case neutral = "😐"
-    case terrible = "💣"
-    case amazing = "🤩"
-    
-    var title: String {
+    case terrible = "拉完了"
+    case npc = "NPC"
+    case superior = "人上人"
+    case topTier = "顶级"
+    case amazing = "夯！"
+
+    var title: String { rawValue }
+
+    var emoji: String {
         switch self {
-        case .satisfied: return "满意"
-        case .neutral: return "一般"
-        case .terrible: return "踩雷"
-        case .amazing: return "惊艳"
+        case .terrible: return "🤮"
+        case .npc: return "🙂"
+        case .superior: return "😋"
+        case .topTier: return "😍"
+        case .amazing: return "🤩"
         }
     }
-    
+
     var glowColor: Color {
         switch self {
-        case .satisfied: return AppTheme.Colors.moodSatisfied
-        case .neutral: return AppTheme.Colors.moodNeutral
         case .terrible: return AppTheme.Colors.moodTerrible
+        case .npc: return AppTheme.Colors.moodNPC
+        case .superior: return AppTheme.Colors.moodSuperior
+        case .topTier: return AppTheme.Colors.moodTopTier
         case .amazing: return AppTheme.Colors.moodAmazing
         }
+    }
+
+    init?(storedValue: String) {
+        if let mood = MoodType(rawValue: storedValue) {
+            self = mood
+            return
+        }
+
+        switch storedValue {
+        case "💣":
+            self = .terrible
+        case "😐":
+            self = .npc
+        case "😋":
+            self = .superior
+        case "🤩":
+            self = .amazing
+        default:
+            return nil
+        }
+    }
+
+    static func normalizedStoredValue(from value: String?) -> String? {
+        guard let value else { return nil }
+        return MoodType(storedValue: value)?.rawValue ?? value
     }
 }
 
@@ -310,43 +340,49 @@ struct CheckInView: View {
                 .font(.system(size: 12))
                 .foregroundColor(checkInSecondaryText)
             
-            HStack(alignment: .lastTextBaseline, spacing: 12) {
-                Button {
-                    if peopleCount > 1 {
-                        peopleCount -= 1
-                        triggerHaptic()
-                    }
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(peopleCount > 1 ? checkInPrimaryText : checkInHintText)
+            HStack(alignment: .center, spacing: 12) {
+                peopleStepperButton(
+                    systemName: "minus.circle.fill",
+                    isEnabled: peopleCount > 1
+                ) {
+                    guard peopleCount > 1 else { return }
+                    peopleCount -= 1
+                    triggerHaptic()
                 }
-                .alignmentGuide(.lastTextBaseline) { dimensions in
-                    dimensions[VerticalAlignment.center]
-                }
-                .disabled(peopleCount <= 1)
 
                 Text("\(peopleCount)")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(checkInPrimaryText)
                     .contentTransition(.numericText())
-                    .frame(minWidth: 24)
+                    .monospacedDigit()
+                    .frame(minWidth: 28, minHeight: 28, alignment: .center)
 
-                Button {
+                peopleStepperButton(
+                    systemName: "plus.circle.fill",
+                    isEnabled: true
+                ) {
                     peopleCount += 1
                     triggerHaptic()
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(checkInPrimaryText)
-                }
-                .alignmentGuide(.lastTextBaseline) { dimensions in
-                    dimensions[VerticalAlignment.center]
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func peopleStepperButton(
+        systemName: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 21, weight: .semibold))
+                .foregroundColor(isEnabled ? checkInPrimaryText : checkInHintText)
+                .frame(width: 28, height: 28, alignment: .center)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
     }
     
     // MARK: - 消费总额输入（底部横线）
@@ -509,7 +545,7 @@ struct CheckInView: View {
                             .frame(width: 45, height: 45)
                     }
 
-                    Text(mood.rawValue)
+                    Text(mood.emoji)
                         .font(.system(size: 32))
                         .scaleEffect(isSelected ? 1.25 : 0.9)
                         .opacity(isSelected ? 1.0 : 0.5)
@@ -523,6 +559,8 @@ struct CheckInView: View {
                 Text(mood.title)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(isSelected ? checkInPrimaryText : checkInHintText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
                     .scaleEffect(isSelected ? 1.05 : 1.0)
                     .animation(AppTheme.Animations.standardSpring, value: isSelected)
             }
@@ -583,7 +621,7 @@ struct CheckInView: View {
         badTags = log.badDishes.isEmpty ? [] : log.badDishes.components(separatedBy: "，").map { $0.trimmingCharacters(in: .whitespaces) }
         
         if let moodValue = log.mood {
-            selectedMood = MoodType.allCases.first { $0.rawValue == moodValue }
+            selectedMood = MoodType(storedValue: moodValue)
         }
     }
     
@@ -684,7 +722,7 @@ struct CheckInView: View {
             goodDishes,
             badDishes,
             review,
-            mood ?? "",
+            MoodType.normalizedStoredValue(from: mood) ?? "",
             photoFilenames.sorted().joined(separator: ",")
         ].joined(separator: "|")
     }

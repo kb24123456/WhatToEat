@@ -197,8 +197,8 @@ struct CheckInHistoryView: View {
                             .font(.system(size: 13))
                             .foregroundColor(AppTheme.Colors.mediumGray)
                         
-                        if let mood = item.log.mood, let moodType = MoodType.allCases.first(where: { $0.rawValue == mood }) {
-                            Text(moodType.rawValue)
+                        if let mood = item.log.mood, let moodType = MoodType(storedValue: mood) {
+                            Text(moodType.emoji)
                                 .font(.system(size: 14))
                             Text(moodType.title)
                                 .font(.system(size: 12, weight: .medium))

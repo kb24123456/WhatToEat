@@ -52,7 +52,7 @@ final class CloudSyncManager {
                 goodDishes: $0.goodDishes,
                 badDishes: $0.badDishes,
                 review: $0.review,
-                mood: $0.mood,
+                mood: MoodType.normalizedStoredValue(from: $0.mood),
                 photoFilenames: $0.photoFilenames,
                 restaurantLegacyID: $0.restaurant?.id.uuidString
             )
@@ -125,7 +125,7 @@ final class CloudSyncManager {
                     goodDishes: dto.goodDishes,
                     badDishes: dto.badDishes,
                     review: dto.review,
-                    mood: dto.mood,
+                    mood: MoodType.normalizedStoredValue(from: dto.mood),
                     photoFilenames: dto.photoFilenames,
                     restaurant: restaurant
                 )

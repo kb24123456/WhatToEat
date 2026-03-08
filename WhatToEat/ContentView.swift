@@ -35,7 +35,7 @@ struct ContentView: View {
     @State private var isAdding: Bool = false
     @State private var isTabBarHidden: Bool = false
     @State private var hasTriggeredCloudMigration = false
-    @StateObject private var appLockManager = AppLockManager.shared
+    @ObservedObject private var appLockManager = AppLockManager.shared
 
     private let tabBarVisibilityAnimation = Animation.interactiveSpring(
         response: 0.42,
