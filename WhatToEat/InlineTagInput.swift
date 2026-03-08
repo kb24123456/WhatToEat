@@ -96,11 +96,13 @@ struct InlineTagInput: UIViewRepresentable {
         
         // 设置约束
         NSLayoutConstraint.activate([
-            // 输入容器 - 宽度为屏幕1/3，居中
+            // 输入容器 - 随设备宽度弹性变化，但保持可读宽度
             inputContainer.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             inputContainer.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
             inputContainer.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
-            inputContainer.widthAnchor.constraint(equalToConstant: ScreenMetrics.bounds.width / 3),
+            inputContainer.widthAnchor.constraint(equalTo: container.widthAnchor, multiplier: 0.58),
+            inputContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: 180),
+            inputContainer.widthAnchor.constraint(lessThanOrEqualToConstant: 320),
             inputContainer.heightAnchor.constraint(equalToConstant: 44),
             
             // 输入框

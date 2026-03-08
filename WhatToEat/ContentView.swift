@@ -353,30 +353,6 @@ private struct RestaurantMapTabContainer: View {
     }
 }
 
-// MARK: - 辅助组件 (全局通用)
-
-struct BlurView: UIViewRepresentable {
-    let style: UIBlurEffect.Style
-    func makeUIView(context: Context) -> UIVisualEffectView {
-        UIVisualEffectView(effect: UIBlurEffect(style: style))
-    }
-    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
-}
-
-struct PlaceholderView: View {
-    let title: String
-    let description: String
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "construction")
-                .font(.system(size: 80))
-                .foregroundColor(.gray)
-            Text(title).font(.title).bold()
-            Text(description).foregroundColor(.gray).multilineTextAlignment(.center).padding()
-        }
-    }
-}
-
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: Restaurant.self, configurations: config)

@@ -9,6 +9,7 @@ import SwiftUI
 
 // MARK: - 极简加载视图
 struct MinimalistLoadingView: View {
+    var cardWidth: CGFloat = 340
     @State private var isAnimating = false
     
     var body: some View {
@@ -34,7 +35,7 @@ struct MinimalistLoadingView: View {
                 .font(MinimalistTheme.Typography.body)
                 .foregroundColor(MinimalistTheme.Colors.textSecondary)
         }
-        .frame(width: 340, height: 480)
+        .frame(width: cardWidth, height: 480)
         .minimalistCardStyle()
         .onAppear {
             isAnimating = true

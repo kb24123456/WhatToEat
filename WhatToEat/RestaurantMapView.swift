@@ -2024,7 +2024,7 @@ struct CityPickerView: View {
                     )
             )
         }
-        .frame(maxWidth: ScreenMetrics.bounds.width / 3)
+        .frame(maxWidth: .infinity)
         .buttonStyle(.plain)
         .disabled(locationManager.currentCity == nil)
         .padding(.horizontal, AppTheme.Spacing.lg)

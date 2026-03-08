@@ -18,18 +18,25 @@ struct MinimalistFortuneCard: View {
     @State private var showContent: Bool = false
     @State private var cardScale: CGFloat = 0.95
     @State private var cardOpacity: Double = 0
+
+    private func cardWidth(for availableWidth: CGFloat) -> CGFloat {
+        min(340, max(availableWidth - 32, 280))
+    }
     
     var body: some View {
-        ZStack {
-            // 背景渐变
-            minimalistBackground
-            
-            // 主卡片
-            if let fortune = aiManager.todayFortune {
-                cardContent(fortune: fortune)
-            } else {
-                MinimalistLoadingView()
+        GeometryReader { proxy in
+            let currentCardWidth = cardWidth(for: proxy.size.width)
+
+            ZStack {
+                minimalistBackground
+
+                if let fortune = aiManager.todayFortune {
+                    cardContent(fortune: fortune, cardWidth: currentCardWidth)
+                } else {
+                    MinimalistLoadingView(cardWidth: currentCardWidth)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             animateEntrance()
@@ -153,7 +160,7 @@ struct MinimalistFortuneCard: View {
     }
     
     // MARK: - 卡片内容
-    private func cardContent(fortune: DailyFoodFortune) -> some View {
+    private func cardContent(fortune: DailyFoodFortune, cardWidth: CGFloat) -> some View {
         VStack(spacing: 0) {
             // 关闭按钮
             closeButton
@@ -189,7 +196,7 @@ struct MinimalistFortuneCard: View {
                 .padding(.horizontal, MinimalistTheme.Spacing.cardPadding)
                 .padding(.bottom, 24)
         }
-        .frame(width: 340)
+        .frame(width: cardWidth)
         .minimalistCardStyle()
         .scaleEffect(cardScale)
         .opacity(cardOpacity)

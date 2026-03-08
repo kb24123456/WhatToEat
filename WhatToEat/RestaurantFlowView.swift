@@ -371,11 +371,10 @@ struct RestaurantFlowView: View {
         GeometryReader { geometry in
             let screenWidth = geometry.size.width
             let screenHeight = geometry.size.height
-            // 调整卡片尺寸
-            let cardWidth: CGFloat = 240
-            let cardHeight: CGFloat = 336
+            let cardWidth = min(max(screenWidth * 0.62, 228), 268)
+            let cardHeight = cardWidth * 1.4
             let spacing: CGFloat = 20
-            let sidePadding = (screenWidth - cardWidth) / 2
+            let sidePadding = max((screenWidth - cardWidth) / 2, 20)
             let topPadding: CGFloat = screenHeight * 0.10 // 减少顶部间距为决策按钮留出空间
             
             VStack(spacing: 0) {
@@ -418,8 +417,8 @@ struct RestaurantFlowView: View {
                             let cardCenterX = cardGeometry.frame(in: .global).midX
                             let screenCenterX = geometry.size.width / 2
                             let distanceFromCenter = abs(cardCenterX - screenCenterX)
-                            // 最大距离为卡片宽度的一半（260pt），归一化到 0-1
-                            let normalizedDistance = min(distanceFromCenter / 260.0, 1.0)
+                            let distanceNormalizer = max(cardWidth * 1.08, 1)
+                            let normalizedDistance = min(distanceFromCenter / distanceNormalizer, 1.0)
                             
                             VStack(spacing: 0) {
                                 // 卡片图片
@@ -765,41 +764,31 @@ struct RestaurantFlowView: View {
     
     // MARK: - 展开态图片 - 统一左右间距
     private func expandedImage(restaurant: Restaurant) -> some View {
-        GeometryReader { geometry in
-            // 可用宽度减去左右边距（64pt * 2 = 128pt）
-            let availableWidth = geometry.size.width
-            // 使用 4:3 宽高比（更紧凑，充分利用垂直空间）
-            let width = availableWidth
-            let height = width * 0.75 // 4:3 横纵比（1 / 0.75 = 1.33）
-            
-            AsyncImageView(
-                filename: restaurant.coverPhotoFilename,
-                placeholder: AnyView(
-                    ZStack {
-                        Color(hex: "#F0F0F0")
-                        Image(systemName: "fork.knife")
-                            .font(.system(size: 60))
-                            .foregroundColor(Color(hex: "#CCCCCC"))
-                    }
-                ),
-                contentMode: .fill
-            )
-            .frame(width: width, height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            // 高级边框效果 - 增强可见性
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color(hex: "#FFFFFF").opacity(0.5), lineWidth: 1.5)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.black.opacity(0.15), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
-            .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
-        }
-        // 计算高度：屏幕宽度减去左右间距（64pt * 2）后的 0.75 倍（4:3比例）
-        .frame(height: (ScreenMetrics.bounds.width - 128) * 0.75)
+        AsyncImageView(
+            filename: restaurant.coverPhotoFilename,
+            placeholder: AnyView(
+                ZStack {
+                    Color(hex: "#F0F0F0")
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 60))
+                        .foregroundColor(Color(hex: "#CCCCCC"))
+                }
+            ),
+            contentMode: .fill
+        )
+        .frame(maxWidth: .infinity)
+        .aspectRatio(4 / 3, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color(hex: "#FFFFFF").opacity(0.5), lineWidth: 1.5)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.black.opacity(0.15), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
+        .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
     }
     
     // MARK: - 距离/时间行
