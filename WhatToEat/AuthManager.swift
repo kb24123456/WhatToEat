@@ -70,6 +70,10 @@ final class AuthManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: AppSettingsKeys.appleUserDisplayName)
     }
 
+    func deleteAccountAssociation() {
+        signOut(keepLocalData: true)
+    }
+
     func switchAccount() {
         signOut(keepLocalData: true)
         startSignIn()

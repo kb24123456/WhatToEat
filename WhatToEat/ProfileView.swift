@@ -34,7 +34,6 @@ struct ProfileView: View {
     @AppStorage(AppSettingsKeys.appAppearanceMode) private var appAppearanceMode: String = AppAppearanceMode.system.rawValue
     @AppStorage(AppSettingsKeys.hapticFeedbackEnabled) private var hapticFeedbackEnabled: Bool = true
     @AppStorage(AppSettingsKeys.iCloudSyncEnabled) private var iCloudSyncEnabled: Bool = true
-    @AppStorage(AppSettingsKeys.primeOfferStartTimestamp) private var primeOfferStartTimestamp: Double = 0
     @State private var showClearCacheAlert = false
     @State private var settingsToastMessage: String?
     @State private var showRestaurantImportPicker = false
@@ -235,11 +234,6 @@ struct ProfileView: View {
         }
     }
 
-    private struct MembershipOfferStatus {
-        let isDiscountActive: Bool
-        let remainingSeconds: Int
-    }
-
     init() {
         _viewModel = State(initialValue: ProfileViewModel())
     }
@@ -349,6 +343,9 @@ struct ProfileView: View {
             .onChange(of: iCloudSyncEnabled) { oldValue, newValue in
                 guard oldValue != newValue else { return }
                 handleICloudToggleChanged(to: newValue)
+            }
+            .task {
+                await primeAccessManager.prepareStore()
             }
     }
 
@@ -936,41 +933,45 @@ struct ProfileView: View {
             settingsSectionCard(
                 title: "权限与支持"
             ) {
-                HStack(alignment: .center, spacing: 8) {
-                    Image(systemName: "location.fill")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Color(hex: "#61C6FF"))
-                        .frame(width: 26, height: 26)
-                        .background(Circle().fill(Color(hex: "#61C6FF").opacity(0.14)))
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color(hex: "#61C6FF"))
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(Color(hex: "#61C6FF").opacity(0.14)))
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("定位权限")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(settingsPrimaryTextColor)
-                        Text(locationPermissionText)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(settingsSecondaryTextColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("定位权限")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(settingsPrimaryTextColor)
+                            Text(locationPermissionText)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(settingsSecondaryTextColor)
+                        }
+
+                        Spacer()
+
+                        Button(locationPermissionActionTitle) {
+                            handleLocationPermissionAction()
+                        }
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(settingsPrimaryTextColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule()
+                                .fill(settingsPillBackground)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(settingsPillBorder.opacity(0.86), lineWidth: 0.8)
+                                )
+                        )
                     }
+                    .padding(.vertical, 2)
 
-                    Spacer()
-
-                    Button(locationPermissionActionTitle) {
-                        handleLocationPermissionAction()
-                    }
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(settingsPrimaryTextColor)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(
-                        Capsule()
-                            .fill(settingsPillBackground)
-                            .overlay(
-                                Capsule()
-                                    .stroke(settingsPillBorder.opacity(0.86), lineWidth: 0.8)
-                            )
-                    )
+                    settingsComplianceLinksFooter
                 }
-                .padding(.vertical, 2)
             }
         }
         .background(
@@ -981,6 +982,89 @@ struct ProfileView: View {
                 )
             }
         )
+    }
+
+    private var settingsComplianceLinksFooter: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            settingsComplianceLinkRow(
+                leftTitle: "隐私政策",
+                leftDestination: AnyView(
+                    ComplianceDocumentPage(
+                        title: "隐私政策",
+                        updatedAt: "2026 年 3 月 8 日",
+                        sections: privacyPolicySections,
+                        footer: "本隐私政策为 WhatToEat App 内展示版本，主要用于说明数据处理范围与用户控制方式。若后续功能或合规要求发生变化，WhatToEat 会同步更新本政策。"
+                    )
+                ),
+                rightTitle: "支持与联系",
+                rightDestination: AnyView(
+                    ComplianceDocumentPage(
+                        title: "支持与联系",
+                        updatedAt: "2026 年 3 月 8 日",
+                        sections: supportSections,
+                        footer: "如遇严重故障、订单问题或隐私相关事项，建议优先通过邮箱联系，以便留存完整沟通记录。"
+                    ) {
+                        SupportAndContactCard()
+                    }
+                )
+            )
+
+            settingsComplianceLinkRow(
+                leftTitle: "会员说明",
+                leftDestination: AnyView(
+                    ComplianceDocumentPage(
+                        title: "会员说明",
+                        updatedAt: "2026 年 3 月 8 日",
+                        sections: membershipExplanationSections,
+                        footer: "Prime 的具体价格、订阅周期、续费说明与交易结果，以 App Store 最终展示与 Apple 支付页为准。"
+                    )
+                ),
+                rightTitle: "删除账户说明",
+                rightDestination: AnyView(
+                    DeleteAccountExplanationPage {
+                        authManager.deleteAccountAssociation()
+                        appLockManager.setFaceIDEnabled(false)
+                        showSettingsToast("已删除 Apple ID 账户关联，本机数据已保留")
+                    }
+                )
+            )
+        }
+        .padding(.top, 4)
+    }
+
+    private func settingsComplianceLinkRow(
+        leftTitle: String,
+        leftDestination: AnyView,
+        rightTitle: String,
+        rightDestination: AnyView
+    ) -> some View {
+        HStack(spacing: 12) {
+            NavigationLink(destination: leftDestination) {
+                settingsComplianceLinkLabel(leftTitle)
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink(destination: rightDestination) {
+                settingsComplianceLinkLabel(rightTitle)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func settingsComplianceLinkLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(settingsSecondaryTextColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(settingsPillBackground.opacity(colorScheme == .dark ? 0.78 : 0.88))
+                    .overlay(
+                        Capsule()
+                            .stroke(settingsPillBorder.opacity(0.72), lineWidth: 0.7)
+                    )
+            )
     }
 
     private var achievementDashboard: some View {
@@ -1022,56 +1106,58 @@ struct ProfileView: View {
         VStack(spacing: 10) {
             membershipHeroCard
 
-            settingsSectionCard(title: "选择方案") {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    let offerStatus = currentMembershipOfferStatus(at: context.date)
+            settingsSectionCard(title: membershipPlanSectionTitle) {
+                VStack(alignment: .leading, spacing: 14) {
+                    GeometryReader { proxy in
+                        let cardWidth = max((proxy.size.width - 20) / 3, 0)
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        if offerStatus.isDiscountActive {
-                            membershipOfferBanner(offerStatus: offerStatus)
-                        }
-
-                        GeometryReader { proxy in
-                            let cardWidth = max((proxy.size.width - 20) / 3, 0)
-
-                            HStack(spacing: 10) {
-                                ForEach(MembershipPlan.allCases, id: \.rawValue) { plan in
-                                    membershipPlanCard(
-                                        plan: plan,
-                                        offerStatus: offerStatus,
-                                        width: cardWidth
-                                    )
-                                }
+                        HStack(spacing: 10) {
+                            ForEach(MembershipPlan.allCases, id: \.rawValue) { plan in
+                                membershipPlanCard(
+                                    plan: plan,
+                                    width: cardWidth
+                                )
                             }
                         }
-                        .frame(height: 94)
-
-                        Button {
-                            handleMembershipPurchase(selectedMembershipPlan, offerStatus: offerStatus)
-                        } label: {
-                            Text(membershipCTAButtonTitle(for: selectedMembershipPlan))
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                        .fill(Color.black)
-                                )
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            handleMembershipRestore()
-                        } label: {
-                            Text("恢复购买")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(settingsSecondaryTextColor)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                        }
-                        .buttonStyle(.plain)
                     }
+                    .frame(height: 94)
+
+                    Text(membershipStoreHintText)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(settingsSecondaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        Task {
+                            await handleMembershipPurchase(selectedMembershipPlan)
+                        }
+                    } label: {
+                        Text(membershipCTAButtonTitle(for: selectedMembershipPlan))
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .fill(membershipCTAButtonDisabled ? Color.black.opacity(0.45) : Color.black)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(membershipCTAButtonDisabled)
+
+                    Button {
+                        Task {
+                            await handleMembershipRestore()
+                        }
+                    } label: {
+                        Text(primeAccessManager.isRestoring ? "正在恢复购买..." : "恢复购买")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(settingsSecondaryTextColor)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(primeAccessManager.isRestoring || primeAccessManager.isPurchasing)
                 }
             }
 
@@ -1337,70 +1423,12 @@ struct ProfileView: View {
             )
     }
 
-    private func membershipOfferBanner(offerStatus: MembershipOfferStatus) -> some View {
-        ViewThatFits(in: .vertical) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("今日限时 5 折")
-                        .font(.system(size: 19, weight: .bold, design: .rounded))
-                        .foregroundStyle(settingsPrimaryTextColor)
-
-                    Text("距恢复原价还剩 \(formattedCountdown(offerStatus.remainingSeconds))")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(settingsSecondaryTextColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.9)
-                }
-
-                Spacer(minLength: 0)
-
-                membershipOfferBadge
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("今日限时 5 折")
-                        .font(.system(size: 19, weight: .bold, design: .rounded))
-                        .foregroundStyle(settingsPrimaryTextColor)
-
-                    Text("距恢复原价还剩 \(formattedCountdown(offerStatus.remainingSeconds))")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(settingsSecondaryTextColor)
-                }
-
-                membershipOfferBadge
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(colorScheme == .dark ? 0.05 : 0.68))
-        )
-    }
-
-    private var membershipOfferBadge: some View {
-        Text("50% OFF")
-            .font(.system(size: 18, weight: .bold, design: .rounded))
-            .foregroundStyle(Color(hex: "#B9770E"))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                Capsule()
-                    .fill(Color(hex: "#FFF1C9"))
-            )
-    }
-
     private func membershipPlanCard(
         plan: MembershipPlan,
-        offerStatus: MembershipOfferStatus,
         width: CGFloat
     ) -> some View {
         let isSelected = selectedMembershipPlan == plan
-        let isDiscountActive = offerStatus.isDiscountActive
-        let currentPrice = membershipPrice(for: plan, isDiscountActive: isDiscountActive)
-        let originalPrice = membershipPrice(for: plan, isDiscountActive: false)
+        let displayPrice = primeAccessManager.displayPrice(for: plan.primePlan) ?? "待配置"
 
         return Button {
             withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.82, blendDuration: 0.08)) {
@@ -1410,23 +1438,18 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 4) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 0) {
-                        Text("¥\(currentPrice)")
+                        Text(displayPrice)
                             .font(.system(size: 27, weight: .bold, design: .rounded))
                             .foregroundStyle(isSelected ? Color.white : settingsPrimaryTextColor)
-                    }
-
-                    if isDiscountActive {
-                        Text("原价 ¥\(originalPrice)")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(isSelected ? Color.white.opacity(0.62) : settingsSecondaryTextColor)
-                            .strikethrough()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
                     }
 
                     Text(plan.title)
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundStyle(isSelected ? Color.white : settingsPrimaryTextColor)
 
-                    Text(membershipPlanFooterText(for: plan, isDiscountActive: isDiscountActive))
+                    Text(membershipPlanFooterText(for: plan))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(isSelected ? Color.white.opacity(0.8) : settingsSecondaryTextColor)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1485,34 +1508,40 @@ struct ProfileView: View {
         .padding(.vertical, 14)
     }
 
-    private func currentMembershipOfferStatus(at date: Date) -> MembershipOfferStatus {
-        guard primeOfferStartTimestamp > 0 else {
-            return MembershipOfferStatus(isDiscountActive: false, remainingSeconds: 0)
+    private var membershipPlanSectionTitle: String {
+        if let activePlanTitle = primeAccessManager.activePlanTitle {
+            return "当前已开通 \(activePlanTitle) Prime"
         }
-
-        let startDate = Date(timeIntervalSince1970: primeOfferStartTimestamp)
-        let remaining = max(0, 1800 - Int(date.timeIntervalSince(startDate)))
-        return MembershipOfferStatus(isDiscountActive: remaining > 0, remainingSeconds: remaining)
+        return "选择方案"
     }
 
-    private func membershipPrice(for plan: MembershipPlan, isDiscountActive: Bool) -> Int {
-        switch (plan, isDiscountActive) {
-        case (.monthly, true):
-            return 3
-        case (.monthly, false):
-            return 6
-        case (.yearly, true):
-            return 10
-        case (.yearly, false):
-            return 20
-        case (.lifetime, true):
-            return 15
-        case (.lifetime, false):
-            return 30
+    private var membershipStoreHintText: String {
+        if primeAccessManager.isLoadingProducts && !primeAccessManager.hasLoadedProducts {
+            return "正在连接 App Store 拉取 Prime 商品..."
         }
+        if let lastStoreError = primeAccessManager.lastStoreError, !lastStoreError.isEmpty {
+            return "\(lastStoreError)。购买与扣费将以 App Store 支付弹窗中的商品价格为准。"
+        }
+        if primeAccessManager.hasAnyPurchasableProduct {
+            return "Prime 价格与扣费以 App Store 支付弹窗中的商品信息为准。"
+        }
+        return "当前还未拉取到 Prime 商品，请在 App Store Connect 配置这 3 个商品后再测试真实购买。"
     }
 
-    private func membershipPlanFooterText(for plan: MembershipPlan, isDiscountActive: Bool) -> String {
+    private var membershipCTAButtonDisabled: Bool {
+        if primeAccessManager.isPurchasing || primeAccessManager.isRestoring {
+            return true
+        }
+        if primeAccessManager.activePlan == .lifetime {
+            return true
+        }
+        if primeAccessManager.activePlan == selectedMembershipPlan.primePlan {
+            return true
+        }
+        return primeAccessManager.product(for: selectedMembershipPlan.primePlan) == nil
+    }
+
+    private func membershipPlanFooterText(for plan: MembershipPlan) -> String {
         switch plan {
         case .monthly:
             return "先体验完整 Prime"
@@ -1524,6 +1553,21 @@ struct ProfileView: View {
     }
 
     private func membershipCTAButtonTitle(for plan: MembershipPlan) -> String {
+        if primeAccessManager.isPurchasing {
+            return "正在连接 App Store..."
+        }
+        if primeAccessManager.isRestoring {
+            return "正在恢复购买..."
+        }
+        if primeAccessManager.activePlan == .lifetime {
+            return "已永久解锁 Prime"
+        }
+        if primeAccessManager.activePlan == plan.primePlan {
+            return "当前已开通 \(plan.title) Prime"
+        }
+        if primeAccessManager.product(for: plan.primePlan) == nil {
+            return "当前套餐待配置"
+        }
         switch plan {
         case .monthly:
             return "按月开通 Prime"
@@ -1534,24 +1578,41 @@ struct ProfileView: View {
         }
     }
 
-    private func formattedCountdown(_ remainingSeconds: Int) -> String {
-        let minutes = remainingSeconds / 60
-        let seconds = remainingSeconds % 60
-        let minuteString = minutes.formatted(.number.precision(.integerLength(2)))
-        let secondString = seconds.formatted(.number.precision(.integerLength(2)))
-        return "\(minuteString):\(secondString)"
+    private func handleMembershipPurchase(_ plan: MembershipPlan) async {
+        let targetPlan = plan.primePlan
+
+        if primeAccessManager.activePlan == .lifetime {
+            showSettingsToast("你已经永久解锁 Prime")
+            return
+        }
+        if primeAccessManager.activePlan == targetPlan {
+            showSettingsToast("当前已开通\(plan.title) Prime")
+            return
+        }
+
+        let result = await primeAccessManager.purchase(targetPlan)
+        switch result {
+        case .success(let purchasedPlan):
+            showSettingsToast("购买成功，已开通\(purchasedPlan.title) Prime")
+        case .pending:
+            showSettingsToast("购买正在处理中，请稍后再检查 Prime 状态")
+        case .cancelled:
+            showSettingsToast("你已取消本次购买")
+        case .failed(let message):
+            showSettingsToast("购买失败：\(message)")
+        }
     }
 
-    private func handleMembershipPurchase(_ plan: MembershipPlan, offerStatus: MembershipOfferStatus) {
-        let price = membershipPrice(for: plan, isDiscountActive: offerStatus.isDiscountActive)
-        let offerPrefix = offerStatus.isDiscountActive ? "限时优惠" : "当前价格"
-        primeAccessManager.activate(plan.primePlan)
-        showSettingsToast("已模拟开通\(plan.title) Prime（\(offerPrefix) ¥\(price)），真实支付接口待接入")
-    }
-
-    private func handleMembershipRestore() {
-        let restored = primeAccessManager.restore()
-        showSettingsToast(restored ? "已恢复本机 Prime 状态，真实恢复购买接口待接入" : "当前没有可恢复的 Prime 记录")
+    private func handleMembershipRestore() async {
+        let result = await primeAccessManager.restore()
+        switch result {
+        case .restored(let restoredPlan):
+            showSettingsToast("已恢复\(restoredPlan.title) Prime")
+        case .nothingToRestore:
+            showSettingsToast("当前 Apple ID 没有可恢复的 Prime 购买记录")
+        case .failed(let message):
+            showSettingsToast("恢复购买失败：\(message)")
+        }
     }
 
     private func achievementMainPage(
@@ -1819,6 +1880,88 @@ struct ProfileView: View {
                 )
         }
         .padding(.vertical, 12)
+    }
+
+    private var privacyPolicySections: [ComplianceSection] {
+        [
+            ComplianceSection(
+                title: "一、我们会处理哪些信息",
+                paragraphs: [
+                    "WhatToEat 主要用于帮助你记录餐厅、打卡、消费、标签、地图足迹等个人美食数据。你在 App 中主动创建、编辑或导入的餐厅信息、打卡记录、消费金额、图片、标签与备注，都会作为你的个人使用数据保存在本地，或在你开启同步后通过 Apple 提供的 iCloud/CloudKit 能力进行同步。",
+                    "当你主动使用对应功能时，App 还可能访问定位信息、相机、相册、Apple ID 登录状态，以及与 Prime 相关的购买与恢复购买信息。"
+                ]
+            ),
+            ComplianceSection(
+                title: "二、我们如何使用这些信息",
+                paragraphs: [
+                    "这些信息仅用于向你提供餐厅记录、打卡统计、地图展示、个性化标签整理、会员能力、数据导入导出、账户切换、面容 ID 验证等功能。",
+                    "在你主动触发 AI 文案、运势或其他外部服务时，WhatToEat 可能会向对应服务发送你当前操作所必需的数据内容，用于生成结果或返回对应能力；我们不会因为未使用相关功能而主动上传无关数据。"
+                ]
+            ),
+            ComplianceSection(
+                title: "三、同步与存储说明",
+                paragraphs: [
+                    "默认情况下，WhatToEat 的主要记录数据保存在本机。如果你在设置中开启 iCloud 同步，相关数据会通过 Apple 提供的 iCloud/CloudKit 基础设施在你的 Apple 设备之间保持一致。",
+                    "你也可以使用导出功能将餐厅数据导出为文件，以便做额外备份或迁移。"
+                ]
+            ),
+            ComplianceSection(
+                title: "四、你的控制权",
+                paragraphs: [
+                    "你可以在 App 内自行新增、修改、删除餐厅与打卡内容，也可以关闭定位权限、关闭 iCloud 同步、退出 Apple ID 账户，或删除当前 Apple ID 账户关联。",
+                    "删除账户关联仅会移除 Apple ID 登录状态与相关本地关联信息，不会自动清除你已经保存在本机的餐厅、打卡与消费数据。"
+                ]
+            )
+        ]
+    }
+
+    private var supportSections: [ComplianceSection] {
+        [
+            ComplianceSection(
+                title: "一、适用范围",
+                paragraphs: [
+                    "如果你在使用 WhatToEat 时遇到闪退、数据异常、购买恢复问题、同步问题，或希望提交功能建议、体验反馈、合作意向，都可以通过本页提供的联系方式与我联系。"
+                ]
+            ),
+            ComplianceSection(
+                title: "二、建议提供的信息",
+                paragraphs: [
+                    "为便于更快定位问题，建议你在反馈时尽量说明设备型号、系统版本、问题发生页面、触发步骤，以及是否能够稳定复现。如果涉及购买或同步问题，也建议附上相关截图。"
+                ]
+            ),
+            ComplianceSection(
+                title: "三、回复说明",
+                paragraphs: [
+                    "WhatToEat 目前由独立开发持续维护。对于功能建议、Bug 反馈与合作联系，我会尽量在可处理范围内回复，但不同问题的响应时间可能会有所差异。"
+                ]
+            )
+        ]
+    }
+
+    private var membershipExplanationSections: [ComplianceSection] {
+        [
+            ComplianceSection(
+                title: "一、Prime 是什么",
+                paragraphs: [
+                    "WhatToEat Prime 是面向长期记录用户的会员服务，主要用于扩展无限餐厅容量、地图与洞察、同步备份导出、批量管理，以及 Prime 专属面容 ID 等功能。",
+                    "Prime 的设计目标不是替代免费版，而是在你希望长期沉淀餐厅与打卡资产时，提供更完整、更稳定的记录能力。"
+                ]
+            ),
+            ComplianceSection(
+                title: "二、Prime 包含哪些方案",
+                paragraphs: [
+                    "当前 Prime 提供月付、年付与永久三种购买形式。其中月付与年付属于自动续费订阅，永久属于一次性买断；不同方案的具体展示与成交价格，以 App Store 购买页为准。",
+                    "如果你已经购买 Prime，可以在会员页面使用“恢复购买”同步当前 Apple ID 下的有效权益。"
+                ]
+            ),
+            ComplianceSection(
+                title: "三、会员状态与限制说明",
+                paragraphs: [
+                    "Prime 状态与当前 Apple ID 的有效交易记录相关。会员能力的启用、恢复、取消续费与订单管理，均由 Apple 的 App Store 支付与订阅体系处理。",
+                    "如果你未开通 Prime，App 仍可正常使用基础记录能力；部分进阶能力会在界面中提示为 Prime 专属。"
+                ]
+            )
+        ]
     }
 
     private var faceIDEnabledBinding: Binding<Bool> {
