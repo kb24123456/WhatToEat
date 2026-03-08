@@ -14,7 +14,9 @@
 // ==========================================
 // 应用后端代理配置
 // ==========================================
-BACKEND_BASE_URL = https://whattoeat-api.billy357831193.workers.dev
+URL_SLASH = /
+BACKEND_BASE_URL = https:$(URL_SLASH)$(URL_SLASH)whattoeat-api.billy357831193.workers.dev
+BACKEND_PROXY_TOKEN = ea8ed170e7ee85934972d208706757421b5a91a7a7a94e74
 
 // ==========================================
 // 可选：自定义代理路径

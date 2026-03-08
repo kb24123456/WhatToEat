@@ -26,6 +26,7 @@ cp /Users/papertiger/Desktop/WhatToEat/WhatToEat/Config/Config.example.xcconfig 
 
 ```xcconfig
 BACKEND_BASE_URL = https://api.example.com
+BACKEND_PROXY_TOKEN = your_app_proxy_token
 BACKEND_AI_FORTUNE_PATH = /v1/food-fortune/generate
 BACKEND_FORTUNE_LUNAR_PATH = /v1/fortune/lunar
 BACKEND_FORTUNE_CONSTELLATION_PATH = /v1/fortune/constellation
@@ -78,7 +79,7 @@ WhatToEat/Config/Config.xcconfig
 
 2. **访问频率控制**
    - 客户端使用缓存减少请求
-   - 服务端负责限流、熔断、告警与审计
+   - 服务端负责鉴权、限流、熔断、告警与审计
 
 3. **错误处理**
    - 代理失败时优雅降级
@@ -90,3 +91,4 @@ WhatToEat/Config/Config.xcconfig
 - 客户端改为后端代理接入模型
 - 删除第三方密钥客户端入口
 - 新增缓存优先与安全降级说明
+- 新增代理 token 与基础超时治理

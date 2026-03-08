@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		3A2A0F9F5BAF4D4D8A2BBE01 /* Config.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = WhatToEat/Config/Config.example.xcconfig; sourceTree = "<group>"; };
+		7D1E5831C2744E7E909F9D01 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = WhatToEat/Config/Config.xcconfig; sourceTree = "<group>"; };
 		12B7D1AD2F1A98940021A936 /* WhatToEat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhatToEat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -14,6 +16,8 @@
 		12F656BE2F2E826100FBE87D /* Exceptions for "WhatToEat" folder in "WhatToEat" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Config/Config.example.xcconfig,
+				Config/Config.xcconfig,
 				Info.plist,
 			);
 			target = 12B7D1AC2F1A98940021A936 /* WhatToEat */;
@@ -262,6 +266,7 @@
 		};
 		12B7D1BB2F1A98960021A936 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7D1E5831C2744E7E909F9D01 /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -272,6 +277,11 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WhatToEat/Info.plist;
+				INFOPLIST_KEY_BackendAIFortunePath = "$(BACKEND_AI_FORTUNE_PATH)";
+				INFOPLIST_KEY_BackendBaseURL = "$(BACKEND_BASE_URL)";
+				INFOPLIST_KEY_BackendFortuneConstellationPath = "$(BACKEND_FORTUNE_CONSTELLATION_PATH)";
+				INFOPLIST_KEY_BackendFortuneLunarPath = "$(BACKEND_FORTUNE_LUNAR_PATH)";
+				INFOPLIST_KEY_BackendProxyToken = "$(BACKEND_PROXY_TOKEN)";
 				INFOPLIST_KEY_CFBundleDisplayName = "\"\"";
 				INFOPLIST_KEY_LSApplicationCategoryType = CloudKit;
 				INFOPLIST_KEY_NSCameraUsageDescription = "我们要访问您的相机以拍摄美食瞬间";
@@ -304,6 +314,7 @@
 		};
 		12B7D1BC2F1A98960021A936 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7D1E5831C2744E7E909F9D01 /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -314,6 +325,11 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WhatToEat/Info.plist;
+				INFOPLIST_KEY_BackendAIFortunePath = "$(BACKEND_AI_FORTUNE_PATH)";
+				INFOPLIST_KEY_BackendBaseURL = "$(BACKEND_BASE_URL)";
+				INFOPLIST_KEY_BackendFortuneConstellationPath = "$(BACKEND_FORTUNE_CONSTELLATION_PATH)";
+				INFOPLIST_KEY_BackendFortuneLunarPath = "$(BACKEND_FORTUNE_LUNAR_PATH)";
+				INFOPLIST_KEY_BackendProxyToken = "$(BACKEND_PROXY_TOKEN)";
 				INFOPLIST_KEY_CFBundleDisplayName = "\"\"";
 				INFOPLIST_KEY_LSApplicationCategoryType = CloudKit;
 				INFOPLIST_KEY_NSCameraUsageDescription = "我们要访问您的相机以拍摄美食瞬间";

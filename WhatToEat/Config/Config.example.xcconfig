@@ -14,7 +14,9 @@
 // 应用后端代理配置
 // 生产环境必须由自有后端代理第三方 AI / 运势接口
 // ==========================================
-BACKEND_BASE_URL = https://api.example.com
+URL_SLASH = /
+BACKEND_BASE_URL = https:$(URL_SLASH)$(URL_SLASH)api.example.com
+BACKEND_PROXY_TOKEN = YOUR_PROXY_TOKEN_HERE
 
 // ==========================================
 // 可选：自定义路径，不填则使用应用内默认值

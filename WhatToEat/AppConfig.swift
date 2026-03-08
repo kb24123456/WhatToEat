@@ -20,6 +20,10 @@ enum AppEnvironment {
         return URL(string: rawValue)
     }
 
+    nonisolated static var backendProxyToken: String? {
+        stringValue(forKey: "BackendProxyToken")
+    }
+
     nonisolated static func backendURL(
         pathKey: String,
         defaultPath: String

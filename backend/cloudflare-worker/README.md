@@ -32,6 +32,7 @@ DOUBAO_API_KEY=...
 DOUBAO_ENDPOINT_ID=...
 JUHE_LUNAR_API_KEY=...
 JUHE_CONSTELLATION_API_KEY=...
+APP_PROXY_TOKEN=...
 ```
 
 4. 本地运行
@@ -55,6 +56,7 @@ npx wrangler secret put DOUBAO_API_KEY
 npx wrangler secret put DOUBAO_ENDPOINT_ID
 npx wrangler secret put JUHE_LUNAR_API_KEY
 npx wrangler secret put JUHE_CONSTELLATION_API_KEY
+npx wrangler secret put APP_PROXY_TOKEN
 ```
 
 3. 部署
@@ -81,10 +83,13 @@ BACKEND_BASE_URL =
 
 ```xcconfig
 BACKEND_BASE_URL = https://whattoeat-api.<your-subdomain>.workers.dev
+BACKEND_PROXY_TOKEN = your_app_proxy_token
 ```
 
 ## 说明
 
 - `GET` 运势接口在边缘做了基础缓存。
 - `POST` AI 食签接口不缓存。
+- `/v1/*` 接口支持基于 token 的最小鉴权。
+- 上游第三方请求已增加统一超时与 502/504 错误映射。
 - Worker 返回格式已对齐当前 iOS 客户端，不需要再改客户端接口模型。

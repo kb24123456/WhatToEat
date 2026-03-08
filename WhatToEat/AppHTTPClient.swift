@@ -35,6 +35,7 @@ struct AppHTTPClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        applyBackendAuthorization(to: &request)
         return try await perform(request, decode: type)
     }
 
@@ -47,7 +48,28 @@ struct AppHTTPClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)
+        applyBackendAuthorization(to: &request)
         return try await perform(request, decode: type)
+    }
+
+    private func applyBackendAuthorization(to request: inout URLRequest) {
+        guard
+            let token = AppEnvironment.backendProxyToken,
+            let url = request.url,
+            isBackendURL(url)
+        else {
+            return
+        }
+
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+
+    private func isBackendURL(_ url: URL) -> Bool {
+        guard let baseURL = AppEnvironment.backendBaseURL else {
+            return false
+        }
+
+        return url.scheme == baseURL.scheme && url.host == baseURL.host && url.port == baseURL.port
     }
 
     private func perform<T: Decodable>(_ request: URLRequest, decode type: T.Type) async throws -> T {

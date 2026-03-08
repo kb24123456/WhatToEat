@@ -22,6 +22,8 @@
 	</dict>
 	<key>BackendBaseURL</key>
 	<string></string>
+	<key>BackendProxyToken</key>
+	<string></string>
 	<key>BackendAIFortunePath</key>
 	<string>/v1/food-fortune/generate</string>
 	<key>BackendFortuneLunarPath</key>
